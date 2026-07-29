@@ -1,0 +1,18 @@
+{
+  "searchableAttributes": ["unordered(text)", "chapterTitle", "book,author"],
+  "attributesForFaceting": ["book", "author", "chapter"],
+  "attributesToRetrieve": ["*"],
+  "attributesToHighlight": ["text", "chapterTitle"],
+  "attributesToSnippet": ["text:40"],
+  "snippetEllipsisText": "…",
+  "removeStopWords": true,
+  "ignorePlurals": true,
+  "queryLanguages": ["en"],
+  "advancedSyntax": true,
+  "removeWordsIfNoResults": "lastWords",
+  "minProximity": 2,
+  "customRanking": ["asc(position)"],
+  "attributeForDistinct": "book",
+  "distinct": false,
+  "paginationLimitedTo": 1000
+}
