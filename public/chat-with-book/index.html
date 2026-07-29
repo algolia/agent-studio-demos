@@ -142,14 +142,16 @@
   <!-- ── Left rail: ingest, model, meter, ledger ─────────────────── -->
   <section class="panel" aria-labelledby="ingest-h">
     <h2 id="ingest-h" class="panel-h">1 · Load the context</h2>
-    <p class="panel-sub">Take a book off the shelf, or bring your own text. Whatever you load becomes the first user message. Nothing leaves your browser except the API calls shown in the wire log.</p>
+    <p class="panel-sub">Take a book off the shelf, or bring your own text. Whatever you load becomes the first user message. Nothing leaves your browser except the API calls shown in the wire log. Each tile says what loading it will do and roughly what that costs, before you click it.</p>
 
     <!-- ── The bookshelf ───────────────────────────────────────────────
-         Four public-domain books, served from this origin as plain text. The
-         tiles are built in app.js because the token figure beside each one is
-         derived from the chars-per-token ratio the page has measured so far,
-         not from a number hard-coded in the markup. ──── -->
-    <div class="shelf" id="shelf" role="group" aria-label="Books to load"></div>
+         Sixteen public-domain books, served from this origin as plain text. The
+         tiles are built in app.js, and not one figure on them is in this markup:
+         the token count, the group a book sits in, the number of summarizer calls
+         and the dollar estimate are all derived at render time from the book's
+         size and the model, budget and measured ratio in force right now. Change
+         the model and the groups rearrange. ──── -->
+    <div class="shelf" id="shelf" role="group" aria-label="Books to load, grouped by what happens when you load them"></div>
     <p class="hint" id="shelf-status" role="status"></p>
 
     <details class="byo" id="byo">

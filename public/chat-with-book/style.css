@@ -253,13 +253,46 @@ textarea { font-family: var(--mono); font-size: 12.4px; resize: vertical; }
 .info:hover { color: var(--ink); border-color: var(--ink-3); }
 
 /* ── The bookshelf ────────────────────────────────────────────────
-   Four tiles, and deliberately not four buttons in a row: the size and the hook
-   are half the choice, so each one gets the room to carry them. The left rule
-   turns the fold's colour on the picked book, which is the same vocabulary the
-   meter's hero tile uses — one page, one meaning per colour. ────── */
+   Sixteen tiles, and deliberately not sixteen buttons in a row: the size, the
+   plan and the hook are the choice, so each one gets the room to carry them. The
+   left rule turns the fold's colour on the picked book, which is the same
+   vocabulary the meter's hero tile uses — one page, one meaning per colour.
 
-.shelf { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 520px) { .shelf { grid-template-columns: 1fr; } }
+   Grouped, because at sixteen books the flat grid buried the one fact worth
+   knowing before clicking: that the bottom half cannot be sent to the model at
+   all. A group's left rule carries its regime — line for "nothing unusual",
+   crease for the fold, warn for the ones that ask about money first — so the
+   shape of the shelf is legible before a word of it is read. ────── */
+
+.shelf { display: grid; gap: 16px; }
+
+.shelf-group { display: grid; gap: 8px; }
+.shelf-group-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--line-strong);
+  font-family: var(--body);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink-2);
+}
+.shelf-group[data-regime="oversize-fold"] > .shelf-group-h { border-left-color: var(--crease); }
+.shelf-group[data-regime="cost-gated"] > .shelf-group-h { border-left-color: var(--warn); }
+.shelf-group-n {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.shelf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .shelf-grid { grid-template-columns: 1fr; } }
 
 .shelf-book {
   display: grid;
@@ -298,6 +331,69 @@ textarea { font-family: var(--mono); font-size: 12.4px; resize: vertical; }
   color: var(--ink-2);
 }
 .sb-hook { margin-top: 3px; font-size: 11.5px; font-style: italic; color: var(--ink-3); }
+
+/* ── What the click will do, and what it will cost ─────────────────
+   The plan block is the reason the tile grew. `what` is the mechanism and takes
+   the regime's colour; `price` is the money and stays quiet in mono, because a
+   dollar figure shouting on a tile is exactly the tone this page is arguing
+   against. Both are one line each so the two can be read apart. ──── */
+
+.sb-plan {
+  display: grid;
+  gap: 1px;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+}
+.sb-what { font-size: 11.5px; font-weight: 500; color: var(--ink-2); }
+.shelf-book[data-regime="oversize-fold"] .sb-what,
+.shelf-book[data-regime="cost-gated"] .sb-what { color: var(--crease); }
+.sb-price {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.sb-gate-flag {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--warn);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  color: var(--warn);
+}
+.shelf-book[data-regime="cost-gated"] { border-left-color: var(--warn); }
+
+/* ── The confirm ───────────────────────────────────────────────────
+   Spans the whole group so the sentence about somebody's money is not squeezed
+   into half a column, and sits directly under the tile it belongs to. ──── */
+
+.shelf-gate {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid var(--warn);
+  border-left-width: 2px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.gate-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.gate-body { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-2); }
+.gate-row { display: flex; flex-wrap: wrap; gap: 8px; }
 
 #shelf-status:empty { display: none; }
 #shelf-status.is-working { color: var(--ink-2); }

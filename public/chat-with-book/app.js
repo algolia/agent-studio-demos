@@ -1982,55 +1982,181 @@ function closeTip() {
 }
 
 /* ── The bookshelf ────────────────────────────────────────────────
-   Four whole books, on this origin, as plain text. A tile is one fetch and one
-   ingest: no upload, no paste, no third party — and the wire log records the
+   Sixteen whole books, on this origin, as plain text. A tile is one fetch and
+   one ingest: no upload, no paste, no third party — and the wire log records the
    fetch alongside the API calls so it is clear which is which.
 
-   The token figure on a tile is derived, not stored: before the first probe it
-   is a chars/4 guess, and after it the ratio the trim endpoint actually measured
-   on this conversation. A book is a book; how many tokens it is depends on the
-   tokenizer, and pretending otherwise is the sort of round number this page is
-   trying to talk people out of. ────────────────────────────────── */
+   Nothing on a tile is stored. The token figure, the regime, the number of
+   summarizer calls and the dollar estimate are all derived at render time from
+   the book's character count and the config as it stands right now — see
+   `estimate()` in shared/books.js. That is deliberate: the shelf is grouped by
+   what will happen when you click, and what will happen depends on the model you
+   picked, the budget you set and the chars-per-token ratio this conversation has
+   measured so far. A label written down once would be a label that lies after
+   the first probe. Change the model or the budget and the groups rearrange in
+   front of you, which is the honest behaviour even though it moves.
 
-function bookSizeLine(book) {
-  return `${fmt(book.words)} words · ≈${fmt(estTokens(book.chars))} tokens`;
+   The price is the same story one step further. It comes from the selected
+   model's entry in the kit's price list, so the figure tracks the picker rather
+   than a constant — and when that rate is a placeholder rather than a published
+   one, the tile says so in those words. A confident number about somebody else's
+   money is the one thing worse than no number.
+   ────────────────────────────────────────────────────────────────── */
+
+/** the threshold above which a tile asks before it spends; overridable in config */
+function costConfirmUsd() {
+  return CFG.costConfirmUsd ?? 0.5;
 }
 
-function renderShelf() {
-  el.shelf.textContent = "";
-  BOOKS.books.forEach((book) => {
-    const tile = document.createElement("button");
-    tile.type = "button";
-    tile.className = "shelf-book";
-    tile.dataset.slug = book.slug;
-    tile.setAttribute("aria-pressed", "false");
+/**
+ * The live config the shelf prices itself against. Read fresh on every render,
+ * never captured: the model picker moves the window and the rate, the budget
+ * picker moves the compaction threshold, and the trim probe replaces the shelf's
+ * own chars-per-token measurement with this conversation's.
+ */
+function shelfOpts() {
+  const opts = {
+    oversizeAtRatio: CFG.oversizeAtRatio,
+    compactAtRatio: CFG.compactAtRatio,
+    foldSectionTokens: CFG.foldChunkTokens,
+    workingBudget: state.model ? currentWindow() : CFG.defaultBudget,
+    costConfirmUsd: costConfirmUsd(),
+    // the kit's own money formatter, so a tile and the cost strip cannot disagree
+    formatUsd: usd,
+  };
+  if (state.model) {
+    opts.contextWindow = modelWindow();
+    opts.price = currentPrice();
+  }
+  // the probe's ratio beats the shelf's default: it was measured on this
+  // conversation, through this model's tokenizer
+  if (state.charsPerToken) opts.charsPerToken = state.charsPerToken;
+  return opts;
+}
 
-    const title = document.createElement("span");
-    title.className = "sb-title";
-    title.textContent = book.title;
-    const by = document.createElement("span");
-    by.className = "sb-by";
-    by.textContent = `${book.author} · ${book.year}`;
-    const size = document.createElement("span");
-    size.className = "sb-size";
-    size.textContent = bookSizeLine(book);
-    const hook = document.createElement("span");
-    hook.className = "sb-hook";
-    hook.textContent = book.hook;
+const estimateFor = (book) => BOOKS.estimate(book, shelfOpts());
 
-    tile.append(title, by, size, hook);
-    tip(tile, () =>
-      `${book.title} — ${fmt(book.chars)} characters of plain text, served from this origin as a ` +
-      `static file. Clicking it loads the file and ingests it as the first user message: the trim ` +
-      `endpoint counts what that costs, and anything past ${fmt(oversizeLimit())} tokens is folded ` +
-      `section by section before a word of it is sent. Project Gutenberg ebook ` +
-      `#${book.gutenbergId}, licence header and footer removed and nothing else edited. The token ` +
-      `figure is ${state.charsPerToken
-        ? `converted at the ${charsPerToken().toFixed(1)} chars per token this conversation measured`
-        : `a chars/${CFG.charsPerTokenFallback} guess until the first probe measures the real ratio`}.`);
-    tile.addEventListener("click", () => pickBook(book));
-    el.shelf.appendChild(tile);
+function bookSizeLine(book, est) {
+  return `${fmt(book.words)} words · ≈${fmt(est.tokens)} tokens`;
+}
+
+/** where the token figure came from — a guess, or something measured */
+function ratioNote() {
+  return state.charsPerToken
+    ? `converted at the ${charsPerToken().toFixed(1)} characters per token this conversation ` +
+      `measured through the trim endpoint`
+    : `converted at ${BOOKS.SHELF_DEFAULTS.charsPerToken} characters per token, measured on ` +
+      `Alice against the same endpoint — the first probe of this conversation replaces it with ` +
+      `its own ratio`;
+}
+
+function bookTile(book, est) {
+  const tile = document.createElement("button");
+  tile.type = "button";
+  tile.className = "shelf-book";
+  tile.dataset.slug = book.slug;
+  tile.dataset.regime = est.regime;
+  tile.disabled = state.busy;
+  tile.setAttribute("aria-pressed", "false");
+
+  const title = document.createElement("span");
+  title.className = "sb-title";
+  title.textContent = book.title;
+  const by = document.createElement("span");
+  by.className = "sb-by";
+  by.textContent = `${book.author} · ${book.year}`;
+  const size = document.createElement("span");
+  size.className = "sb-size";
+  size.textContent = bookSizeLine(book, est);
+
+  /* The whole point of the rework: before you spend anything, the tile tells you
+     what the click will do and what it will cost. Two lines rather than one, so
+     the mechanism and the bill can be read separately. */
+  const plan = document.createElement("span");
+  plan.className = "sb-plan";
+  const what = document.createElement("span");
+  what.className = "sb-what";
+  what.textContent = est.what;
+  const price = document.createElement("span");
+  price.className = "sb-price";
+  price.textContent = est.price;
+  plan.append(what, price);
+
+  const hook = document.createElement("span");
+  hook.className = "sb-hook";
+  hook.textContent = book.hook;
+
+  tile.append(title, by, size, plan);
+  if (est.costGated) {
+    const flag = document.createElement("span");
+    flag.className = "sb-gate-flag";
+    flag.textContent = `asks first · over ${usd(est.costConfirmUsd)}`;
+    tile.appendChild(flag);
+  }
+  tile.appendChild(hook);
+
+  // the accessible name carries the figures, because a screen reader reading
+  // "The Awakening" alone would not have been told what pressing it costs
+  tile.setAttribute("aria-label",
+    `${book.title}, ${book.author}, ${book.year}. ${fmt(book.words)} words, about ` +
+    `${fmt(est.tokens)} tokens. ${est.line}.` +
+    (est.costGated ? " Asks for confirmation before ingesting." : ""));
+
+  tip(tile, () => {
+    const live = estimateFor(book);
+    const bill = live.usd === null
+      ? `No rate is configured for this model, so no bill is quoted — the call count above is ` +
+        `still real.`
+      : `The estimate is ${usd(live.usd)}: ${fmt(live.tokens)} tokens read once by the ` +
+        `summarizer at ${M.priceLine(live.rate)} It is an estimate and not an invoice — the API ` +
+        `does not report the summarizer's own token usage, so this is computed from the size of ` +
+        `the text and the rate, and the real figure will differ.`;
+    return `${book.title} — ${fmt(book.chars)} characters of plain text, served from this ` +
+      `origin as a static file. Project Gutenberg ebook #${book.gutenbergId}, licence header ` +
+      `and footer removed and nothing else edited. Clicking it loads the file and ingests it ` +
+      `as the first user message. ${live.what[0].toUpperCase()}${live.what.slice(1)}: anything ` +
+      `past ${fmt(live.oversizeAt)} tokens cannot be sent at all, and auto-compaction fires at ` +
+      `${fmt(live.autoCompactAt)}. Token figure ${ratioNote()}. ${bill}`;
   });
+  tile.addEventListener("click", () => pickBook(book));
+  return tile;
+}
+
+/**
+ * Grouped by regime, cheapest group first, and each group says in a sentence why
+ * its books behave the way they do. A flat grid of sixteen tiles would hide the
+ * one fact a visitor most needs before clicking: that the bottom half of this
+ * shelf cannot be sent to the model at all.
+ */
+function renderShelf() {
+  closeCostGate();
+  el.shelf.textContent = "";
+  BOOKS.groupByRegime(shelfOpts()).forEach((group) => {
+    const section = document.createElement("section");
+    section.className = "shelf-group";
+    section.dataset.regime = group.regime;
+
+    const head = document.createElement("h3");
+    head.className = "shelf-group-h";
+    head.append(document.createTextNode(group.copy.heading));
+    const count = document.createElement("span");
+    count.className = "shelf-group-n";
+    count.textContent = group.entries.length === 1 ? "1 book" : `${group.entries.length} books`;
+    const info = document.createElement("button");
+    info.type = "button";
+    info.className = "info";
+    info.textContent = "?";
+    tip(info, group.copy.note);
+    head.append(count, info);
+
+    const grid = document.createElement("div");
+    grid.className = "shelf-grid";
+    group.entries.forEach(({ book, est }) => grid.appendChild(bookTile(book, est)));
+
+    section.append(head, grid);
+    el.shelf.appendChild(section);
+  });
+  if (state.book) markShelf(state.book.slug);
 }
 
 function markShelf(slug) {
@@ -2041,18 +2167,85 @@ function markShelf(slug) {
   });
 }
 
-/** the probe has measured the real ratio: re-price every tile with it */
-function refreshShelfSizes() {
-  el.shelf.querySelectorAll(".shelf-book").forEach((tile) => {
-    const book = BOOKS.findBook(tile.dataset.slug);
-    const size = tile.querySelector(".sb-size");
-    if (book && size) size.textContent = bookSizeLine(book);
-  });
-}
-
 function shelfStatus(text, kind) {
   el.shelfStatus.textContent = text;
   el.shelfStatus.className = `hint${kind ? ` is-${kind}` : ""}`;
+}
+
+/* ── The confirm, for a book that costs real money ─────────────────
+   Everything else on this page reports what a call cost after the fact. This is
+   the one place where the number arrives first, because it is the one place a
+   single click can spend a dollar of somebody else's budget. Whether a tile
+   reaches this depends on the model selected: at the default rate nothing here
+   does, and switching to a model ten times dearer makes the largest books start
+   asking, with no per-book copy anywhere. ───────────────────────── */
+
+function closeCostGate() {
+  el.shelf.querySelectorAll(".shelf-gate").forEach((n) => n.remove());
+}
+
+function showCostGate(book, est) {
+  const tile = el.shelf.querySelector(`.shelf-book[data-slug="${book.slug}"]`);
+  closeCostGate();
+  if (!tile) return;
+
+  const panel = document.createElement("div");
+  panel.className = "shelf-gate";
+  panel.setAttribute("role", "group");
+  panel.setAttribute("aria-label", `Confirm ingesting ${book.title}`);
+  panel.dataset.slug = book.slug;
+
+  const h = document.createElement("p");
+  h.className = "gate-h";
+  h.textContent = `${book.title} costs about ${usd(est.usd)} to ingest`;
+
+  const body = document.createElement("p");
+  body.className = "gate-body";
+  body.textContent =
+    `${est.what[0].toUpperCase()}${est.what.slice(1)}, which is about ` +
+    `${est.compactCalls} summarizer ${est.compactCalls === 1 ? "call" : "calls"} over ` +
+    `${fmt(est.tokens)} tokens, billed to your own provider credentials. ` +
+    `That figure is an estimate, not a quote: it is the size of the text at ` +
+    `${est.rate ? est.rate.label : "this model"}'s input rate, and the API does not report what ` +
+    `the summarizer actually used. Nothing has been sent yet.`;
+
+  const why = document.createElement("button");
+  why.type = "button";
+  why.className = "info";
+  why.textContent = "?";
+  tip(why, () => `The threshold is ${usd(costConfirmUsd())}, and it is compared against the ` +
+    `estimate at the model you have selected — not against a fixed list of books. ` +
+    `${M.priceLine(est.rate)} Set costConfirmUsd in config.js to move the line.`);
+  h.appendChild(why);
+
+  const row = document.createElement("div");
+  row.className = "gate-row";
+  const go = document.createElement("button");
+  go.type = "button";
+  go.className = "btn primary gate-go";
+  go.textContent = `Ingest anyway · ~${usd(est.usd)}`;
+  go.addEventListener("click", () => {
+    closeCostGate();
+    pickBook(book, { confirmed: true });
+  });
+  const no = document.createElement("button");
+  no.type = "button";
+  no.className = "btn ghost gate-no";
+  no.textContent = "Not now";
+  no.addEventListener("click", () => {
+    closeCostGate();
+    shelfStatus(`${book.title} not ingested — nothing was sent.`, null);
+    tile.focus();
+  });
+  row.append(go, no);
+
+  panel.append(h, body, row);
+  panel.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); no.click(); }
+  });
+  tile.after(panel);
+  go.focus();
+  shelfStatus(`${book.title} is waiting on your confirmation — no call has been made.`, "working");
 }
 
 /**
@@ -2060,9 +2253,19 @@ function shelfStatus(text, kind) {
  * books in one history — two documents in one conversation is a different demo,
  * and silently concatenating them would make every number on the page harder to
  * account for.
+ *
+ * A book whose estimated bill is over the threshold stops here the first time and
+ * asks. Nothing is fetched and nothing is sent until it is confirmed: the gate
+ * sits ahead of the static-file fetch too, not just ahead of the API calls.
  */
-async function pickBook(book) {
+async function pickBook(book, { confirmed = false } = {}) {
   if (state.busy) return;
+  const est = estimateFor(book);
+  if (est.costGated && !confirmed) {
+    showCostGate(book, est);
+    return;
+  }
+  closeCostGate();
   if (state.messages.length) resetAll();
   markShelf(book.slug);
   state.book = book;
@@ -2080,7 +2283,7 @@ async function pickBook(book) {
     logCall(url, null, null,
       `${fmt(text.length)} chars in ${Math.round(performance.now() - t0)}ms · a static file on ` +
       `this origin — no API, no key, no third party`, "GET");
-    shelfStatus(`${book.title} · ${fmt(text.length)} chars — ingesting`, "working");
+    shelfStatus(`${book.title} · ${fmt(text.length)} chars — ${est.what}`, "working");
   } catch (e) {
     shelfStatus(`Could not load ${book.title} from this site.`, "err");
     logCall(url, null, e.message, "failed", "GET");
@@ -2092,7 +2295,6 @@ async function pickBook(book) {
   const ok = await ingest(text);
   if (ok) {
     shelfStatus(`${book.title} is in the conversation — ask it something.`, "ok");
-    refreshShelfSizes();
   } else {
     shelfStatus("", null);
   }
@@ -2154,8 +2356,12 @@ async function refreshContext() {
   if (state.tokens > 0 && chars > 0) state.charsPerToken = chars / state.tokens;
   renderMeter();
   renderLedger();
-  // the shelf quotes token figures too, and they were a guess until just now
-  refreshShelfSizes();
+  // The shelf quotes token figures, regimes and dollars, all derived from a
+  // chars-per-token ratio that was a prior measurement until this probe made it
+  // this conversation's own. Re-render rather than patch one line: the ratio can
+  // move a book across a group boundary, and a tile in the wrong group is a
+  // wronger claim than a stale number.
+  renderShelf();
 }
 
 /**
@@ -3139,6 +3345,10 @@ function initModels() {
     // picker can make an impossible run possible again. Re-render or the tile
     // keeps asserting the old answer until the next charge lands.
     renderCost();
+    // and the shelf's groups are a claim about THIS model: its window decides
+    // what folds, its rate decides what asks first. A dearer model can move a
+    // book into the confirm group without anything else on the page changing.
+    renderShelf();
   });
   state.model = CFG.models[0];
   setModelHint();
@@ -3200,6 +3410,9 @@ function initBudgets() {
     state.budget = CFG.budgets[Number(el.budget.value)].value;
     setBudgetHint();
     renderMeter();
+    // the compaction threshold moved, so "compacts on your first question" may no
+    // longer be true of the smaller books
+    renderShelf();
   });
   setBudgetHint();
 }
