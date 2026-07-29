@@ -17,11 +17,14 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 ```text
 public/                     the deployable root — this is what Cloudflare Pages serves
   index.html                landing page, one card per demo
-  shared/
+  shared/                   the demo kit — see CONTRIBUTING.md § The demo kit
     tokens.css              the design language: colors, fonts, spacing, base primitives
     md.js                   vendored sanitizing markdown renderer (window.renderMarkdown)
+    meter.js                the cost strip: cost model, mode switch, rendering (window.DemoMeter)
+    books.js                the bookshelf manifest and its suggestion chips (window.DEMO_BOOKS)
     config.example.js       template for local credentials — copy it, never edit it in place
     config.js               your real credentials (gitignored, never committed)
+  assets/texts/             four public-domain books, plain text, Gutenberg boilerplate removed
   chat-with-book/           index.html + app.js + style.css
   infinite-conversation/    index.html (stub)
 tests/                      node:test smoke tests — no framework, no install
@@ -128,7 +131,9 @@ npx wrangler@4 pages deploy public/ --project-name agent-studio-demos
 ## Adding a demo
 
 1. `mkdir public/<demo-slug>` and write an `index.html` that links `../shared/tokens.css`.
-2. Reuse `../shared/md.js` and `../shared/config.js` rather than vendoring copies.
+2. Reuse the demo kit in `public/shared/` rather than vendoring copies — the meter and the
+   bookshelf are already shared; [CONTRIBUTING.md](CONTRIBUTING.md#the-demo-kit) documents
+   the API of each module.
 3. Add a card to `public/index.html` — pitch, status, and the endpoints it exercises.
 
 ## Unstable endpoints

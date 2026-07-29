@@ -57,9 +57,102 @@ than sprinkling `/* global */` comments.
 
 1. `mkdir public/<demo-slug>` and write an `index.html` that links
    `../shared/tokens.css` first, then its own `style.css`.
-2. Reuse `../shared/md.js` and `../shared/config.js` rather than vendoring copies.
+2. Reuse the demo kit in `public/shared/` rather than vendoring copies.
 3. A demo's stylesheet never redeclares a token from `tokens.css`.
 4. Add a card to `public/index.html`: pitch, status, and the endpoints it exercises.
+
+## The demo kit
+
+`public/shared/` is what the next demo starts from. Every module is a plain
+browser script that publishes one global — no build step, no imports, and the
+tests `require()` the same bytes the browser loads (`tests/load.js`). Load them
+with `<script src>` before the demo's own `app.js`.
+
+Auto-compaction stays **on by default** in every demo built on this kit. A demo
+that overflows in front of a visitor is not demonstrating anything.
+
+### `tokens.css` — palette and base primitives
+
+One declaration per token, both themes inside it via `light-dark()`. Violet is
+action; pink (`--crease`) is the fold and everything the fold makes possible.
+
+### `md.js` → `window.renderMarkdown(src)`
+
+Escapes first, then renders the small part of Markdown a chat answer uses.
+Returns HTML safe to assign to `innerHTML`; link targets are allow-listed.
+
+### `meter.js` → `window.DemoMeter`
+
+The cost strip: what a conversation really spent, against what it would have cost
+with no context management. Pure model, separate renderer.
+
+| Member | What it does |
+| --- | --- |
+| `freshCost()` | a zeroed cost object — the shape a demo accumulates into |
+| `priceOf(modelName)` | published per-MTok rates; longest key match, so dated model ids resolve |
+| `priceLine(price)` | one sentence naming the rate and where the number came from |
+| `charge(cost, side, inTok, outTok, price)` | bills one call to `"real"` or `"naive"`, returns the dollar value, touches nothing else |
+| `meterView(cost, { modelWindow, modelLabel, price })` | **the pure one**: a view model, including which of the two modes the strip is in |
+| `tileCopy` | the tooltip copy, keyed by tile — bind it with the page's own tooltip engine |
+| `createStrip(els)` | `{ render(view), reset() }`; `els` names nodes by role (`naiveUsd`, `savedUsd`, `unlockedValue`, `opEquals`, …) |
+| `usd`, `fmt`, `signedTokens`, `shortTokens` | the formatters, so the strip and the wire log cannot disagree about a figure |
+
+The two modes are why `meterView` exists apart from the renderer:
+
+- **feasible** — the largest single naive payload still fits the model's real
+  window, so `view.saved` is `naive − real`. Negative is allowed, and framed as
+  "paying itself back".
+- **impossible** — that payload is larger than the window, so the provider would
+  refuse the naive run outright. `view.saved` is `null`, `view.unlocked` carries
+  the copy, and nothing subtracts anywhere. A dollar delta against a request that
+  cannot be made is the flattering reading and the weaker one.
+
+The boundary belongs to the feasible side: a payload exactly the size of the
+window fits. `tests/meter.test.js` holds both modes, the boundary, and the state
+a demo hits first — an oversize document ingested before any question, where both
+dollar totals are still zero.
+
+The cost object stays the demo's own: its `app.js` decides what counts as a turn,
+calls `charge` per API call, and hands `meterView(...)` to the strip.
+
+### `books.js` → `window.DEMO_BOOKS`
+
+`{ books, bookUrl(book), findBook(slug) }`. Four public-domain books under
+`public/assets/texts/`, with counted `chars`/`words` and the needle/arc
+suggestion chips. `bookUrl` is root-absolute, so it resolves from any demo
+folder. The counts are checked against the files themselves in
+`tests/books.test.js` — edit a text and that test names the number to update.
+
+### Not extracted: the auto-compact loop
+
+The *decision* is one line in `chat-with-book/app.js`:
+
+```js
+if (state.tokens >= currentWindow() * CFG.compactAtRatio) await runCompact({ auto: true });
+```
+
+`runCompact` itself is not shareable as it stands: it is welded to that demo's
+`messages`/`kinds`/`weights` arrays, its fold record, its ledger bands and its
+chat bubbles. Moving it into the kit would export the entanglement rather than
+the idea.
+
+The seam to cut, when a second demo needs it, is a driver that owns none of that
+state and calls back into it:
+
+```
+createCompactor({
+  probe(messages),                 // → { tokens }           (context/trim)
+  compact(messages, opts),         // → { messages, stats }  (context/compact)
+  budget(), ratio(),               // the thresholds, read live
+  onHistory(messages, stats),      // the demo swaps its own history and redraws
+  onCharge(stats),                 // the demo bills the summarizer to the meter
+})  →  { afterTurn(), now() }
+```
+
+Everything the current loop does beyond that — sectioned folds for payloads too
+large for a single compact call, keeping each section's original text so it can
+be reopened later — is `chat-with-book`'s own subject matter, and should stay
+there until a second demo asks for the same thing.
 
 ## Adding a config field
 
