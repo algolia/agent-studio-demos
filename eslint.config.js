@@ -150,8 +150,10 @@ module.exports = [
     rules: { "no-control-regex": "off" },
   },
   {
-    // Tests are Node, not a browser.
-    files: ["tests/**/*.js", "eslint.config.js"],
+    // Tests and the shelf/index scripts are Node, not a browser. `fetch` and
+    // `URL` are there because the scripts talk to Gutenberg and to the Algolia
+    // REST API with nothing installed — Node's own globals, no dependency.
+    files: ["tests/**/*.js", "scripts/**/*.js", "eslint.config.js"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "commonjs",
@@ -165,6 +167,9 @@ module.exports = [
         console: "readonly",
         globalThis: "writable",
         Buffer: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        TextEncoder: "readonly",
       },
     },
     rules: recommended,
