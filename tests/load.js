@@ -27,6 +27,24 @@ function loadRenderMarkdown() {
   return globalThis.renderMarkdown;
 }
 
+/** the demo kit's meter: cost model, mode switch, tooltip copy */
+function loadMeter() {
+  require(path.join(SHARED, "meter.js"));
+  if (!globalThis.DemoMeter) {
+    throw new Error("meter.js did not publish window.DemoMeter");
+  }
+  return globalThis.DemoMeter;
+}
+
+/** the bookshelf manifest */
+function loadBooks() {
+  require(path.join(SHARED, "books.js"));
+  if (!globalThis.DEMO_BOOKS) {
+    throw new Error("books.js did not publish window.DEMO_BOOKS");
+  }
+  return globalThis.DEMO_BOOKS;
+}
+
 /**
  * The committed config template — never config.js, which holds real
  * credentials, is gitignored, and does not exist in CI.
@@ -39,4 +57,4 @@ function loadExampleConfig() {
   return globalThis.DEMO_CONFIG;
 }
 
-module.exports = { loadRenderMarkdown, loadExampleConfig };
+module.exports = { loadRenderMarkdown, loadExampleConfig, loadMeter, loadBooks };
