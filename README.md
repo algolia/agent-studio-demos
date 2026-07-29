@@ -1,8 +1,11 @@
-# Agent Studio public demos
+# Agent Studio demos
+
+[![CI](https://github.com/algolia/agent-studio-demos/actions/workflows/ci.yml/badge.svg)](https://github.com/algolia/agent-studio-demos/actions/workflows/ci.yml)
+[![Deploy](https://github.com/algolia/agent-studio-demos/actions/workflows/deploy.yml/badge.svg)](https://github.com/algolia/agent-studio-demos/actions/workflows/deploy.yml)
 
 Small, self-contained single-page demos of the [Algolia Agent Studio](https://www.algolia.com/doc/guides/algolia-ai/agent-studio) context APIs. No build step, no framework, no bundler — every demo is plain HTML, CSS and JavaScript served as static files.
 
-Deployed at `https://agent-studio-demos.pages.dev/`, one demo per path.
+Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every push to `main` deploys it.
 
 | Demo | Path | Status |
 | --- | --- | --- |
@@ -21,6 +24,9 @@ public/                     the deployable root — this is what Cloudflare Page
     config.js               your real credentials (gitignored, never committed)
   chat-with-book/           index.html + app.js + style.css
   infinite-conversation/    index.html (stub)
+tests/                      node:test smoke tests — no framework, no install
+eslint.config.js            flat config, rules written out, zero dependencies
+.github/workflows/          ci.yml (lint + tests), deploy.yml (Cloudflare Pages)
 ```
 
 Each demo links `../shared/tokens.css` first, then its own `style.css`. A demo's stylesheet never redeclares a token; the landing page uses nothing but `tokens.css`.
@@ -54,29 +60,70 @@ Open a file over `http://`, not `file://` — the demos load their config and sh
 
 **These pages call the API directly from the browser** so the wire log can show you every request. That means the key is visible to anyone who opens devtools. Use a key scoped to exactly what the demo needs, and put a backend in front of it before shipping anything like this.
 
-## Deploy to Cloudflare Pages
+## Checks
 
-The site is static — `public/` is the build output, and there is no build command.
+Two gates, both runnable verbatim on a laptop with nothing installed:
 
 ```bash
-wrangler pages deploy public/
+npx eslint public/ tests/ eslint.config.js   # flat config, rules written out by name
+node --test tests/*.test.js                  # node:test, no framework
 ```
 
-Pages project settings:
+CI runs exactly these on every pull request and on `main`. Both are green on a clean
+checkout with no `config.js` present — the tests read `config.example.js`, and eslint
+ignores the real config — so a local run covers the same files as CI.
 
-- **Build command** — none
-- **Build output directory** — `public`
-- **Root directory** — repository root
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR flow.
 
-`public/shared/config.js` is gitignored, so it is not in the repo and will not appear in a Git-triggered build. A demo that loads without it does not break — it renders a short notice telling the reader to create the file — but it also does not demo anything, so a Git-triggered build alone will not give you a working public site.
+## Deploy
 
-Pick one of these instead:
+The site is static: `public/` is the build output, there is no build command, and
+`.github/workflows/deploy.yml` publishes it to Cloudflare Pages on every push to `main`
+(or on demand, via **Actions → Deploy → Run workflow**).
 
-- **Deploy from a working copy** (works today): `wrangler pages deploy public/` with your `config.js` in place. The file is uploaded even though it is untracked.
-- **Generate it in a build step** from Cloudflare Pages environment variables, writing `public/shared/config.js` before the upload.
-- **Commit a deploy-only config** under a path of its own, with a key scoped to nothing but these demos, and point the demos at it.
+`public/shared/config.js` is gitignored, so it is not in the repo and a plain checkout
+cannot deploy a working site. A demo that loads without it does not break — it renders a
+short notice telling the reader to create the file — but it does not demo anything either.
+So the workflow writes that file before uploading, from a repository **variable**.
 
-Whichever you choose, the key ends up readable in the browser. Scope it accordingly.
+What must exist on the repo for a deploy to succeed:
+
+| Kind | Name | What it holds |
+| --- | --- | --- |
+| Secret | `CLOUDFLARE_API_TOKEN` | Cloudflare token, **Edit Cloudflare Workers** template. Dashboard → My Profile → API Tokens → Create Token. |
+| Variable | `DEMO_CONFIG_JS` | The entire contents of a working `public/shared/config.js`. |
+
+The account id (`CLOUDFLARE_ACCOUNT_ID`) is inline in the workflow — an account id
+identifies, it does not authorise.
+
+```bash
+gh secret set CLOUDFLARE_API_TOKEN --repo algolia/agent-studio-demos
+gh variable set DEMO_CONFIG_JS --repo algolia/agent-studio-demos < public/shared/config.js
+```
+
+**One variable, not one per field.** The config is a nested structure — several model
+entries of up to ten fields each, a reader-proxy object, a dozen fold-tuning scalars.
+Reassembling that from ~40 variables would put a second copy of its shape inside the
+workflow, and adding a model would mean editing the workflow. Holding the whole file
+means the deployed config is identical to the one that already works locally; the cost is
+that changing a config field means refreshing the variable, which is the `gh variable set`
+line above.
+
+It is a variable rather than a secret on purpose: the key inside is an intentionally
+public, demo-scoped key that any visitor can read from devtools anyway, and secrets are
+masked in logs — which makes a malformed config impossible to diagnose. The workflow
+syntax-checks the file it writes and asserts `host`, `appId`, `apiKey` and at least one
+model are present, so a truncated variable fails with a readable message instead of a
+blank page.
+
+Whatever key you configure ends up readable in the browser. Scope it accordingly.
+
+You can still deploy by hand from a working copy — `config.js` is uploaded even though it
+is untracked:
+
+```bash
+npx wrangler@4 pages deploy public/ --project-name agent-studio-demos
+```
 
 ## Adding a demo
 

@@ -3297,8 +3297,12 @@ function init() {
     if (link) li.append(" ", link);
   });
 
-  $("repo-cta").href = CFG.repoUrl;
-  $("repo-link").href = CFG.repoUrl;
+  // The markup already carries the canonical repo URL, so the links work with no
+  // config at all; a config may still redirect them at a fork.
+  if (CFG.repoUrl) {
+    $("repo-cta").href = CFG.repoUrl;
+    $("repo-link").href = CFG.repoUrl;
+  }
 
   el.ingest.addEventListener("click", ingest);
   el.urlBtn.addEventListener("click", fetchUrl);

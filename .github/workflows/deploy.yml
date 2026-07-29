@@ -1,0 +1,86 @@
+# Deploy the static site to Cloudflare Pages on every push to main.
+#
+# `public/` is the deployable root and there is no build step, so the only work
+# here is writing the one file the repo deliberately does not carry:
+# public/shared/config.js, which holds the demo credentials.
+#
+# What must exist for this to pass:
+#   secret  CLOUDFLARE_API_TOKEN  — a Pages "Edit Cloudflare Workers" token
+#   var     DEMO_CONFIG_JS        — the whole contents of public/shared/config.js
+#
+# Why one variable rather than one per field: the config is a nested structure
+# (four model entries of up to ten fields each, a reader-proxy object, a dozen
+# fold-tuning scalars). Reassembling that from ~40 variables would put a second
+# copy of its shape in this file, and adding a model would mean editing the
+# workflow. One variable keeps deploy config identical to the file that already
+# works locally:
+#
+#   gh variable set DEMO_CONFIG_JS --repo algolia/agent-studio-demos \
+#     < public/shared/config.js
+#
+# The key inside it is an intentionally public, demo-scoped search key — these
+# pages call the API straight from the browser, so it is readable by anyone who
+# opens devtools either way. A variable, not a secret, on purpose: secrets are
+# masked in logs, which makes a malformed config impossible to diagnose.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Cloudflare Pages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Write public/shared/config.js from the DEMO_CONFIG_JS variable
+        env:
+          DEMO_CONFIG_JS: ${{ vars.DEMO_CONFIG_JS }}
+        run: |
+          if [ -z "$DEMO_CONFIG_JS" ]; then
+            echo "::error::Repository variable DEMO_CONFIG_JS is not set." \
+                 "Set it from a working local config:" \
+                 "gh variable set DEMO_CONFIG_JS --repo algolia/agent-studio-demos < public/shared/config.js"
+            exit 1
+          fi
+          printf '%s\n' "$DEMO_CONFIG_JS" > public/shared/config.js
+          # A truncated or mangled variable is a blank page in the browser and
+          # nothing in the log. Fail here instead, where the message is legible.
+          node --check public/shared/config.js
+          node -e 'globalThis.window = {}; require("./public/shared/config.js");
+                   const c = globalThis.window.DEMO_CONFIG;
+                   if (!c || !c.host || !c.appId || !c.apiKey || !(c.models || []).length) {
+                     throw new Error("DEMO_CONFIG_JS parsed but is missing host/appId/apiKey/models");
+                   }
+                   console.log("config.js ok —", c.models.length, "model option(s)");'
+
+      - name: Deploy public/ to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Account ids identify, they do not authorise — this one is not a secret.
+          CLOUDFLARE_ACCOUNT_ID: 5d2cf62e15cde89159ee759f8d986f7f
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Secret CLOUDFLARE_API_TOKEN is not set." \
+                 "Create a Cloudflare token with the 'Edit Cloudflare Workers' template," \
+                 "then: gh secret set CLOUDFLARE_API_TOKEN --repo algolia/agent-studio-demos"
+            exit 1
+          fi
+          npx --yes wrangler@4 pages deploy public/ \
+            --project-name agent-studio-demos \
+            --branch main

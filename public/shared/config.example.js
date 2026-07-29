@@ -122,5 +122,5 @@ window.DEMO_CONFIG = {
     label: "r.jina.ai reader",
   },
 
-  repoUrl: "https://github.com/algolia/agent-studio-public-demos",
+  repoUrl: "https://github.com/algolia/agent-studio-demos",
 };
