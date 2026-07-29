@@ -1,0 +1,126 @@
+// Copy to config.js and fill in your own values. config.js is gitignored.
+//
+// The context endpoints and agent completions are called directly from the
+// browser, so whatever key you put here is visible to anyone who loads the page.
+// For a public deployment, proxy these calls through your own backend.
+window.DEMO_CONFIG = {
+  host: "https://agent-studio.eu.algolia.com",
+  appId: "YOUR_APP_ID",
+  apiKey: "YOUR_API_KEY",
+
+  // One published agent per model: /completions takes the model from the agent
+  // (per-request `configuration` overrides are rejected with 422
+  // "Dynamic configuration not allowed" on most apps).
+  // providerId + model are also sent to /context/compact, which runs the
+  // summary on your own provider credentials.
+  //
+  // contextWindow is the model's REAL published window — the hard ceiling the
+  // provider enforces on both /completions and the summarizer behind
+  // /context/compact. The oversize guard measures against this, never against
+  // the demo's working budget below.
+  models: [
+    {
+      id: "enablers",
+      label: "Enablers small",
+      note: "via an openai_compatible provider",
+      // Headline option: Algolia's own open-source model family, reached through an
+      // openai_compatible provider. Verified: /context/compact works through it.
+      badge: "Algolia open-source",
+      agentId: "b3fb1cf2-81e0-4721-9142-c860518784bb",
+      providerId: "c39b45b0-ff20-401f-a9ef-2c4c2fd016f8",
+      model: "small",
+      // The provider publishes no window: neither GET /1/providers/{id} nor
+      // GET /1/providers/{id}/models carries one (the model list is bare strings),
+      // and the upstream openai_compatible /v1/models answers 401. So the ceiling
+      // was measured instead, by bisecting /context/compact with high-entropy text:
+      //   248,893 tokens → 200 in 47s   |   255,901 tokens → 500 in 1.5s
+      // The refusal is immediate, so it is the provider rejecting on length rather
+      // than the summarizer timing out. Real ceiling therefore ~256k; 200,000 is the
+      // nearest standard size strictly below what was verified to pass, so the
+      // oversize guard can never wave through a payload the provider would refuse.
+      contextWindow: 200000,
+      windowVerified: true,
+      windowNote: "The provider publishes no context window, so this one was measured: " +
+        "context/compact accepted 248,893 tokens and refused 255,901 (immediately, in 1.5s — a " +
+        "length rejection, not a timeout), which puts the real ceiling near 256k. The demo " +
+        "carries 200,000, the nearest standard size below what was verified to pass.",
+    },
+    {
+      id: "mini",
+      label: "gpt-4.1-mini",
+      note: "OpenAI · small",
+      agentId: "YOUR_AGENT_ID",
+      providerId: "YOUR_PROVIDER_ID",
+      model: "gpt-4.1-mini",
+      contextWindow: 1047576,
+    },
+  ],
+
+  // Working budget the meter fills against. Real windows are on the model
+  // options; these smaller budgets make compaction observable in a demo.
+  budgets: [
+    { label: "4k", value: 4000 },
+    { label: "8k", value: 8000 },
+    { label: "32k", value: 32000 },
+    { label: "model window", value: null },
+  ],
+  defaultBudget: 8000,
+  compactAtRatio: 0.7,
+  keepLastMessages: 6,
+
+  // ── Oversize handling ────────────────────────────────────────────
+  // Above this share of the model's real window nothing is sent: not to
+  // /completions (400 "prompt is too long") and not to /context/compact in one
+  // piece either — that endpoint forwards its whole payload to the summarizer,
+  // which overflows the same window and answers 500. Instead the document is
+  // folded bottom-up, section by section.
+  oversizeAtRatio: 0.8,
+
+  // Target size of one section handed to the summarizer. Measured against
+  // /context/trim: 60k tokens compacts in ~4–6 s and leaves a wide margin under
+  // a 200k window. Sections much larger still succeed but summarize thinner.
+  foldChunkTokens: 60000,
+
+  // Cap on each section summary. Uncapped, the summarizer writes thousands of
+  // tokens per section and the fold takes minutes; output tokens are what the
+  // latency is made of. 250 words still carries every chapter title.
+  foldSectionWords: 250,
+
+  // Only used before the first trim probe. After it, the real chars-per-token
+  // ratio is derived from the endpoint's own count — the usual ~4 is badly wrong
+  // for non-English text (this demo's French book runs at ~2.7).
+  charsPerTokenFallback: 4,
+
+  // Cap on the joint digest the reduce pass writes. Same lesson as
+  // foldSectionWords, one level up: left open, the reduce faithfully reproduces
+  // all six section summaries and the digest comes back as large as the
+  // concatenation it replaced — measured at 8,182 → 8,484 tokens in 123 s, which
+  // is all latency and no compression. Capped, the same six summaries join into
+  // ~1,200 tokens in a fraction of the time, and the seams are still smoothed.
+  foldDigestWords: 900,
+
+  // How many section summaries run at once. Each section is an independent
+  // /context/compact call, so they parallelise cleanly; the ceiling is the
+  // provider's rate limit, not this page. On a 429 the section backs off once
+  // and then gives up as a placeholder rather than failing the whole fold.
+  foldConcurrency: 3,
+
+  // After the sections land, one more /context/compact call over the section
+  // summaries joins them into a single digest — it dedups entities and smooths
+  // the seams between sections. Set false to keep the raw concatenation.
+  foldReducePass: true,
+
+  // Sections → digest → digest-of-digests. Two passes clear a 1M-char book.
+  maxFoldLevels: 3,
+
+  // Most sites do not send Access-Control-Allow-Origin, so a browser cannot
+  // read them directly. When the direct fetch is refused, the URL is read
+  // through this public reader instead — always named in the UI and wire log,
+  // never silent. Set to null to disable the fallback entirely.
+  readerProxy: {
+    url: "https://r.jina.ai/",
+    label: "r.jina.ai reader",
+  },
+
+  repoUrl: "https://github.com/algolia/agent-studio-public-demos",
+};

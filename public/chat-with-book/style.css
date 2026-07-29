@@ -1,0 +1,1200 @@
+/* ───────────────────────────────────────────────────────────────
+   Infinite Conversations — Agent Studio context APIs demo
+
+   Design notes
+   · Subject: a conversation that folds instead of overflowing. The
+     signature element is "the fold" — the ledger's creased bands and
+     the crease glyph in the wordmark.
+   · Status colors (ok / approaching / over) are mutually exclusive
+     states, each shipped with a shape-differentiated dot AND a text
+     label, so identity is never carried by color alone.
+   ─────────────────────────────────────────────────────────────── */
+
+
+/* ── The meter (cost / savings strip) ─────────────────────────────
+   A KPI row of three stat tiles, not a chart: three headline numbers whose job
+   is magnitude and one comparison, which is what a stat tile is for. Saved is
+   the tile the reader came for, so it is the one with the crease rule and the
+   larger figure — the fold's own colour, because the fold is what did the
+   saving. Sticky at top:0 as body's first child: never moves, never overlaps.
+   ─────────────────────────────────────────────────────────────── */
+
+.costbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  box-shadow: light-dark(0 10px 22px -22px rgba(20, 22, 42, 0.55), 0 12px 26px -24px #000);
+}
+.costbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 7px 28px;
+}
+.costbar-eyebrow {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.cost-tiles { display: flex; align-items: center; gap: 15px; min-width: 0; }
+.cost-op { font-family: var(--mono); font-size: 13px; color: var(--ink-3); }
+
+/* stat-tile contract: label · value · sub. The left rule carries which tile it
+   is; no tile wears a fill, so nothing here competes with the ledger below. */
+.cost-tile {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding: 1px 0 1px 9px;
+  border-left: 2px solid var(--line-strong);
+  cursor: help;
+}
+.ct-label {
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.ct-value {
+  /* tabular figures are deliberate here and only here: the value animates, and
+     proportional digits would re-measure the whole strip on every frame.
+     overflow:hidden is the odometer's mask — the digits roll behind it. */
+  font-family: var(--mono);
+  font-size: 15.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+}
+.ct-sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.cost-tile.is-hero { border-left-color: var(--crease); padding-left: 11px; }
+.cost-tile.is-hero .ct-label { color: var(--crease); }
+.cost-tile.is-hero .ct-value { font-size: 22px; letter-spacing: -0.025em; }
+/* the fold has been billed but not yet repaid: say so rather than showing a
+   cheerful zero */
+.cost-tile.is-hero.is-behind { border-left-color: var(--warn); }
+.cost-tile.is-hero.is-behind .ct-label,
+.cost-tile.is-hero.is-behind .ct-value { color: var(--warn); }
+
+.ct-badge, .ct-est {
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+.ct-badge { border: 1px solid var(--over); color: var(--over); }
+.ct-est { border: 1px dashed var(--line-strong); color: var(--ink-3); }
+
+/* the savings ratio. The track is 0→100% of naive by construction — there is no
+   axis to truncate, and a full track means every penny was saved. */
+.ct-chip { display: inline-flex; align-items: center; gap: 6px; }
+.ct-chip-num { color: var(--crease); }
+.cost-tile.is-hero.is-behind .ct-chip-num { color: var(--warn); }
+.ct-chip-track {
+  width: 34px; height: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ct-chip-track > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--crease);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* one digit, one span, so only the digits that changed move */
+.ct-value .dg { display: inline-block; }
+
+.cost-toggle {
+  display: none;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-3);
+  font-family: var(--body);
+  font-size: 11px;
+  cursor: pointer;
+}
+.cost-toggle:hover { color: var(--ink); border-color: var(--ink-3); }
+
+@media (max-width: 720px) {
+  .costbar-inner { gap: 12px; padding: 6px 16px; }
+  .costbar-eyebrow { display: none; }
+  .cost-tiles { gap: 11px; }
+  .cost-op { display: none; }
+}
+/* phone: the saving is the headline, the two operands are one tap away */
+@media (max-width: 420px) {
+  .cost-toggle { display: inline-flex; }
+  .costbar[data-open="0"] .cost-tile:not(.is-hero) { display: none; }
+  .costbar[data-open="1"] .costbar-inner { flex-wrap: wrap; row-gap: 6px; }
+  /* a grid, not a flex row: minmax(0,…) is what stops three tiles whose content
+     is wider than a third of a phone from pushing the page sideways */
+  .costbar[data-open="1"] .cost-tiles {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 8px;
+    flex: 1 1 100%;
+  }
+  .costbar[data-open="1"] .ct-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* the sub line wraps rather than ellipsising: "80% of naive" is the answer, and
+     a clipped answer is worse than a two-line strip (which nothing overlaps) */
+  .costbar[data-open="1"] .ct-sub { min-width: 0; flex-wrap: wrap; gap: 0 7px; }
+  .costbar[data-open="1"] .ct-value { font-size: 12.5px; }
+  .costbar[data-open="1"] .cost-tile.is-hero .ct-value { font-size: 17px; }
+  .costbar[data-open="1"] .ct-chip-track { display: none; }
+  .cost-tile.is-hero .ct-value { font-size: 20px; }
+  /* the full wording is 110px of a ~107px column. font-size:0 hides it from the
+     eye and keeps it in the accessibility tree, where it is the useful version;
+     the glyph plus the tile's tooltip carry it for everyone else. */
+  .ct-badge { font-size: 0; padding: 0; border: 0; }
+  .ct-badge::after {
+    content: "✗";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px; height: 14px;
+    border: 1px solid var(--over);
+    border-radius: 50%;
+    font-size: 9px;
+    line-height: 1;
+    vertical-align: -3px;
+  }
+}
+
+/* ── Masthead ─────────────────────────────────────────────────── */
+
+.masthead {
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, var(--surface) 0%, var(--paper) 100%);
+}
+.masthead-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 44px 28px 34px;
+}
+.eyebrow {
+  margin: 0 0 18px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border: 1px solid var(--crease);
+  border-radius: 999px;
+  color: var(--crease);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-optical-sizing: auto;
+  font-weight: 800;
+  font-size: clamp(2.6rem, 8.4vw, 5.6rem);
+  line-height: 0.9;
+  letter-spacing: -0.035em;
+}
+/* the crease: a folded corner sitting between the two words */
+.fold-mark {
+  display: inline-block;
+  width: 0.42em;
+  height: 0.42em;
+  margin: 0 0.14em 0.04em;
+  background: linear-gradient(135deg, var(--crease) 0 50%, transparent 50% 100%);
+  border: 1.5px solid var(--crease);
+  border-radius: 2px;
+  transform: rotate(-8deg);
+  vertical-align: baseline;
+}
+
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  font-size: 1.02rem;
+  color: var(--ink-2);
+}
+.lede code {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--ink);
+}
+
+.masthead-meters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 34px;
+  margin-top: 30px;
+}
+.hero-stat { display: flex; flex-direction: column; }
+/* 34px between three stats does not fit a phone: they wrapped 2 + 1 with a hole */
+@media (max-width: 620px) {
+  .masthead-meters { gap: 18px 20px; margin-top: 22px; }
+  .cta { margin-left: 0; }
+}
+.hero-num {
+  font-family: var(--mono);
+  font-size: clamp(1.5rem, 3.4vw, 2.1rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.hero-label {
+  margin-top: 6px;
+  font-size: 11.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.cta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.cta:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 var(--crease);
+}
+
+/* ── Layout ───────────────────────────────────────────────────── */
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
+  gap: 22px;
+  max-width: 1240px;
+  margin: 26px auto;
+  padding: 0 28px;
+  align-items: start;
+}
+@media (max-width: 940px) {
+  /* minmax(0,…) not 1fr: 1fr's auto minimum lets the ledger's nowrap bands
+     force the column wider than the viewport */
+  .grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.panel {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  padding: 22px;
+}
+.panel-h {
+  margin: 0 0 4px;
+  font-family: var(--display);
+  font-size: 0.94rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.panel-sub {
+  margin: 0 0 14px;
+  font-size: 12.8px;
+  color: var(--ink-3);
+}
+.rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 22px 0 18px;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+textarea, input[type="text"], select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 14px;
+}
+textarea { font-family: var(--mono); font-size: 12.4px; resize: vertical; }
+.hint { margin: 6px 0 0; font-size: 11.5px; color: var(--ink-3); }
+
+.row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 520px) { .field-grid { grid-template-columns: 1fr; } }
+
+.btn {
+  padding: 9px 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--ink-3); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) { .btn.primary { color: #12122a; } }
+.btn.ghost { background: transparent; border-style: dashed; font-weight: 500; }
+.file-btn {
+  padding: 9px 15px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  font-size: 13.5px;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+.file-btn:hover { border-color: var(--ink-3); }
+.ingest-status { font-family: var(--mono); font-size: 12px; color: var(--ok); }
+
+.url-label { margin-top: 18px; }
+/* min-width:0 or the input's default intrinsic width pushes Fetch out of the row */
+.url-row input { flex: 1 1 200px; min-width: 0; }
+#url-status:empty { display: none; }
+#url-status.is-working { color: var(--ink-2); }
+#url-status.is-ok { color: var(--ok); }
+#url-status.is-err { color: var(--over); }
+/* the honest label: whose pipe the bytes came down */
+.via {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.info {
+  width: 15px; height: 15px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 10px;
+  line-height: 1;
+  cursor: help;
+}
+.info:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* ── Meter ────────────────────────────────────────────────────── */
+
+.meter-figure { margin: 0; }
+.meter-figure figcaption {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.meter-title { font-size: 12.5px; color: var(--ink-2); }
+.meter-read {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.meter-track {
+  position: relative;
+  height: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  width: 0;
+  background: var(--ok);
+  border-radius: 0 3px 3px 0;
+  transition: width 0.45s cubic-bezier(0.2, 0.7, 0.2, 1), background-color 0.3s ease;
+}
+.meter-fill.is-warn { background: var(--warn); }
+.meter-fill.is-over { background: var(--over); }
+/* over budget: the bar is full, so the excess is shown as a hatch plus an
+   arrow on the axis label — the bar itself never lies about its 0→max scale */
+.meter-fill.is-clamped {
+  border-radius: 0;
+  background-image: repeating-linear-gradient(
+    135deg, rgba(255, 255, 255, 0.45) 0 3px, transparent 3px 7px);
+}
+.meter-track:has(.is-clamped) { border-color: var(--over); }
+.meter-track:has(.is-clamped)::after {
+  content: "";
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 5px;
+  background: var(--over);
+  box-shadow: -3px 0 0 var(--surface);
+}
+.meter-threshold {
+  position: absolute;
+  top: -1px; bottom: -1px;
+  width: 2px;
+  background: var(--ink);
+  opacity: 0.55;
+}
+.meter-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.meter-axis span:nth-child(2) { flex: 0 0 auto; }
+.meter-state { margin: 10px 0 0; font-size: 12.8px; color: var(--ink-2); }
+.dot {
+  display: inline-block;
+  width: 9px; height: 9px;
+  margin-right: 6px;
+  vertical-align: 0;
+}
+.state-ok { background: var(--ok); border-radius: 50%; }
+.state-warn { background: var(--warn); border-radius: 1px; transform: rotate(45deg); }
+.state-over { background: var(--over); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+/* the remedy is running: a fourth state, so "over budget" stops reading as ignored */
+.state-working {
+  background: var(--accent);
+  border-radius: 50%;
+  animation: fold-pulse 1.1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .state-working { animation: none; }
+}
+
+/* ── Ledger (the signature) ───────────────────────────────────── */
+
+.ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 78px;
+  padding: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.ledger:empty::after {
+  content: "Empty — no messages carried yet.";
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.band {
+  position: relative;
+  min-height: 18px;
+  line-height: 14px;
+  border-radius: 2px;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-2);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  animation: band-in 0.3s ease-out;
+}
+.band.assistant { background: var(--surface); border-left-color: var(--line-strong); }
+.band.summary {
+  border-left-color: var(--crease);
+  background:
+    repeating-linear-gradient(135deg,
+      transparent 0 5px,
+      color-mix(in oklab, var(--crease) 16%, transparent) 5px 6px);
+  color: var(--ink);
+}
+.band.summary::after {
+  content: "";
+  position: absolute;
+  top: 0; right: 0;
+  width: 12px; height: 12px;
+  background: linear-gradient(225deg, var(--crease) 0 50%, transparent 50%);
+}
+@keyframes band-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
+}
+
+/* ── Chat ─────────────────────────────────────────────────────── */
+
+.chat-panel { display: flex; flex-direction: column; min-height: 620px; }
+.thread {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 60vh;
+  padding: 4px 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.empty {
+  margin: auto;
+  max-width: 34ch;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 13.5px;
+}
+.empty p { margin: 4px 0; }
+
+.msg { display: flex; flex-direction: column; gap: 5px; max-width: 84%; }
+.msg .who {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.msg .bubble {
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.msg.user { align-self: flex-end; align-items: flex-end; }
+.msg.user .bubble { background: var(--accent-soft); border-color: transparent; }
+.msg.doc { max-width: 92%; }
+.msg.doc .bubble { padding: 0; overflow: hidden; white-space: normal; }
+.doc-text {
+  font-family: var(--mono);
+  font-size: 11.8px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  padding: 12px 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.doc-text[data-mode="full"] {
+  max-height: 340px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--line);
+}
+.doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px dashed var(--line-strong);
+  background: var(--surface-2);
+}
+.doc-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  cursor: help;
+}
+.doc-toggle {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-family: var(--body);
+  font-size: 11.5px;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.doc-toggle:hover { color: var(--ink); border-color: var(--ink-3); }
+/* stamped on the ingested-document card once its text has left the history */
+.doc-folded {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border: 1px solid var(--crease);
+  border-radius: 999px;
+  color: var(--crease);
+  cursor: help;
+}
+.msg .cursor { display: inline-block; width: 7px; background: var(--ink-3); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* compaction event card */
+.event {
+  align-self: stretch;
+  max-width: none;
+  border: 1px solid var(--crease);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--crease) 8%, var(--surface));
+  padding: 13px 15px;
+}
+.event-h {
+  margin: 0 0 8px;
+  font-family: var(--display);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.event-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.event-figures div { display: flex; flex-direction: column; gap: 2px; }
+.event-figures .k { font-family: var(--body); font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+.event-note { margin: 10px 0 0; font-size: 12.4px; color: var(--ink-2); }
+
+/* before → after bar pair inside the event card */
+.ba { margin-top: 12px; display: grid; gap: 6px; }
+.ba-row { display: grid; grid-template-columns: 52px 1fr 72px; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); }
+.ba-bar { height: 8px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+.ba-bar > span { display: block; height: 100%; background: var(--ink-3); }
+.ba-row.after .ba-bar > span { background: var(--crease); }
+.ba-val { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* ── Hierarchical fold card ───────────────────────────────────────
+   One card per fold, one group per pass, one row per section. Rows carry a
+   shape-differentiated marker AND a text state, so progress never depends on
+   colour alone. ──────────────────────────────────────────────────── */
+
+.fold-levels { display: grid; gap: 12px; margin-top: 12px; }
+.fold-level-h {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--body);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.fold-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.fold-steps li {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  border-left: 3px solid var(--line-strong);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.fold-steps .mark { width: 9px; height: 9px; justify-self: center; background: var(--line-strong); }
+.fold-steps .val { color: var(--ink-2); }
+
+.fold-steps li[data-state="working"] {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.fold-steps li[data-state="working"] .mark {
+  background: var(--accent);
+  border-radius: 50%;
+  animation: fold-pulse 1.1s ease-in-out infinite;
+}
+.fold-steps li[data-state="done"] {
+  border-left-color: var(--crease);
+  color: var(--ink-2);
+}
+.fold-steps li[data-state="done"] .mark {
+  background: var(--crease);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.fold-steps li[data-state="failed"] { border-left-color: var(--over); color: var(--over); }
+.fold-steps li[data-state="failed"] .mark { background: var(--over); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+@keyframes fold-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) {
+  .fold-steps li[data-state="working"] .mark { animation: none; }
+}
+
+/* the reduce is one call over the section summaries: a diamond, not a triangle */
+.fold-steps li.is-reduce { border-left-color: var(--crease); }
+.fold-steps li.is-reduce .mark { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); border-radius: 0; }
+.fold-steps li.is-reduce[data-state="done"] .mark { background: var(--crease); }
+
+/* inline peek at what a section summary actually says; the panel has the rest */
+.sum-peek {
+  grid-column: 2 / -1;
+  justify-self: stretch;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 0 1px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dashed var(--line-strong);
+  background: none;
+  font-family: var(--body);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--ink-3);
+  cursor: help;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sum-peek:hover, .sum-peek:focus-visible { color: var(--ink-2); border-bottom-color: var(--ink-3); }
+
+.fold-live {
+  margin: 10px 0 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+.fold-live:empty { display: none; }
+
+.fold-timing {
+  margin: 10px 0 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  cursor: help;
+  border-bottom: 1px dashed var(--line-strong);
+  display: inline-block;
+}
+
+/* ── Dig deeper ────────────────────────────────────────────────────
+   A finished section row can be reopened three ways, so it grows a strip of
+   quiet controls and, on demand, one inline field. Everything sits inside the
+   row's own grid, in the columns the summary peek already uses, so a row that
+   can be dug into does not look like a different kind of row. ────── */
+
+.fold-steps li[data-dig="1"] { padding-bottom: 6px; }
+.dig-tools {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.dig-btn {
+  padding: 2px 8px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--body);
+  font-size: 11px;
+  cursor: pointer;
+}
+.dig-btn:hover:not(:disabled), .dig-btn:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  border-style: solid;
+}
+
+.dig-form {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-top: 6px;
+}
+/* the rebuild has nothing to type: the button is the whole form */
+.dig-form.is-bare { grid-template-columns: auto; justify-content: start; }
+.dig-form input {
+  padding: 6px 9px;
+  font-size: 12.5px;
+  min-width: 0;
+}
+.dig-form .dig-go {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+@media (prefers-color-scheme: dark) { .dig-form .dig-go { color: #12122a; } }
+.dig-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-family: var(--body);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+
+/* a row whose summary was replaced, and the digest that has not caught up */
+.refocused, .stale-hint {
+  margin-left: 7px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: help;
+}
+.refocused { border: 1px solid var(--accent); color: var(--accent); }
+.stale-hint { border: 1px dashed var(--warn); color: var(--warn); }
+
+/* the small label on a turn whose context was not the ordinary one */
+.turn-chip {
+  /* the bubble column stretches its children; a chip is label-sized, not
+     column-sized, so it opts out on whichever side its speaker sits */
+  align-self: flex-start;
+  padding: 1px 7px;
+  border: 1px solid var(--crease);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--crease);
+  cursor: help;
+  white-space: nowrap;
+}
+.msg.user .turn-chip { align-self: flex-end; }
+.turn-note {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+/* the agent-driven unfold: the accent colour, because the model drove it */
+.msg.event.unfold {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 7%, var(--surface));
+}
+.msg.event.unfold.is-capped {
+  border-color: var(--warn);
+  background: color-mix(in oklab, var(--warn) 7%, var(--surface));
+}
+.uf-steps { margin-top: 10px; }
+
+/* an answer big enough to sit in the protected tail: a caution, not a failure */
+.msg.event.large-answer {
+  border-color: var(--warn);
+  background: color-mix(in oklab, var(--warn) 7%, var(--surface));
+}
+.msg.event.large-answer .event-h { color: var(--warn); }
+/* no dashed rule under this one: the other event headings carry their tooltips
+   without one, and a dashed line across a full-width heading reads as an error */
+.msg.event.large-answer .event-h { cursor: help; }
+
+/* a fold-card change, recorded in the thread rather than only in the card */
+.msg.fold-note {
+  align-self: stretch;
+  max-width: none;
+  padding: 7px 11px;
+  border-left: 3px solid var(--crease);
+  background: var(--surface-2);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+/* ── Error card — human sentence here, raw payload in the wire log ── */
+
+.msg.error {
+  align-self: stretch;
+  max-width: none;
+  border: 1px solid var(--over);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--over) 7%, var(--surface));
+  padding: 13px 15px;
+}
+.error-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-family: var(--display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--over);
+}
+.error-h .mark {
+  flex: none;
+  width: 11px; height: 11px;
+  background: var(--over);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.error-body { margin: 0; font-size: 12.8px; color: var(--ink-2); }
+.error-body + .error-body { margin-top: 6px; }
+.error-hint { margin: 8px 0 0; font-size: 11.5px; color: var(--ink-3); }
+
+.composer { display: flex; gap: 10px; margin-top: 14px; }
+.composer input { flex: 1; }
+
+/* ── Wire log ─────────────────────────────────────────────────── */
+
+.wire { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.wire summary {
+  cursor: pointer;
+  font-family: var(--display);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.wire-count { font-family: var(--mono); font-size: 11px; font-weight: 400; text-transform: none; color: var(--ink-3); margin-left: 8px; }
+.wire-list { margin: 12px 0 0; padding-left: 20px; display: grid; gap: 8px; }
+.wire-list li { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.wire-list .verb { color: var(--accent); }
+.wire-list .stat { color: var(--ink-3); }
+.wire-list .err { color: var(--over); }
+/* what this one call cost, on the same rates the strip at the top uses */
+.wire-list .wire-cost {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--ink-3);
+  cursor: help;
+}
+.wire-list .wire-cost.is-free { border-style: solid; border-color: var(--ok); color: var(--ok); }
+/* a client-side repair fired on this response — see unwrapContentBlocks in app.js */
+.wire-list .wire-fix {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--crease);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--crease);
+  cursor: help;
+}
+
+/* ── Footer ───────────────────────────────────────────────────── */
+
+.footer {
+  max-width: 1240px;
+  margin: 34px auto 0;
+  padding: 26px 28px 44px;
+  border-top: 1px solid var(--line);
+}
+.footer-lede { margin: 0 0 12px; font-family: var(--display); font-weight: 600; }
+.footer-links { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 12.8px; color: var(--ink-2); overflow-wrap: anywhere; }
+.event, .msg.error, .msg .bubble, .ledger .band { max-width: 100%; }
+.footer-note { margin: 16px 0 0; max-width: 70ch; font-size: 12.4px; color: var(--ink-3); }
+
+/* ── Tooltip ──────────────────────────────────────────────────── */
+
+.tooltip {
+  position: fixed;
+  z-index: 40;
+  max-width: 320px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.7);
+  font-size: 12.2px;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.tooltip.on { opacity: 1; }
+.tooltip code { display: block; margin-top: 6px; color: var(--accent); white-space: pre-wrap; }
+.tooltip .tip-body { display: block; }
+
+/* the rich flavour holds a whole generated summary, so it scrolls — which means
+   it has to accept the pointer that scrolls it */
+.tooltip.is-rich {
+  pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.tooltip.is-rich .tip-body {
+  font-family: var(--mono);
+  font-size: 11.4px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+}
+/* a summary rendered as Markdown reads as prose, not as syntax */
+.tooltip.is-rich .tip-body.md {
+  font-family: var(--body);
+  font-size: 12.2px;
+  white-space: normal;
+}
+.tooltip .tip-h {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  position: sticky;
+  top: -9px;
+  padding: 9px 0 4px;
+  margin-top: -9px;
+  background: var(--surface);
+}
+
+/* ── Theme toggle ─────────────────────────────────────────────────
+   Sits with the masthead's other affordances. Two states, each labelled for
+   screen readers; the glyph alone never carries the meaning. ────────── */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-family: var(--body);
+  font-size: 12px;
+  cursor: pointer;
+}
+.theme-toggle:hover { color: var(--ink); border-color: var(--ink-3); }
+.theme-toggle .glyph { font-size: 13px; line-height: 1; }
+.masthead-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  float: right;
+  margin: -8px 0 0 12px;
+}
+/* narrow: the toggle's word is what pushes the eyebrow onto a second line, and
+   the glyph plus its aria-label already say everything */
+@media (max-width: 560px) {
+  .theme-toggle { padding: 7px 10px; }
+  .theme-toggle span:not(.glyph) {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+  }
+}
+
+/* ── Markdown inside an assistant bubble ──────────────────────────
+   Rendered by md.js from escaped text, so every tag here was emitted locally.
+   Tight vertical rhythm: a chat bubble is not an article. ───────────── */
+
+/* .bubble is pre-wrap for plain text; rendered markdown wants normal flow */
+.md { white-space: normal; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p { margin: 0 0 0.6em; }
+.md h4, .md h5, .md h6 {
+  margin: 0.9em 0 0.35em;
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1.25;
+}
+.md h4 { font-size: 1.02em; }
+.md h5 { font-size: 0.96em; }
+.md h6 { font-size: 0.92em; color: var(--ink-2); }
+.md ul, .md ol { margin: 0 0 0.6em; padding-left: 1.35em; }
+.md li { margin: 0.12em 0; }
+.md li > ul, .md li > ol { margin: 0.12em 0 0.2em; }
+.md strong { font-weight: 600; color: var(--ink); }
+.md em { font-style: italic; }
+.md del { opacity: 0.7; }
+.md code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.md pre {
+  margin: 0 0 0.6em;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow-x: auto;
+}
+.md pre code { padding: 0; border: 0; background: none; }
+.md blockquote {
+  margin: 0 0 0.6em;
+  padding: 2px 0 2px 11px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--ink-2);
+}
+.md hr { margin: 0.8em 0; border: 0; border-top: 1px solid var(--line); }
+.md a { overflow-wrap: anywhere; }
+
+/* the headline model's badge, and the honesty marker on an unpublished window */
+.model-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--crease);
+  border-radius: 999px;
+  color: var(--crease);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: help;
+}
+.unverified {
+  color: var(--warn);
+  border-bottom: 1px dashed var(--warn);
+  cursor: help;
+}
+/* same dashed affordance as .unverified, but in the body ink rather than warn:
+   the number is sourced, so it invites a look without asking for caution */
+.measured {
+  border-bottom: 1px dashed var(--crease);
+  cursor: help;
+}
+
+/* the docs link on a wire-log row and in the footer */
+.doc-link {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  margin-left: 6px;
+  white-space: nowrap;
+}

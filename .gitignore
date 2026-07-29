@@ -1,0 +1,12 @@
+# Real demo credentials — never commit. Any config.js at any depth.
+config.js
+public/shared/config.js
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# Cloudflare / wrangler
+.wrangler/
+node_modules/

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat with a book — Agent Studio context APIs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/tokens.css">
+<link rel="stylesheet" href="style.css">
+<script>
+  /* Resolve the theme before first paint, or the page flashes the wrong one.
+     Stored choice wins; otherwise the OS preference decides. */
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
+    var dark = saved ? saved === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+</head>
+<body>
+<a class="skip" href="#chat">Skip to the conversation</a>
+
+<!-- ── The meter ─────────────────────────────────────────────────────
+     Sticky rather than position:fixed, and deliberately: as the first child of
+     body with top:0 it never moves, so it behaves exactly like a fixed strip
+     while still occupying layout — no body padding to keep in sync with its own
+     height, and nothing to overlap when it wraps on a narrow screen. ──── -->
+<div class="costbar" id="costbar" data-open="0">
+  <div class="costbar-inner">
+    <span class="costbar-eyebrow">
+      the meter
+      <button class="info" type="button" data-tip="Two prices for the same conversation. Naive is what it would have cost re-sending the full original document and the whole unsummarized history on every turn. Real is what was actually spent — every completion, plus every summarizer call the folds, refolds and unfolds needed. The difference is the saving, and it is only worth quoting because the summarizer's own bill is on the real side of it.">?</button>
+    </span>
+    <div class="cost-tiles" id="cost-tiles">
+      <div class="cost-tile" id="tile-naive" tabindex="0">
+        <span class="ct-label">Naive<span class="ct-badge" id="naive-badge" hidden>wouldn't even fit ✗</span></span>
+        <span class="ct-value" id="naive-usd"></span>
+        <span class="ct-sub"><span id="naive-tok">0 tok</span></span>
+      </div>
+      <span class="cost-op" aria-hidden="true">−</span>
+      <div class="cost-tile" id="tile-real" tabindex="0">
+        <span class="ct-label">Real<span class="ct-est" id="real-est" hidden>est.</span></span>
+        <span class="ct-value" id="real-usd"></span>
+        <span class="ct-sub"><span id="real-tok">0 tok</span></span>
+      </div>
+      <span class="cost-op" aria-hidden="true">=</span>
+      <div class="cost-tile is-hero" id="tile-saved" tabindex="0">
+        <span class="ct-label">Saved</span>
+        <span class="ct-value" id="saved-usd"></span>
+        <span class="ct-sub">
+          <span id="saved-tok">0 tok</span>
+          <span class="ct-chip">
+            <span class="ct-chip-num" id="saved-pct">—</span>
+            <span class="ct-chip-track" id="saved-track" aria-hidden="true"><span id="saved-fill"></span></span>
+          </span>
+        </span>
+      </div>
+    </div>
+    <button class="cost-toggle" id="cost-toggle" type="button" aria-expanded="false" aria-controls="cost-tiles">Breakdown</button>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="masthead-tools">
+      <a class="theme-toggle" href="../"><span class="glyph" aria-hidden="true">←</span> All demos</a>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">
+        <span class="glyph" id="theme-glyph" aria-hidden="true">◐</span>
+        <span id="theme-label">Dark</span>
+      </button>
+    </div>
+    <p class="eyebrow">Algolia Agent Studio · context APIs <span class="tag">unstable</span></p>
+    <h1 aria-label="Chat with a book">Chat with<span class="fold-mark" aria-hidden="true"></span>a book</h1>
+    <p class="lede">
+      A conversation runs out of room long before it runs out of things to say.
+      Two endpoints fix that: <code>context/trim</code> counts what you are carrying,
+      <code>context/compact</code> folds the old part into a summary. Paste a long
+      document below, or fetch a URL, and watch the fold happen. Bring something
+      that overflows the model window outright and it gets folded in sections
+      first — a summary is only useful if it fits. A fold is not a shredder,
+      though: every folded section is still here. Dive into one to ask a question
+      against its full original text, refold it around what you actually care
+      about, or watch the assistant reopen a section by itself when your question
+      needs a detail the digest dropped.
+    </p>
+    <div class="masthead-meters">
+      <div class="hero-stat">
+        <span class="hero-num" id="hero-tokens">0</span>
+        <span class="hero-label">tokens carried</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-num" id="hero-folds">0</span>
+        <span class="hero-label">folds so far</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-num" id="hero-saved">0</span>
+        <span class="hero-label">tokens reclaimed</span>
+      </div>
+      <a class="cta" href="#" id="repo-cta" target="_blank" rel="noopener">
+        Like it? Use the code in your project <span aria-hidden="true">→</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="grid">
+  <!-- ── Left rail: ingest, model, meter, ledger ─────────────────── -->
+  <section class="panel" aria-labelledby="ingest-h">
+    <h2 id="ingest-h" class="panel-h">1 · Load the context</h2>
+    <p class="panel-sub">Whatever you paste becomes the first user message. Nothing leaves your browser except the API calls shown in the wire log.</p>
+
+    <label class="field-label" for="doc">Paste a long document</label>
+    <textarea id="doc" rows="7" placeholder="Release notes, a spec, a transcript, a chapter…"></textarea>
+
+    <div class="row">
+      <label class="file-btn">
+        <input type="file" id="file" accept=".txt,.md,.markdown,text/plain" hidden>
+        Choose a .txt or .md file
+      </label>
+      <button class="btn ghost" id="sample-btn" type="button">Use a sample</button>
+    </div>
+
+    <label class="field-label url-label" for="url">
+      …or fetch a web page
+      <button class="info" type="button" data-tip="Fetched by your browser and stripped to plain text here — script, style, and navigation elements are dropped, whitespace is collapsed. A site that sends no CORS header cannot be read directly; that URL is read through the public reader named in config.js instead, and the substitution is stated on screen and in the wire log.">?</button>
+    </label>
+    <div class="row url-row">
+      <input id="url" type="url" inputmode="url" autocomplete="off"
+             placeholder="https://www.gutenberg.org/cache/epub/54873/pg54873-images.html">
+      <button class="btn" id="url-btn" type="button">Fetch</button>
+    </div>
+    <p class="hint" id="url-status" role="status"></p>
+
+    <div class="row">
+      <button class="btn primary" id="ingest-btn" type="button">Ingest</button>
+      <span class="ingest-status" id="ingest-status" role="status"></span>
+    </div>
+
+    <hr class="rule">
+
+    <h2 class="panel-h">2 · Pick the engine</h2>
+    <div class="field-grid">
+      <div>
+        <label class="field-label" for="model">Model</label>
+        <select id="model"></select>
+        <p class="hint" id="model-hint"></p>
+      </div>
+      <div>
+        <label class="field-label" for="budget">
+          Working budget
+          <button class="info" type="button" data-tip="The meter fills against this budget, not the model's full window. Real windows are large enough that a demo would never fill them; a smaller budget makes the fold observable. Auto-compaction triggers at 70% of the budget.">?</button>
+        </label>
+        <select id="budget"></select>
+        <p class="hint" id="budget-hint"></p>
+      </div>
+    </div>
+
+    <hr class="rule">
+
+    <h2 class="panel-h">3 · Watch the fold</h2>
+    <figure class="meter-figure">
+      <figcaption>
+        <span class="meter-title">Context carried</span>
+        <span class="meter-read" id="meter-read">0 / 8,000 tokens</span>
+      </figcaption>
+      <div class="meter" id="meter"
+           role="meter" aria-valuemin="0" aria-valuenow="0" aria-valuemax="8000"
+           aria-label="Estimated tokens carried, against the working budget">
+        <div class="meter-track">
+          <div class="meter-fill" id="meter-fill"></div>
+          <div class="meter-threshold" id="meter-threshold" title="Auto-compaction threshold"></div>
+        </div>
+        <div class="meter-axis">
+          <span>0</span>
+          <span id="axis-threshold">70% · compaction</span>
+          <span id="axis-max">8,000</span>
+        </div>
+      </div>
+      <p class="meter-state" id="meter-state"><span class="dot state-ok" aria-hidden="true"></span> Room to spare</p>
+    </figure>
+
+    <div class="row">
+      <button class="btn" id="compact-btn" type="button">Compact now</button>
+      <button class="btn ghost" id="reset-btn" type="button">Start over</button>
+    </div>
+
+    <hr class="rule">
+
+    <h2 class="panel-h">The ledger</h2>
+    <p class="panel-sub">One band per message, height proportional to its estimated tokens. Folded history keeps its crease.</p>
+    <div class="ledger" id="ledger" aria-label="Messages by token weight"></div>
+  </section>
+
+  <!-- ── Right: chat + wire log ─────────────────────────────────── -->
+  <section class="panel chat-panel" id="chat" aria-labelledby="chat-h">
+    <h2 id="chat-h" class="panel-h">The conversation</h2>
+    <div class="thread" id="thread">
+      <div class="empty">
+        <p><strong>Nothing carried yet.</strong></p>
+        <p>Ingest a document, or just ask a question — the meter starts moving from the first turn.</p>
+      </div>
+    </div>
+    <form class="composer" id="composer">
+      <label class="sr-only" for="prompt">Your message</label>
+      <input id="prompt" type="text" autocomplete="off" placeholder="Ask about what you pasted…">
+      <button class="btn primary" id="send-btn" type="submit">Send</button>
+    </form>
+
+    <details class="wire">
+      <summary>Wire log <span class="wire-count" id="wire-count">0 calls</span></summary>
+      <p class="panel-sub">Every request this page makes, in order. Method, path, and the stats the API sent back.</p>
+      <ol class="wire-list" id="wire-list"></ol>
+    </details>
+  </section>
+</main>
+
+<footer class="footer">
+  <p class="footer-lede">Built on Agent Studio context APIs <span class="tag">unstable</span></p>
+  <ul class="footer-links" id="footer-endpoints">
+    <li data-endpoint="/1/unstable/context/trim"><code>POST /1/unstable/context/trim</code> — deterministic token count and trim</li>
+    <li data-endpoint="/1/unstable/context/compact"><code>POST /1/unstable/context/compact</code> — LLM summary of older turns, on your provider</li>
+    <li data-endpoint="/1/agents/{agent_id}/completions"><code>POST /1/agents/{agent_id}/completions</code> — streaming chat, <code>compatibilityMode=ai-sdk-5</code></li>
+  </ul>
+  <p class="footer-note">
+    Unstable endpoints can change without notice. This page calls them straight from the
+    browser for demo clarity — put a backend in front of your key before shipping.
+    <a id="repo-link" href="#" target="_blank" rel="noopener">Source</a>
+  </p>
+</footer>
+
+<div class="tooltip" id="tooltip" role="tooltip" aria-hidden="true"></div>
+
+<script src="../shared/config.js"></script>
+<script src="../shared/md.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

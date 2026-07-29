@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Studio demos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/tokens.css">
+<script>
+  /* Resolve the theme before first paint, or the page flashes the wrong one.
+     Same storage key as the demos, so a choice made in one carries here. */
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
+    var dark = saved ? saved === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+<style>
+/* ───────────────────────────────────────────────────────────────
+   Landing page — nothing but shared tokens, no demo styles.
+   The card's thumbnail is a CSS-drawn stand-in for a screenshot: a
+   folded stack of bands, the same motif the context demos use for
+   compaction. It is deliberately not an <img> — a missing file would
+   be a broken image on a public page.
+   ─────────────────────────────────────────────────────────────── */
+
+.wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+
+.masthead { border-bottom: 1px solid var(--line); background: var(--surface); }
+.masthead .wrap { padding-top: 40px; padding-bottom: 40px; position: relative; }
+.eyebrow {
+  margin: 0 0 10px; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+}
+.tag {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  border: 1px solid var(--line-strong); border-radius: 2px;
+  padding: 1px 5px; color: var(--ink-2); text-transform: none;
+}
+h1 {
+  font-family: var(--display); font-weight: 800; font-size: clamp(38px, 7vw, 68px);
+  line-height: 0.98; letter-spacing: -0.02em; margin: 0 0 16px;
+}
+.fold-mark {
+  display: inline-block; width: 0.42em; height: 0.42em; margin: 0 0.12em;
+  background: var(--crease);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  transform: translateY(-0.18em);
+}
+.lede { margin: 0; max-width: 62ch; font-size: 17px; color: var(--ink-2); }
+.lede code { background: var(--surface-2); padding: 1px 4px; border-radius: 2px; }
+
+.theme-toggle {
+  position: absolute; top: 20px; right: 24px;
+  font: inherit; font-size: 12px; color: var(--ink-2);
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 4px 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.theme-toggle:hover { border-color: var(--line-strong); color: var(--ink); }
+
+.cards { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.cards-wrap { padding-top: 40px; padding-bottom: 56px; }
+.section-h {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-3); margin: 0 0 18px;
+}
+
+.card {
+  display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  color: inherit; text-decoration: none; overflow: hidden;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+.card:hover, .card:focus-visible { border-color: var(--accent); transform: translateY(-2px); }
+.card.is-soon { opacity: 0.86; }
+.card.is-soon:hover { border-color: var(--line-strong); }
+
+/* the folded-stack stand-in for a screenshot */
+.thumb {
+  height: 148px; border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 7px; padding: 0 24px; position: relative;
+}
+.thumb i { display: block; height: 8px; border-radius: 2px; background: var(--line-strong); }
+.thumb i:nth-child(1) { width: 88%; }
+.thumb i:nth-child(2) { width: 72%; }
+.thumb i:nth-child(3) { width: 34%; background: var(--crease); position: relative; }
+.thumb i:nth-child(4) { width: 58%; }
+.thumb i:nth-child(5) { width: 44%; }
+.thumb::after {
+  content: ""; position: absolute; right: 0; top: 0;
+  width: 28px; height: 28px;
+  background: linear-gradient(225deg, var(--paper) 50%, var(--crease) 50%);
+  border-left: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.is-soon .thumb i:nth-child(3) { background: var(--line-strong); }
+.is-soon .thumb { background: repeating-linear-gradient(
+  -45deg, var(--surface-2) 0 10px, var(--paper) 10px 20px); }
+
+.card-body { padding: 20px 24px 22px; display: flex; flex-direction: column; flex: 1; }
+.card-status {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ok); margin: 0 0 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.is-soon .card-status { color: var(--ink-3); }
+.card-status .dot {
+  width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block;
+}
+.is-soon .card-status .dot { border-radius: 1px; }
+.card h2 {
+  font-family: var(--display); font-weight: 600; font-size: 24px;
+  letter-spacing: -0.01em; line-height: 1.15; margin: 0 0 10px;
+}
+.card p { margin: 0 0 16px; color: var(--ink-2); font-size: 15px; }
+.card-meta {
+  margin: auto 0 0; padding: 0; list-style: none;
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.card-meta li {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  border: 1px solid var(--line); border-radius: 2px; padding: 2px 6px;
+}
+.card-go { font-size: 13px; color: var(--accent); margin-top: 14px; font-weight: 500; }
+.is-soon .card-go { color: var(--ink-3); }
+
+.footer { border-top: 1px solid var(--line); background: var(--surface); }
+.footer .wrap { padding-top: 26px; padding-bottom: 40px; }
+.footer p { margin: 0 0 8px; font-size: 13px; color: var(--ink-3); max-width: 70ch; }
+</style>
+
+</head>
+<body>
+
+<a class="skip" href="#demos">Skip to the demos</a>
+
+<header class="masthead">
+  <div class="wrap">
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">
+      <span class="glyph" id="theme-glyph" aria-hidden="true">◐</span>
+      <span id="theme-label">Dark</span>
+    </button>
+    <p class="eyebrow">Algolia Agent Studio · context APIs <span class="tag">unstable</span></p>
+    <h1>Agent Studio<span class="fold-mark" aria-hidden="true"></span>demos</h1>
+    <p class="lede">
+      Small, single-page demos of what the Agent Studio context APIs make possible.
+      <code>context/trim</code> counts exactly what a conversation is carrying;
+      <code>context/compact</code> folds the old part of it into a summary you can
+      still open back up. Each demo runs entirely in the browser, shows every API
+      call it makes, and comes with its source.
+    </p>
+  </div>
+</header>
+
+<main class="wrap cards-wrap" id="demos">
+  <h2 class="section-h">The demos</h2>
+  <div class="cards">
+
+    <a class="card" href="chat-with-book/">
+      <div class="thumb" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="card-body">
+        <p class="card-status"><span class="dot"></span> Live</p>
+        <h2>Chat with a book</h2>
+        <p>
+          Chat with an entire book on a small-context model — watch hierarchical
+          compaction fold 800k characters into a conversation that never overflows.
+        </p>
+        <ul class="card-meta">
+          <li>context/trim</li>
+          <li>context/compact</li>
+          <li>streaming completions</li>
+          <li>cost meter</li>
+        </ul>
+        <p class="card-go">Open the demo →</p>
+      </div>
+    </a>
+
+    <a class="card is-soon" href="infinite-conversation/">
+      <div class="thumb" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="card-body">
+        <p class="card-status"><span class="dot"></span> Coming soon</p>
+        <h2>Infinite conversation</h2>
+        <p>
+          A conversation that never ends — auto-compaction keeps decades-long
+          threads alive on tiny context windows.
+        </p>
+        <ul class="card-meta">
+          <li>auto-compaction</li>
+          <li>seeded histories</li>
+          <li>suggested replies</li>
+        </ul>
+        <p class="card-go">Read what is coming →</p>
+      </div>
+    </a>
+
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>
+      Built on Agent Studio context APIs <span class="tag">unstable</span>. Unstable
+      endpoints can change without notice.
+    </p>
+    <p>
+      These pages call the API straight from the browser for demo clarity. Put a
+      backend in front of your key before shipping anything like them.
+    </p>
+  </div>
+</footer>
+
+<script>
+  /* The toggle only pins color-scheme; the palette resolves itself. */
+  (function () {
+    var btn = document.getElementById("theme-toggle");
+    var label = document.getElementById("theme-label");
+    var glyph = document.getElementById("theme-glyph");
+    function paint() {
+      var dark = document.documentElement.dataset.theme === "dark";
+      btn.setAttribute("aria-pressed", String(dark));
+      label.textContent = dark ? "Light" : "Dark";
+      glyph.textContent = dark ? "◑" : "◐";
+    }
+    btn.addEventListener("click", function () {
+      var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      try { localStorage.setItem("ic-theme", next); } catch (e) { /* private mode */ }
+      paint();
+    });
+    paint();
+  })();
+</script>
+
+</body>
+</html>
