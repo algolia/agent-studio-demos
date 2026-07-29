@@ -2,6 +2,9 @@
 config.js
 public/shared/config.js
 
+# Built by scripts/build-passages.js from the committed texts — derived, not source.
+passages.jsonl
+
 # OS / editor noise
 .DS_Store
 Thumbs.db
