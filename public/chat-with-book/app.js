@@ -3071,6 +3071,10 @@ function resetAll() {
   state.fold = null;
   state.unfoldSettle = null;
   resetCost();
+  // the chips go with the document they belong to: a Moby-Dick question sent
+  // against an empty history reads as the demo failing to answer
+  renderChips(null);
+  markShelf(null);
   tipPinned = null; closeTip();
   el.thread.innerHTML = '<div class="empty"><p><strong>Cleared.</strong></p>' +
     '<p>Take a book off the shelf, or ingest a document of your own.</p></div>';
@@ -3130,6 +3134,11 @@ function initModels() {
     state.model = CFG.models[Number(el.model.value)];
     setModelHint();
     renderMeter();
+    // the meter's mode is a statement about THIS model's window: a history that
+    // cannot be sent naively to a 200k model fits a 1M one, so switching the
+    // picker can make an impossible run possible again. Re-render or the tile
+    // keeps asserting the old answer until the next charge lands.
+    renderCost();
   });
   state.model = CFG.models[0];
   setModelHint();
