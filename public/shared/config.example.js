@@ -113,6 +113,14 @@ window.DEMO_CONFIG = {
   // Sections → digest → digest-of-digests. Two passes clear a 1M-char book.
   maxFoldLevels: 3,
 
+  // The line above which a tile asks before it spends. Ingesting a book runs
+  // every word past the summarizer once, on your own provider credentials, so
+  // it is a per-click cost rather than a one-off — above this estimate the tile
+  // shows a confirm and sends nothing until it is accepted. Read live, so it
+  // moves with the model picker: the rate changes, the estimates change, and
+  // the shelf's cost-gated group rearranges. Omit it and the demo uses 0.5.
+  costConfirmUsd: 0.5,
+
   // Most sites do not send Access-Control-Allow-Origin, so a browser cannot
   // read them directly. When the direct fetch is refused, the URL is read
   // through this public reader instead — always named in the UI and wire log,
