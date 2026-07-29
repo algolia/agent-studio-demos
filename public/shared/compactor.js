@@ -120,6 +120,9 @@
 
     let inFlight = null;
     let folds = 0;
+    // the summary the previous pass put at the head of the history, so a plan
+    // that would only fold that message can be recognised before it is paid for
+    let lastSummary = null;
 
     function budget() { return read(d.budget, Infinity); }
     function ratio() { return read(d.ratio, 1); }
@@ -168,6 +171,7 @@
       if (!summary) throw new Error("context/compact returned no summary message");
 
       const next = [summary].concat(s.messages.slice(p.cut));
+      lastSummary = summary;
       if (typeof d.onCharge === "function") d.onCharge(out.stats, meta);
 
       // The honest count of what is now carried comes from the endpoint that
@@ -197,12 +201,22 @@
       const limit = Number.isFinite(o.maxPasses) ? o.maxPasses : maxPasses;
       const tokensBefore = state().tokens;
 
+      let stalled = false;
       inFlight = (async () => {
         const passes = [];
-        let stalled = false;
         for (let i = 0; i < limit; i++) {
           const forced = o.force && i === 0;
           if (!forced && !needed()) break;
+          // A plan that takes nothing but the summary the last pass wrote would
+          // fold that summary back into itself: a real call, real money, and no
+          // room bought. Recognising it here rather than from its result is the
+          // difference between spending nothing and spending once to find out.
+          const ahead = plan();
+          if (!ahead) break;
+          if (ahead.cut === 1 && lastSummary && state().messages[0] === lastSummary) {
+            stalled = true;
+            break;
+          }
           const result = await pass(i + 1);
           if (!result) break;
           passes.push(result);

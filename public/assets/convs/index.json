@@ -18,6 +18,8 @@
    "exchanges": 252,
    "chars": 681828,
    "tokens": 170457,
+   "tokensSource": "estimated locally at 4 chars per token — the trim endpoint was not reachable when these files were built. Text like this tokenizes nearer 3 chars per token, so the real count is higher; the demo re-probes on load and shows the endpoint's own number.",
+   "method": "composed offline from authored templates (tools/compose-conversations.js)",
    "file": "deploy-escalation.json"
   },
   {
@@ -35,6 +37,8 @@
    "exchanges": 228,
    "chars": 323015,
    "tokens": 80754,
+   "tokensSource": "estimated locally at 4 chars per token — the trim endpoint was not reachable when these files were built. Text like this tokenizes nearer 3 chars per token, so the real count is higher; the demo re-probes on load and shows the endpoint's own number.",
+   "method": "composed offline from authored templates (tools/compose-conversations.js)",
    "file": "tidewrights.json"
   },
   {
@@ -52,6 +56,8 @@
    "exchanges": 204,
    "chars": 326430,
    "tokens": 81608,
+   "tokensSource": "estimated locally at 4 chars per token — the trim endpoint was not reachable when these files were built. Text like this tokenizes nearer 3 chars per token, so the real count is higher; the demo re-probes on load and shows the endpoint's own number.",
+   "method": "composed offline from authored templates (tools/compose-conversations.js)",
    "file": "german-by-post.json"
   }
  ]

@@ -430,7 +430,8 @@ async function main() {
         slug: r.slug, title: r.title, register: r.register, blurb: r.blurb,
         opener: r.opener, starters: r.starters,
         messageCount: r.messageCount, exchanges: r.exchanges,
-        chars: r.chars, tokens: r.tokens,
+        chars: r.chars, tokens: r.tokens, tokensSource: r.tokensSource,
+        method: r.generated.method,
         file: `${r.slug}.json`,
       })),
     };

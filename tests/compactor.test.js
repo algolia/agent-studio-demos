@@ -218,6 +218,24 @@ test("a pass that reclaims nothing stops the loop instead of churning", async ()
   assert.strictEqual(demo.compactCalls.length, 1, "no money spent on passes that cannot help");
 });
 
+test("folding a summary back into itself is refused before it is paid for", async () => {
+  // 15 messages, keepLast 4, cap 20,000 at 550 each: the first pass takes 11 and
+  // leaves [summary] + 4. The next plan can only take the summary itself, and
+  // that call must never go out — it is real money for no room.
+  const { demo, compactor } = fakeDemo({ messages: seed(15), perMessage: 550, summaryTokens: 6000 });
+  const run = await compactor.now();
+  assert.strictEqual(demo.compactCalls.length, 1, "exactly one call, not two");
+  assert.strictEqual(run.passes, 1);
+  assert.strictEqual(run.stalled, true, "the loop knew, rather than found out");
+  assert.strictEqual(demo.messages.length, 5, "one summary plus the protected tail");
+  // the guard is about the summary specifically: a one-message plan over a
+  // message the driver did not write is still worth trying
+  const fresh = fakeDemo({ messages: seed(5), perMessage: 9000, summaryTokens: 100 });
+  await fresh.compactor.now();
+  assert.strictEqual(fresh.demo.compactCalls.length, 1);
+  assert.strictEqual(fresh.demo.compactCalls[0].count, 1, "a lone oversize message still goes");
+});
+
 test("maxPasses bounds a fold that only ever makes slow progress", async () => {
   // each pass reclaims a little — 36 messages traded for a 5,000-token summary —
   // so it never stalls, and never reaches 5,600 either within three passes
