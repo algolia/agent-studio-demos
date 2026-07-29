@@ -21,6 +21,7 @@ public/                     the deployable root — this is what Cloudflare Page
     tokens.css              the design language: colors, fonts, spacing, base primitives
     md.js                   vendored sanitizing markdown renderer (window.renderMarkdown)
     meter.js                the cost strip: cost model, mode switch, rendering (window.DemoMeter)
+    meter.css               the cost strip's styling, linked after tokens.css
     books.js                the bookshelf manifest and its suggestion chips (window.DEMO_BOOKS)
     config.example.js       template for local credentials — copy it, never edit it in place
     config.js               your real credentials (gitignored, never committed)
@@ -32,7 +33,7 @@ eslint.config.js            flat config, rules written out, zero dependencies
 .github/workflows/          ci.yml (lint + tests), deploy.yml (Cloudflare Pages)
 ```
 
-Each demo links `../shared/tokens.css` first, then its own `style.css`. A demo's stylesheet never redeclares a token; the landing page uses nothing but `tokens.css`.
+Each demo links `../shared/tokens.css` first, then any shared stylesheet it uses (`meter.css`), then its own `style.css`. A demo's stylesheet never redeclares a token; the landing page uses nothing but `tokens.css`.
 
 ## Run it locally
 

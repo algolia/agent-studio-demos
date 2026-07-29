@@ -97,6 +97,10 @@ with no context management. Pure model, separate renderer.
 | `createStrip(els)` | `{ render(view), reset() }`; `els` names nodes by role (`naiveUsd`, `savedUsd`, `unlockedValue`, `opEquals`, …) |
 | `usd`, `fmt`, `signedTokens`, `shortTokens` | the formatters, so the strip and the wire log cannot disagree about a figure |
 
+Its styling travels with it in `meter.css`, which declares no token of its own.
+Link order is `tokens.css`, `meter.css`, then the demo's `style.css` — that last
+position is what lets a demo adjust the strip without editing the shared file.
+
 The two modes are why `meterView` exists apart from the renderer:
 
 - **feasible** — the largest single naive payload still fits the model's real
