@@ -325,6 +325,9 @@ select {
   border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px;
   display: grid; gap: 8px;
 }
+/* an explicit display beats the UA rule for [hidden], so the attribute the page
+   sets on this element would otherwise do nothing at all */
+.chips[hidden] { display: none; }
 .chip-head {
   display: flex; justify-content: space-between; align-items: center;
   gap: 12px; flex-wrap: wrap;

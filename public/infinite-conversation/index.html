@@ -8,19 +8,19 @@
 <!-- ── Social cards ───────────────────────────────────────────────
      Absolute URLs throughout: a crawler has no page to resolve a relative
      path against. ──── -->
-<meta name="description" content="Arrive in the middle of a conversation with hundreds of turns and more tokens than the model can hold behind it, then keep going by clicking suggested replies while compaction quietly keeps it alive.">
+<meta name="description" content="Arrive in the middle of a conversation with hundreds of turns and far more tokens than the working budget can hold behind it, then keep going by clicking suggested replies while compaction quietly keeps it alive.">
 <meta property="og:site_name" content="Agent Studio demos">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://agent-studio-demos.pages.dev/infinite-conversation/">
 <meta property="og:title" content="Infinite conversation — Agent Studio context APIs">
-<meta property="og:description" content="Arrive in the middle of a conversation with hundreds of turns and more tokens than the model can hold behind it, then keep going by clicking suggested replies while compaction quietly keeps it alive.">
+<meta property="og:description" content="Arrive in the middle of a conversation with hundreds of turns and far more tokens than the working budget can hold behind it, then keep going by clicking suggested replies while compaction quietly keeps it alive.">
 <meta property="og:image" content="https://agent-studio-demos.pages.dev/assets/og/infinite-conversation.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="The Infinite conversation demo, a seeded saga folded on arrival and the cost meter carrying its count.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Infinite conversation — Agent Studio context APIs">
-<meta name="twitter:description" content="Arrive in the middle of a conversation with hundreds of turns and more tokens than the model can hold behind it, then keep going by clicking suggested replies while compaction quietly keeps it alive.">
+<meta name="twitter:description" content="Arrive in the middle of a conversation with hundreds of turns and far more tokens than the working budget can hold behind it, then keep going by clicking suggested replies while compaction quietly keeps it alive.">
 <meta name="twitter:image" content="https://agent-studio-demos.pages.dev/assets/og/infinite-conversation.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -46,9 +46,9 @@
 
 <!-- ── The meter ─────────────────────────────────────────────────────
      The same strip as every demo on this site, from shared/meter.js. This page
-     can reach its impossible mode before a single question is asked: the
-     seeded history is already larger than the model's window, so there is no
-     naive run to be cheaper than. Every node the kit writes to is here,
+     can reach its impossible mode before a single question is asked: when trim
+     counts the seeded history larger than the model's window there is no naive
+     run to be cheaper than, and the strip says so instead of subtracting. Every node the kit writes to is here,
      including both states of the third tile — createStrip skips a node it was
      not given, so a missing one would simply never draw. ──── -->
 <div class="costbar" id="costbar" data-open="0">
@@ -111,7 +111,7 @@
     <div class="masthead-meters">
       <div class="hero-stat">
         <span class="hero-num" id="hero-behind">0</span>
-        <span class="hero-label">turns behind you</span>
+        <span class="hero-label">exchanges behind you</span>
       </div>
       <div class="hero-stat">
         <span class="hero-num" id="hero-tokens">0</span>

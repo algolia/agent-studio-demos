@@ -1393,6 +1393,9 @@ function resetThread() {
   el.compact.textContent = "Compact now";
   el.sagaStatus.textContent = "";
   el.heroBehind.textContent = "0";
+  // nothing is loaded, so nothing can be folded: re-run the enable/disable pass
+  // rather than leaving a primary button that looks live and does nothing
+  busy(false);
   renderMeter();
   renderLedger();
   renderTurnline();
