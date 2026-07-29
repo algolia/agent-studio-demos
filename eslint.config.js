@@ -60,7 +60,27 @@ const browserGlobals = {
   DEMO_CONFIG: "readonly",
   DEMO_BOOKS: "readonly",
   DemoMeter: "readonly",
+  DemoCompactor: "readonly",
   renderMarkdown: "readonly",
+};
+
+/* Node, for the conversation generator under tools/. It is not a browser
+   script, but it does reach for fetch and the stream decoder a browser also
+   has — so the two lists overlap on purpose rather than by accident. */
+const nodeGlobals = {
+  require: "readonly",
+  module: "writable",
+  exports: "writable",
+  __dirname: "readonly",
+  __filename: "readonly",
+  process: "readonly",
+  console: "readonly",
+  globalThis: "writable",
+  Buffer: "readonly",
+  fetch: "readonly",
+  TextDecoder: "readonly",
+  setTimeout: "readonly",
+  clearTimeout: "readonly",
 };
 
 /* The part of eslint:recommended that catches real mistakes: things that are
@@ -171,6 +191,16 @@ module.exports = [
         URL: "readonly",
         TextEncoder: "readonly",
       },
+    },
+    rules: recommended,
+  },
+  {
+    // The conversation generator: Node, CommonJS, and never loaded by a page.
+    files: ["tools/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "commonjs",
+      globals: nodeGlobals,
     },
     rules: recommended,
   },

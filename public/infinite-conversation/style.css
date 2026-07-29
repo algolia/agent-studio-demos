@@ -1,0 +1,438 @@
+/* ───────────────────────────────────────────────────────────────
+   infinite-conversation — this page's own styles.
+
+   Loaded third, after tokens.css and meter.css, which is the position that
+   lets it adjust the shared cost strip without editing the shared file. It
+   declares no token of its own: every colour, radius, shadow and family here
+   comes from tokens.css.
+
+   The motif is the crease — pink, from --crease — and it means the same thing
+   on every element that carries it: this is folded, and the fold is what makes
+   the rest possible.
+   ─────────────────────────────────────────────────────────────── */
+
+/* ── Masthead ─────────────────────────────────────────────────── */
+
+.masthead { border-bottom: 1px solid var(--line); background: var(--surface); }
+.masthead-inner { max-width: 1180px; margin: 0 auto; padding: 20px 24px 34px; }
+.masthead-tools { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 14px; }
+
+.theme-toggle {
+  font: inherit; font-size: 12px; color: var(--ink-2);
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 4px 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+}
+.theme-toggle:hover { border-color: var(--line-strong); color: var(--ink); }
+
+.eyebrow {
+  margin: 0 0 10px; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+}
+.tag {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  border: 1px solid var(--line-strong); border-radius: 2px;
+  padding: 1px 5px; color: var(--ink-2); text-transform: none;
+}
+h1 {
+  font-family: var(--display); font-weight: 800; font-size: clamp(36px, 6.4vw, 62px);
+  line-height: 0.98; letter-spacing: -0.02em; margin: 0 0 16px;
+}
+.fold-mark {
+  display: inline-block; width: 0.42em; height: 0.42em; margin: 0 0.12em;
+  background: var(--crease);
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  transform: translateY(-0.18em);
+}
+.lede { margin: 0; max-width: 68ch; font-size: 17px; color: var(--ink-2); }
+.lede code, .event-note code {
+  background: var(--surface-2); padding: 1px 4px; border-radius: 2px;
+}
+
+.masthead-meters {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 28px; margin-top: 26px;
+}
+.hero-stat { display: flex; flex-direction: column; }
+.hero-num {
+  font-family: var(--display); font-weight: 600; font-size: 30px; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.hero-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-3); margin-top: 6px;
+}
+.cta {
+  margin-left: auto; font-size: 13px; font-weight: 500; color: var(--accent);
+  text-decoration: none; border-bottom: 1px solid transparent; padding-bottom: 1px;
+}
+.cta:hover { border-bottom-color: var(--accent); }
+
+/* ── Layout ───────────────────────────────────────────────────── */
+
+.grid {
+  max-width: 1180px; margin: 0 auto; padding: 28px 24px 40px;
+  display: grid; gap: 22px; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: start;
+}
+@media (max-width: 960px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 22px 24px;
+}
+.panel-h {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--ink-3); margin: 0 0 8px;
+}
+.panel-sub { margin: 0 0 14px; font-size: 13px; color: var(--ink-3); max-width: 62ch; }
+.rule { border: 0; border-top: 1px solid var(--line); margin: 24px 0 20px; }
+.hint { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ── The inline explainer button ───────────────────────────────── */
+
+.info {
+  font: inherit; font-size: 10px; line-height: 1;
+  width: 15px; height: 15px; padding: 0; margin-left: 5px;
+  border: 1px solid var(--line-strong); border-radius: 50%;
+  background: var(--surface-2); color: var(--ink-3); cursor: help;
+  display: inline-flex; align-items: center; justify-content: center;
+  vertical-align: 1px;
+}
+.info:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Buttons ──────────────────────────────────────────────────── */
+
+.btn {
+  font: inherit; font-size: 13px; padding: 7px 14px; cursor: pointer;
+  background: var(--surface-2); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn.primary {
+  background: var(--accent); border-color: var(--accent);
+  color: light-dark(#fff, #0d0e1c); font-weight: 500;
+}
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); color: light-dark(#fff, #0d0e1c); }
+.btn.ghost { background: transparent; border-color: var(--line); color: var(--ink-2); }
+.btn.tiny { font-size: 11px; padding: 3px 8px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── The threads on offer ─────────────────────────────────────── */
+
+.sagas { display: grid; gap: 8px; }
+.saga {
+  display: grid; gap: 4px; text-align: left; cursor: pointer;
+  font: inherit; color: inherit; padding: 12px 14px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius);
+  border-left: 2px solid var(--line-strong);
+}
+.saga:hover:not(:disabled) { border-color: var(--line-strong); border-left-color: var(--accent); }
+.saga.is-on {
+  border-left-color: var(--crease);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.saga:disabled { opacity: 0.5; cursor: not-allowed; }
+.saga-title { font-family: var(--display); font-weight: 600; font-size: 16px; line-height: 1.2; }
+.saga-register {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.saga-blurb { font-size: 12.5px; color: var(--ink-2); }
+.saga-meta {
+  display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px;
+  font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+}
+.saga-meta span {
+  border: 1px solid var(--line); border-radius: 2px; padding: 1px 5px;
+  font-variant-numeric: tabular-nums;
+}
+.saga-flag { border-color: var(--crease) !important; color: var(--crease); }
+
+.provenance { margin-top: 14px; font-size: 12.5px; }
+.provenance summary {
+  cursor: pointer; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3);
+}
+.provenance summary:hover { color: var(--ink-2); }
+.provenance p { margin: 10px 0 0; color: var(--ink-2); max-width: 60ch; }
+.provenance .prov-method {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  border-left: 2px solid var(--crease); padding-left: 10px;
+}
+
+/* ── Fields ───────────────────────────────────────────────────── */
+
+.field-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.field-label {
+  display: block; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px;
+}
+select {
+  font: inherit; font-size: 13px; width: 100%; padding: 6px 8px;
+  background: var(--surface-2); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+}
+
+/* ── The token meter ──────────────────────────────────────────── */
+
+.meter-figure { margin: 0; }
+.meter-figure figcaption {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 8px; gap: 10px;
+}
+.meter-title { font-size: 13px; color: var(--ink-2); }
+.meter-read {
+  font-family: var(--mono); font-size: 12px; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.meter-track {
+  position: relative; height: 12px; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 2px; overflow: hidden;
+}
+.meter-fill {
+  height: 100%; width: 0; background: var(--accent);
+  transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.meter-fill.is-over { background: var(--over); }
+.meter-threshold {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
+  background: var(--crease);
+}
+.meter-axis {
+  display: flex; justify-content: space-between; margin-top: 5px;
+  font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+}
+.meter-state { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-2); }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+.state-ok { background: var(--ok); }
+.state-warn { background: var(--warn); }
+.state-over { background: var(--over); }
+
+/* ── The ledger ───────────────────────────────────────────────── */
+
+.ledger {
+  display: flex; flex-direction: column; gap: 1px;
+  min-height: 120px; max-height: 260px; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 2px; padding: 2px;
+  background: var(--surface-2);
+}
+.band { min-height: 1px; border-radius: 1px; background: var(--line-strong); }
+.band-user { background: var(--accent); opacity: 0.55; }
+.band-assistant { background: var(--ink-3); opacity: 0.4; }
+.band-summary {
+  background: repeating-linear-gradient(
+    -45deg, var(--crease) 0 3px, transparent 3px 6px);
+  min-height: 8px; border: 1px solid var(--crease);
+}
+
+/* ── The conversation ─────────────────────────────────────────── */
+
+.chat-panel { display: flex; flex-direction: column; min-height: 640px; }
+.thread {
+  flex: 1; overflow-y: auto; max-height: 62vh; min-height: 320px;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 4px 2px 10px;
+}
+.empty { margin: auto 0; text-align: center; color: var(--ink-3); font-size: 14px; }
+.empty p { margin: 4px 0; }
+
+.msg { display: flex; flex-direction: column; gap: 4px; max-width: 90%; }
+.msg.user { align-self: flex-end; align-items: flex-end; }
+.msg.assistant { align-self: flex-start; }
+.who {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.bubble {
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 9px 13px; font-size: 14px;
+}
+.msg.user .bubble { background: var(--accent-soft); border-color: var(--accent-soft); }
+/* the seeded turns are the same conversation, one shade quieter: they are what
+   you walked in on rather than what you said */
+.msg.is-seeded .bubble { opacity: 0.86; }
+.bubble .md > :first-child { margin-top: 0; }
+.bubble .md > :last-child { margin-bottom: 0; }
+.bubble .md p { margin: 0 0 8px; }
+.bubble .md ol, .bubble .md ul { margin: 0 0 8px; padding-left: 20px; }
+.bubble .md pre {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 2px;
+  padding: 8px 10px; overflow-x: auto; font-size: 12px;
+}
+.bubble .md code { font-family: var(--mono); font-size: 0.88em; }
+.cursor {
+  display: inline-block; width: 7px; height: 1em; vertical-align: -0.15em;
+  background: var(--accent); animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  .cursor { animation: none; }
+  .meter-fill { transition: none; }
+}
+
+/* ── Event cards: the backlog, the fold, the record, an error ─── */
+
+.msg.event {
+  align-self: stretch; max-width: none;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-left: 2px solid var(--crease);
+  border-radius: var(--radius); padding: 12px 14px; gap: 8px;
+}
+.msg.event.is-error { border-left-color: var(--over); }
+.event-h {
+  margin: 0; font-family: var(--display); font-weight: 600; font-size: 14px;
+  display: flex; align-items: baseline; gap: 7px; cursor: help;
+}
+.event-note { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.msg.event.backlog { border-left-style: dashed; }
+.msg.event.record { background: var(--surface); }
+.msg.event.fold.is-auto { border-left-color: var(--accent); }
+
+.fold-steps { margin: 2px 0 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+.fold-steps li {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  font-size: 12.5px; color: var(--ink-2);
+}
+.fold-steps .mark {
+  width: 8px; height: 8px; border-radius: 2px; flex: none;
+  background: var(--line-strong);
+}
+.fold-steps li[data-state="working"] .mark { background: var(--warn); }
+.fold-steps li[data-state="done"] .mark { background: var(--ok); }
+.fold-steps li[data-state="failed"] .mark { background: var(--over); }
+.fold-steps .lbl { flex: 1 1 auto; min-width: 0; }
+.fold-steps .val {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.fold-live {
+  margin: 4px 0 0; font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+}
+.sum-peek {
+  font: inherit; font-size: 12px; text-align: left; cursor: pointer;
+  color: var(--ink-2); background: var(--paper);
+  border: 1px solid var(--line); border-left: 2px solid var(--crease);
+  border-radius: 2px; padding: 6px 9px; margin-top: 2px; width: 100%;
+}
+.sum-peek:hover { border-color: var(--line-strong); color: var(--ink); }
+
+/* ── Suggestion chips, and the ride ───────────────────────────── */
+
+.chips {
+  border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px;
+  display: grid; gap: 8px;
+}
+/* an explicit display beats the UA rule for [hidden], so the attribute the page
+   sets on this element would otherwise do nothing at all */
+.chips[hidden] { display: none; }
+.chip-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; flex-wrap: wrap;
+}
+.chip-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.ride { display: flex; align-items: center; gap: 8px; }
+.ride-count {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+  padding: 6px 11px; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line-strong);
+  border-radius: 999px;
+}
+.chip:hover:not(:disabled) {
+  border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
+}
+.chip:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Composer, turn line, wire log ────────────────────────────── */
+
+.composer { display: flex; gap: 8px; margin-top: 12px; }
+.composer input {
+  font: inherit; font-size: 14px; flex: 1; min-width: 0; padding: 8px 11px;
+  background: var(--surface-2); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+}
+.composer input:disabled { opacity: 0.6; }
+.turnline {
+  margin: 8px 0 0; font-size: 12px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.wire { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.wire summary {
+  cursor: pointer; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3);
+}
+.wire summary:hover { color: var(--ink-2); }
+.wire-count { color: var(--ink-2); text-transform: none; letter-spacing: 0; }
+.wire-list {
+  margin: 10px 0 0; padding: 0; list-style: none;
+  display: grid; gap: 7px; max-height: 260px; overflow-y: auto;
+}
+.wire-list li {
+  font-family: var(--mono); font-size: 11px; line-height: 1.5; color: var(--ink-2);
+  border-left: 2px solid var(--line-strong); padding: 3px 0 3px 9px;
+}
+.wire-path { color: var(--ink); }
+.wire-path .verb { color: var(--accent); }
+.wire-list .stat { color: var(--ink-3); }
+.wire-list .err { color: var(--over); }
+.doc-link { font-size: 10px; margin-left: 7px; white-space: nowrap; }
+.wire-cost, .wire-fix {
+  display: inline-block; margin-top: 3px; margin-right: 5px;
+  font-size: 10px; padding: 0 5px; border-radius: 2px;
+  border: 1px solid var(--line-strong); color: var(--ink-3); cursor: help;
+}
+.wire-cost.is-free { border-color: var(--ok); color: var(--ok); }
+.wire-fix { border-color: var(--warn); color: var(--warn); }
+
+/* ── Footer ───────────────────────────────────────────────────── */
+
+.footer { border-top: 1px solid var(--line); background: var(--surface); }
+.footer > * { max-width: 1180px; margin-left: auto; margin-right: auto; padding: 0 24px; }
+.footer-lede { margin: 26px auto 12px; font-size: 13px; color: var(--ink-2); }
+.footer-links { list-style: none; margin: 0 auto 14px; display: grid; gap: 6px; }
+.footer-links li { font-size: 12px; color: var(--ink-3); }
+.footer-links code { color: var(--ink-2); }
+.footer-note { margin: 0 auto; padding-bottom: 34px; font-size: 12px; color: var(--ink-3); max-width: 74ch; }
+
+/* ── The tooltip panel ────────────────────────────────────────── */
+
+.tooltip {
+  position: fixed; z-index: 60; top: 0; left: 0;
+  max-width: 320px; padding: 9px 11px;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 12.5px; line-height: 1.5;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 100ms ease;
+}
+.tooltip.on { opacity: 1; visibility: visible; }
+.tooltip.is-rich { pointer-events: auto; overflow-y: auto; }
+.tooltip .tip-h {
+  display: block; font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.tooltip .tip-body { display: block; white-space: pre-line; }
+.tooltip .tip-body.md { white-space: normal; }
+.tooltip .tip-body.md p { margin: 0 0 7px; }
+.tooltip code {
+  display: block; margin-top: 7px; padding: 6px 8px; white-space: pre-wrap;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 2px;
+  font-size: 11px; color: var(--ink-2);
+}
+
+/* ── The shared cost strip, adjusted from this side of the line ─── */
+
+.costbar { position: sticky; top: 0; z-index: 40; }

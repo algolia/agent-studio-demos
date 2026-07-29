@@ -147,6 +147,60 @@ The counts are checked against the files in `tests/books.test.js`, and so are th
 regime boundaries — edit a text or move a threshold and that file names what
 changed.
 
+### `compactor.js` → `window.DemoCompactor`
+
+The auto-compact loop, as a driver that owns no state. It lived inside
+`chat-with-book` for as long as that demo was its only caller;
+`infinite-conversation` needs the same loop, so it is cut into the kit.
+
+| Member | What it does |
+| --- | --- |
+| `threshold(budget, ratio)` | the token count at which compaction fires |
+| `shouldCompact(tokens, budget, ratio)` | the decision, boundary inclusive |
+| `planPass({ weights, keepLast, maxPayload })` | **the pure one**: how much of the oldest end one `context/compact` call should take — `{ cut, tokens, oversize, remaining }`, or `null` when nothing is foldable |
+| `createCompactor(deps)` | `{ now(), afterTurn(), needed(), plan(), threshold(), folds, busy }` |
+
+```
+createCompactor({
+  history(),                       // → { messages, weights, tokens }  read live
+  probe(messages),                 // → { tokens }           (context/trim)
+  compact(messages, opts),         // → { messages, stats }  (context/compact)
+  budget(), ratio(), keepLast(), maxPayload(),   the thresholds, read live
+  onPass(meta),                    // optional narration, before the call goes out
+  onHistory(messages, stats, meta), // the demo swaps its own history and redraws
+  onCharge(stats, meta),           // the demo bills the summarizer to the meter
+})  →  { now(), afterTurn() }
+```
+
+`now()` is the visitor pressing a button: it folds once and then keeps folding
+while the conversation is still over. `afterTurn()` is the automatic one: it
+folds only when the threshold has been crossed. The contract with the demo is
+one sentence — by the time `onHistory` returns, `history()` answers with what it
+was handed. The driver re-reads it before every pass rather than keeping a copy,
+and `weights` is passed to `planPass` rather than stored, because that parallel
+array is exactly the entanglement this file exists not to inherit.
+
+It folds **repeatedly**, not once. A thread that arrives 235k tokens long cannot
+be summarized in a single call: that payload has to fit the summarizer's own
+window too. So a pass takes as much of the oldest end as fits under
+`maxPayload`, and the next pass folds its summary in with the next stretch — one
+summary stays at the head of the history rather than a stack of them.
+
+Two things it refuses to do, both of them money:
+
+- a pass that reclaimed nothing ends the run, because the next one will reclaim
+  nothing either;
+- a plan that would fold only the summary the last pass wrote is recognised
+  *before* the call goes out, not after paying to find out.
+
+`tests/compactor.test.js` holds the threshold boundary, the protected tail, the
+single-message-over-cap case, a full multi-pass run against stub endpoints, and
+both refusals.
+
+Still not extracted, and still `chat-with-book`'s own subject matter: sectioned
+*parallel* folds of one oversized document, and keeping each section's original
+text so it can be reopened later.
+
 ## Adding a book
 
 1. Find it on [Project Gutenberg](https://www.gutenberg.org/) and note the ebook
@@ -234,37 +288,6 @@ settings-only and `distinct` is per-query. So the index fixes
 the caller decides per search — pass `distinct: 1` to sweep the whole shelf and
 get one passage per book, pass nothing to dig inside one book and get several
 passages from it. One index, both behaviours, no second copy of the data.
-
-### Not extracted: the auto-compact loop
-
-The *decision* is one line in `chat-with-book/app.js`:
-
-```js
-if (state.tokens >= currentWindow() * CFG.compactAtRatio) await runCompact({ auto: true });
-```
-
-`runCompact` itself is not shareable as it stands: it is welded to that demo's
-`messages`/`kinds`/`weights` arrays, its fold record, its ledger bands and its
-chat bubbles. Moving it into the kit would export the entanglement rather than
-the idea.
-
-The seam to cut, when a second demo needs it, is a driver that owns none of that
-state and calls back into it:
-
-```
-createCompactor({
-  probe(messages),                 // → { tokens }           (context/trim)
-  compact(messages, opts),         // → { messages, stats }  (context/compact)
-  budget(), ratio(),               // the thresholds, read live
-  onHistory(messages, stats),      // the demo swaps its own history and redraws
-  onCharge(stats),                 // the demo bills the summarizer to the meter
-})  →  { afterTurn(), now() }
-```
-
-Everything the current loop does beyond that — sectioned folds for payloads too
-large for a single compact call, keeping each section's original text so it can
-be reopened later — is `chat-with-book`'s own subject matter, and should stay
-there until a second demo asks for the same thing.
 
 ## Adding a config field
 

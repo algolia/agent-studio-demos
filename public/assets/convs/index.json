@@ -1,0 +1,64 @@
+{
+ "generated": "2026-07-29",
+ "model": "gpt-4.1-nano",
+ "note": "Every figure the demo displays is derived from these files. tokens is the trim endpoint's own count of the committed messages array.",
+ "scenarios": [
+  {
+   "slug": "deploy-escalation",
+   "title": "The deploy that would not stay up",
+   "register": "technical support, escalating",
+   "blurb": "Eleven days of one production incident: a service that falls over some minutes after every deploy, three wrong theories, two teams, and the log line that finally explained it.",
+   "opener": "You are joining a support thread that has been running for eleven days.",
+   "starters": [
+    "Where did we land on the connection pool?",
+    "Can you summarise what we have ruled out?",
+    "What should I check first tomorrow morning?"
+   ],
+   "messageCount": 504,
+   "exchanges": 252,
+   "chars": 681828,
+   "tokens": 170457,
+   "tokensSource": "estimated locally at 4 chars per token — the trim endpoint was not reachable when these files were built. Text like this tokenizes nearer 3 chars per token, so the real count is higher; the demo re-probes on load and shows the endpoint's own number.",
+   "method": "composed offline from authored templates (tools/compose-conversations.js)",
+   "file": "deploy-escalation.json"
+  },
+  {
+   "slug": "tidewrights",
+   "title": "The Tidewrights",
+   "register": "worldbuilding, sprawling",
+   "blurb": "A writer and a collaborator building one invented world out loud — tide clocks, a guild that maintains them, a language that grew around them, and an argument about whether any of it needs a map.",
+   "opener": "You are joining a worldbuilding session that has been going for weeks.",
+   "starters": [
+    "Remind me what we decided about the tide clocks?",
+    "Which guild has the strongest claim to the harbour?",
+    "Give me a scene I have not thought of yet."
+   ],
+   "messageCount": 456,
+   "exchanges": 228,
+   "chars": 323015,
+   "tokens": 80754,
+   "tokensSource": "estimated locally at 4 chars per token — the trim endpoint was not reachable when these files were built. Text like this tokenizes nearer 3 chars per token, so the real count is higher; the demo re-probes on load and shows the endpoint's own number.",
+   "method": "composed offline from authored templates (tools/compose-conversations.js)",
+   "file": "tidewrights.json"
+  },
+  {
+   "slug": "german-by-post",
+   "title": "German, one evening at a time",
+   "register": "language tutoring, months long",
+   "blurb": "Fourteen months of evening German with the same tutor: the case tables, the plateau in month four, a week in Vienna that changed everything, and a novel finally finished in the original.",
+   "opener": "You are joining a tutoring thread that has been running for fourteen months.",
+   "starters": [
+    "Can we go over the dative again?",
+    "Give me five sentences to correct.",
+    "What should I read after this one?"
+   ],
+   "messageCount": 408,
+   "exchanges": 204,
+   "chars": 326430,
+   "tokens": 81608,
+   "tokensSource": "estimated locally at 4 chars per token — the trim endpoint was not reachable when these files were built. Text like this tokenizes nearer 3 chars per token, so the real count is higher; the demo re-probes on load and shows the endpoint's own number.",
+   "method": "composed offline from authored templates (tools/compose-conversations.js)",
+   "file": "german-by-post.json"
+  }
+ ]
+}
