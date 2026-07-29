@@ -126,7 +126,7 @@
       gutenbergId: 45,
       words: 102501,
       chars: 561144,
-      hook: "episodic on purpose: thirty-eight chapters, most of them a scrape and a lesson",
+      hook: "the first book on the shelf too large to send in one piece",
       chips: [
         { kind: "needle", short: "carrots and the slate", text: "What does Anne do when Gilbert Blythe calls her Carrots?" },
         { kind: "needle", short: "the cake for Mrs. Allan", text: "What ruins the cake Anne bakes for Mrs. Allan, and how does she find out?" },
@@ -158,7 +158,7 @@
       gutenbergId: 1342,
       words: 127359,
       chars: 728714,
-      hook: "the largest book that still fits the window whole — just under the fold line",
+      hook: "the most-read novel in English, and long past the size a single request can carry",
       chips: [
         { kind: "needle", short: "the first proposal", text: "How does Darcy open his first proposal at Hunsford, and what does Elizabeth say back to him?" },
         { kind: "needle", short: "Lady Catherine's visit", text: "What does Lady Catherine de Bourgh come to Longbourn to demand, and how does that visit backfire on her?" },
@@ -174,7 +174,7 @@
       gutenbergId: 345,
       words: 161321,
       chars: 845890,
-      hook: "the first book on the shelf too large to send at all",
+      hook: "letters, diaries, telegrams and news cuttings — a novel assembled from documents",
       chips: [
         { kind: "needle", short: "the Demeter's log", text: "What does the log found aboard the Demeter at Whitby record about the voyage?" },
         { kind: "needle", short: "Renfield's collection", text: "What does Renfield keep in his cell at the asylum, and what does he say about blood?" },
@@ -325,11 +325,20 @@
                            summarizer the same way — so the document is
                            summarized in sections first.
 
-     `charsPerToken` defaults to 4.6, measured on these very files against the
-     trim endpoint. It is deliberately NOT the 4 that config.js carries as its
-     pre-probe fallback: that number sizes fold sections, where guessing low is
-     the safe direction, and here guessing low would over-state every bill. Pass
-     the ratio a live conversation measured and every figure sharpens. ── */
+     `charsPerToken` defaults to 3, and that number was measured rather than
+     assumed: Alice's committed text is 144,600 characters and /context/trim
+     reported 48,116 tokens for it on the default model, which is 3.006 chars per
+     token. It is deliberately NOT the 4 that config.js carries as its pre-probe
+     fold-sizing fallback — that one only has to keep a section small enough to
+     summarize, where guessing high is harmless. Here a wrong ratio moves a book
+     into the wrong regime, so it is the measurement. A live conversation
+     re-measures on every probe; pass that ratio in and the labels sharpen.
+
+     The money is not a constant either. It comes from the price of whichever
+     model is selected — `DemoMeter.priceOf(name)` returns exactly the object
+     `opts.price` wants — because a bill quoted at a rate the visitor is not
+     paying is worse than no bill. The default model's rate is a PLACEHOLDER
+     (meter.js says so in those words), so the copy below says so too. ── */
 
   const SHELF_DEFAULTS = {
     /** the model's real published window — the provider's hard ceiling */
@@ -340,24 +349,34 @@
     workingBudget: 8000,
     /** share of the working budget at which auto-compaction fires */
     compactAtRatio: 0.7,
-    /** measured on this shelf; config.js's 4 is a deliberately low fold-sizing floor */
-    charsPerToken: 4.6,
+    /** measured against /context/trim on Alice, 144,600 chars → 48,116 tokens */
+    charsPerToken: 3,
     /** target size of one section handed to the summarizer (CFG.foldChunkTokens) */
     foldSectionTokens: 60000,
     /**
-     * Input rate for the summarizer, per million tokens. The fold reads the
-     * whole book once, so this rate times the book's size is the bill.
+     * A price object shaped like DemoMeter.priceOf()'s return:
+     * { label, inPerMTok, outPerMTok, placeholder }. Null means no rate is known,
+     * and then no dollar figure is invented — the copy says the cost depends on
+     * the model instead of quoting a number nobody set.
      */
-    usdPerMillionTokens: 3,
+    price: null,
     /**
-     * Above this estimated ingest cost a book asks before it spends. 0.85 rather
-     * than a round 1.00 because the gap on this shelf is wide: Moby-Dick, the
-     * demo's long-standing stress test, estimates ≈$0.80 and stays a plain
-     * one-click fold, while the two books past the gate are ≈$0.99 and ≈$2.09.
-     * Anywhere in between separates them; there is nothing at $0.85 to get wrong.
+     * Above this estimated ingest cost a book asks before it spends. It is
+     * compared against the estimate AT THE SELECTED MODEL'S RATE, so the gate is
+     * a function of what the visitor actually chose: on the default model's
+     * $0.10/MTok nothing here reaches it, and switching to a pricier model makes
+     * the confirm appear on the largest books by itself.
      */
-    costGateUsd: 0.85,
+    costConfirmUsd: 0.5,
+    /** mirrors meter.js's `usd`, so a tile and the cost strip agree to the digit */
+    formatUsd: defaultFormatUsd,
   };
+
+  /** 4 decimals under a dollar, 2 above — the same rule as the meter's `usd` */
+  function defaultFormatUsd(v) {
+    const n = Number.isFinite(v) ? v : 0;
+    return `$${Math.abs(n) < 1 ? n.toFixed(4) : n.toFixed(2)}`;
+  }
 
   /** the four regimes, with the copy a grouped shelf needs for each */
   const REGIMES = {
@@ -366,15 +385,15 @@
       heading: "Small enough that nothing happens",
       note: "Under the auto-compaction threshold, so the whole text rides along " +
         "untouched and no summarizer call is made. At the default 8,000-token budget " +
-        "nothing on this shelf lands here — you have to raise the budget to see it.",
+        "nothing on this shelf lands here — raise the budget and books start arriving.",
     },
     "budget-compact": {
       label: "compacts on your first question",
       heading: "Sent whole, then compacted on your first question",
       note: "These fit the model's real window in one piece, so nothing is folded on " +
         "arrival. They are all far over the working budget, though, so the first " +
-        "question triggers one summarizer call over the whole text. At the default " +
-        "budget that is every book here — the floor is always on, which is the point.",
+        "question triggers one summarizer call over the whole text. That floor is " +
+        "always on, which is the point of it.",
     },
     "oversize-fold": {
       label: "folds on arrival",
@@ -385,20 +404,15 @@
         "the conversation starts from there. Every section stays reopenable.",
     },
     "cost-gated": {
-      label: "folds on arrival, and asks first",
-      heading: "Folded on arrival, and it costs real money",
-      note: "The same mechanism as above, with a bill worth reading first: the " +
-        "summarizer reads every word once, on your provider credentials. These ask " +
-        "before they spend, and the figure they quote is an estimate.",
+      label: "asks before it spends",
+      heading: "Worth reading the price before you click",
+      note: "Same mechanisms as above — each tile states its own — with a bill big " +
+        "enough to be worth a decision. The summarizer reads every word once, on your " +
+        "provider credentials, so these ask first and say what they think it will cost. " +
+        "Whether a book lands here depends on the model you picked: change it and this " +
+        "group changes.",
     },
   };
-
-  /** "$0.16", "$2.09", "under a cent" — never a bare 0 that reads as free */
-  function usdLabel(usd) {
-    if (usd <= 0) return "$0.00";
-    if (usd < 0.01) return "under a cent";
-    return `$${usd.toFixed(2)}`;
-  }
 
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
@@ -407,8 +421,8 @@
    * config. Pass any subset of SHELF_DEFAULTS to override.
    *
    * → { regime, tokens, foldsOnArrival, foldSections, compactCalls, usd,
-   *     usdLabel, costGated, oversizeAt, autoCompactAt, what, price, line,
-   *     charsPerToken }
+   *     usdLabel, rateNote, costGated, oversizeAt, autoCompactAt, what, price,
+   *     line, charsPerToken, price object echoed as `rate` }
    */
   function estimate(book, opts) {
     const cfg = Object.assign({}, SHELF_DEFAULTS, opts || {});
@@ -431,11 +445,17 @@
       : (tokens > autoCompactAt ? 1 : 0);
 
     /* The summarizer reads the whole text once either way, which is what this
-       bill is: input tokens at the model's input rate. The reduce pass reads
-       only the section summaries, a rounding error beside the book itself, and
-       output tokens are capped small by config. Estimate, not invoice. */
-    const usd = (tokens * cfg.usdPerMillionTokens) / 1e6;
-    const costGated = foldsOnArrival && usd > cfg.costGateUsd;
+       bill is: input tokens at the selected model's input rate. The reduce pass
+       reads only the section summaries, a rounding error beside the book itself,
+       and output tokens are capped small by config. Estimate, not invoice. */
+    const rate = cfg.price || null;
+    const usd = rate ? (tokens * rate.inPerMTok) / 1e6 : null;
+    /**
+     * Money only. A cheap book that folds is one click; an expensive book is a
+     * decision whether or not it folds, because it is the visitor's provider
+     * account either way.
+     */
+    const costGated = usd !== null && usd > cfg.costConfirmUsd;
 
     const regime = costGated ? "cost-gated"
       : foldsOnArrival ? "oversize-fold"
@@ -447,9 +467,16 @@
         ? "compacts on your first question"
         : "fits the working budget whole";
 
-    const price = compactCalls > 0
-      ? `~${plural(compactCalls, "summarizer call", "summarizer calls")} ≈ ${usdLabel(usd)}`
-      : "no summarizer call";
+    /* "illustrative" is not decoration: the default model has no published price,
+       so its rate in meter.js is a placeholder. A figure derived from a made-up
+       rate has to carry that on its face, not only in a tooltip. */
+    const rateNote = rate ? (rate.placeholder ? "an illustrative rate" : "a list price") : null;
+    const calls = plural(compactCalls, "summarizer call", "summarizer calls");
+    const price = compactCalls === 0
+      ? "no summarizer call"
+      : usd === null
+        ? `~${calls} · cost depends on the model`
+        : `~${calls} ≈ ${cfg.formatUsd(usd)} at ${rateNote}`;
 
     return {
       regime,
@@ -460,9 +487,12 @@
       foldsOnArrival,
       foldSections,
       compactCalls,
+      rate,
+      rateNote,
       usd,
-      usdLabel: usdLabel(usd),
+      usdLabel: usd === null ? "cost depends on the model" : cfg.formatUsd(usd),
       costGated,
+      costConfirmUsd: cfg.costConfirmUsd,
       what,
       price,
       line: `${what} · ${price}`,
@@ -517,6 +547,6 @@
     estimate,
     regimeOf,
     groupByRegime,
-    usdLabel,
+    formatUsd: defaultFormatUsd,
   };
 })(window);

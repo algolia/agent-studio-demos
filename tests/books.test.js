@@ -166,35 +166,46 @@ test("every needle question's subject is actually in its book", () => {
   }
 });
 
-/* ── The regime helper ───────────────────────────────────────────── */
+
+/* ── The regime helper ─────────────────────────────────────────────
+   Two fixtures stand in for the price list so this file never has to import the
+   meter: they are shaped exactly like `DemoMeter.priceOf()`'s return, which is
+   what `estimate` reads. One is a placeholder rate (the default model has no
+   published price), one is a real list price, and the difference has to show up
+   in the copy — that is the point of testing it. ── */
 
 const { estimate, regimeOf, groupByRegime, SHELF_DEFAULTS, REGIMES, REGIME_ORDER } = SHELF;
+
+const PLACEHOLDER_RATE = { label: "Enablers small", inPerMTok: 0.1, outPerMTok: 0.1, placeholder: true };
+const LIST_RATE = { label: "claude-haiku-4.5", inPerMTok: 1.0, outPerMTok: 5.0 };
 
 /** a book of exactly this many tokens, at the default ratio */
 const bookOf = (tokens) => ({ slug: "synthetic", chars: Math.round(tokens * SHELF_DEFAULTS.charsPerToken) });
 
 test("the shelf's measured regimes, book by book", () => {
-  // The figures this table asserts were measured on 2026-07-29 against the
-  // committed files at 4.6 chars per token, a 200,000-token window and the
-  // default 8,000-token budget. It is here so that a change to the derivation
-  // has to be argued for rather than absorbed.
+  // Measured on 2026-07-29 against the committed files at 3 chars per token —
+  // itself measured, not assumed: Alice is 144,600 characters and /context/trim
+  // reported 48,116 tokens for it. Window 200,000, working budget 8,000. The
+  // table is here so a change to the derivation has to be argued for rather than
+  // absorbed: it moved once already, when the ratio turned out to be 3 and not
+  // 4.6, and eight books changed regime.
   const EXPECTED = {
-    "the-yellow-wallpaper": ["budget-compact", 6847, 1, 1],
-    "alice-in-wonderland": ["budget-compact", 31435, 1, 1],
-    "the-time-machine": ["budget-compact", 39065, 1, 1],
-    "narrative-of-frederick-douglass": ["budget-compact", 48694, 1, 1],
-    "aesops-fables": ["budget-compact", 52969, 1, 1],
-    "the-awakening": ["budget-compact", 78132, 2, 1],
-    "the-souls-of-black-folk": ["budget-compact", 86743, 2, 1],
-    "frankenstein": ["budget-compact", 91160, 2, 1],
-    "anne-of-green-gables": ["budget-compact", 121988, 3, 1],
-    "arabian-nights": ["budget-compact", 129964, 3, 1],
-    "pride-and-prejudice": ["budget-compact", 158416, 3, 1],
-    "dracula": ["oversize-fold", 183889, 4, 5],
-    "jane-eyre": ["oversize-fold", 222257, 4, 5],
-    "moby-dick": ["oversize-fold", 264987, 5, 6],
-    "ulysses": ["cost-gated", 330371, 6, 7],
-    "war-and-peace": ["cost-gated", 697451, 12, 13],
+    "the-yellow-wallpaper": ["budget-compact", 10499, 1, 1],
+    "alice-in-wonderland": ["budget-compact", 48200, 1, 1],
+    "the-time-machine": ["budget-compact", 59900, 1, 1],
+    "narrative-of-frederick-douglass": ["budget-compact", 74665, 2, 1],
+    "aesops-fables": ["budget-compact", 81219, 2, 1],
+    "the-awakening": ["budget-compact", 119802, 2, 1],
+    "the-souls-of-black-folk": ["budget-compact", 133005, 3, 1],
+    "frankenstein": ["budget-compact", 139779, 3, 1],
+    "anne-of-green-gables": ["oversize-fold", 187048, 4, 5],
+    "arabian-nights": ["oversize-fold", 199279, 4, 5],
+    "pride-and-prejudice": ["oversize-fold", 242905, 5, 6],
+    "dracula": ["oversize-fold", 281963, 5, 6],
+    "jane-eyre": ["oversize-fold", 340793, 6, 7],
+    "moby-dick": ["oversize-fold", 406313, 7, 8],
+    "ulysses": ["oversize-fold", 506569, 9, 10],
+    "war-and-peace": ["oversize-fold", 1069424, 18, 19],
   };
   for (const b of SHELF.books) {
     const want = EXPECTED[b.slug];
@@ -213,6 +224,14 @@ test("every book on this shelf compacts at the default budget", () => {
     assert.ok(est.tokens > est.autoCompactAt, `${b.slug} is under the auto-compaction threshold`);
     assert.notEqual(est.regime, "fits-budget");
   }
+});
+
+test("half the shelf is now too large to send in one piece", () => {
+  const folds = SHELF.books.filter((b) => estimate(b).foldsOnArrival).map((b) => b.slug).sort();
+  assert.deepEqual(folds, [
+    "anne-of-green-gables", "arabian-nights", "dracula", "jane-eyre",
+    "moby-dick", "pride-and-prejudice", "ulysses", "war-and-peace",
+  ]);
 });
 
 test("the fold threshold belongs to the sendable side", () => {
@@ -238,80 +257,133 @@ test("the auto-compaction threshold belongs to the quiet side", () => {
   assert.equal(over.regime, "budget-compact");
 });
 
-test("the cost gate only ever applies to a book that folds", () => {
-  // an expensive book that still fits the window is not gated: the gate is about
-  // the fold's bill, and a book that fits makes one call whatever it costs
-  const gated = estimate(bookOf(300000), { costGateUsd: 0.5 });
-  assert.equal(gated.regime, "cost-gated");
-  assert.equal(gated.costGated, true);
+test("with no rate configured, no dollar figure is invented", () => {
+  const est = estimate(SHELF.findBook("war-and-peace"));
+  assert.equal(SHELF_DEFAULTS.price, null, "the shelf ships without a price of its own");
+  assert.equal(est.usd, null);
+  assert.equal(est.rate, null);
+  assert.equal(est.rateNote, null);
+  assert.equal(est.usdLabel, "cost depends on the model");
+  assert.equal(est.price, "~19 summarizer calls · cost depends on the model");
+  assert.equal(est.costGated, false, "an unknown bill is never gated — there is nothing to gate on");
+});
 
-  const cheapGate = estimate(bookOf(300000), { costGateUsd: 5 });
-  assert.equal(cheapGate.regime, "oversize-fold");
-  assert.equal(cheapGate.costGated, false);
+test("the bill follows the model the visitor picked", () => {
+  const wp = SHELF.findBook("war-and-peace");
+  const cheap = estimate(wp, { price: PLACEHOLDER_RATE });
+  const dear = estimate(wp, { price: LIST_RATE });
 
-  // 150k tokens is $0.45 — over a $0.10 gate, but it never folds, so never gated
-  const fitsButPricey = estimate(bookOf(150000), { costGateUsd: 0.1 });
-  assert.ok(fitsButPricey.usd > 0.1);
-  assert.equal(fitsButPricey.foldsOnArrival, false);
-  assert.equal(fitsButPricey.costGated, false);
-  assert.equal(fitsButPricey.regime, "budget-compact");
+  // 1,069,424 tokens × $0.10 / MTok, and the same book at ten times the rate
+  assert.equal(cheap.usdLabel, "$0.1069");
+  assert.equal(dear.usdLabel, "$1.07");
+  // the mechanism does not depend on the price, only the decision does
+  assert.equal(cheap.foldSections, dear.foldSections);
+  assert.equal(cheap.what, dear.what);
+  assert.equal(cheap.costGated, false);
+  assert.equal(dear.costGated, true);
+});
+
+test("a placeholder rate is labelled as one, on the tile itself", () => {
+  const wp = SHELF.findBook("war-and-peace");
+  assert.match(estimate(wp, { price: PLACEHOLDER_RATE }).price, /at an illustrative rate$/);
+  assert.match(estimate(wp, { price: LIST_RATE }).price, /at a list price$/);
+  assert.equal(estimate(wp, { price: PLACEHOLDER_RATE }).rateNote, "an illustrative rate");
+  assert.equal(estimate(wp, { price: LIST_RATE }).rateNote, "a list price");
+});
+
+test("nothing on the shelf asks for a confirm at the default model's rate", () => {
+  // the honest consequence of a $0.10/MTok rate: the most expensive book here is
+  // ~11 cents, and putting a confirm in front of 11 cents is theatre
+  for (const b of SHELF.books) {
+    assert.equal(estimate(b, { price: PLACEHOLDER_RATE }).costGated, false, b.slug);
+  }
+});
+
+test("switching to a pricier model raises the confirm by itself", () => {
+  const gated = SHELF.books
+    .filter((b) => estimate(b, { price: LIST_RATE }).costGated)
+    .map((b) => b.slug);
+  assert.deepEqual(gated, ["ulysses", "war-and-peace"]);
+  for (const slug of gated) {
+    assert.equal(regimeOf(SHELF.findBook(slug), { price: LIST_RATE }), "cost-gated");
+  }
 });
 
 test("the gate is a boundary, not a range", () => {
-  const exactly = estimate(bookOf(200000), { costGateUsd: 0.6 });
-  assert.equal(exactly.usd, 0.6);
-  assert.equal(exactly.costGated, false, "exactly at the gate is not over it");
-  assert.equal(estimate(bookOf(200001), { costGateUsd: 0.6 }).costGated, true);
+  // 5,000,000 tokens at $0.10 / MTok is exactly $0.50, the default threshold
+  const at = estimate(bookOf(5000000), { price: PLACEHOLDER_RATE });
+  assert.equal(at.usd, 0.5);
+  assert.equal(at.costGated, false, "exactly at the threshold is not over it");
+  assert.equal(estimate(bookOf(5000001), { price: PLACEHOLDER_RATE }).costGated, true);
+});
+
+test("the gate is about money, not about mechanism", () => {
+  // a book that fits the window whole still spends real money on its one compact
+  // call, so an expensive one asks first even though it never folds
+  const fits = estimate(bookOf(150000), { price: LIST_RATE, costConfirmUsd: 0.1 });
+  assert.equal(fits.foldsOnArrival, false);
+  assert.equal(fits.compactCalls, 1);
+  assert.equal(fits.costGated, true);
+  assert.equal(fits.regime, "cost-gated");
+  // and a book that folds but costs nothing does not ask
+  const free = estimate(bookOf(400000), { price: PLACEHOLDER_RATE });
+  assert.equal(free.foldsOnArrival, true);
+  assert.equal(free.costGated, false);
+  assert.equal(free.regime, "oversize-fold");
 });
 
 test("the verdict follows the config, which is why it is derived", () => {
   const wallpaper = SHELF.findBook("the-yellow-wallpaper");
-  const pp = SHELF.findBook("pride-and-prejudice");
+  const frank = SHELF.findBook("frankenstein");
   const moby = SHELF.findBook("moby-dick");
 
   // raise the working budget past the book and nothing compacts any more
   assert.equal(regimeOf(wallpaper), "budget-compact");
   assert.equal(regimeOf(wallpaper, { workingBudget: 200000 }), "fits-budget");
 
-  // shrink the model window and the book that "just fits" stops fitting
-  assert.equal(regimeOf(pp), "budget-compact");
-  assert.equal(regimeOf(pp, { contextWindow: 100000 }), "oversize-fold");
+  // shrink the model window and the largest book that still fits stops fitting
+  assert.equal(regimeOf(frank), "budget-compact");
+  assert.equal(regimeOf(frank, { contextWindow: 100000 }), "oversize-fold");
 
-  // and the gate is a number, not a name: drop it and the stress test gates too
-  assert.equal(regimeOf(moby), "oversize-fold");
-  assert.equal(regimeOf(moby, { costGateUsd: 0.5 }), "cost-gated");
-
-  // a cheaper model moves the bill without moving the mechanism
-  const cheap = estimate(moby, { usdPerMillionTokens: 0.5 });
-  assert.equal(cheap.regime, "oversize-fold");
-  assert.equal(cheap.usdLabel, "$0.13");
-  assert.equal(cheap.foldSections, estimate(moby).foldSections);
+  // the threshold is a number, not a name: lower it and the stress test asks first
+  assert.equal(regimeOf(moby, { price: PLACEHOLDER_RATE }), "oversize-fold");
+  assert.equal(regimeOf(moby, { price: PLACEHOLDER_RATE, costConfirmUsd: 0.01 }), "cost-gated");
 
   // the ratio the page measures re-prices everything
-  const measured = estimate(moby, { charsPerToken: 2.7 });
-  assert.ok(measured.tokens > estimate(moby).tokens);
-  assert.equal(measured.charsPerToken, 2.7);
+  const measured = estimate(moby, { charsPerToken: 4.6 });
+  assert.ok(measured.tokens < estimate(moby).tokens);
+  assert.equal(measured.charsPerToken, 4.6);
+  assert.equal(estimate(moby).charsPerToken, 3);
 });
 
 test("the copy a tile prints says what happens and what it costs", () => {
-  const est = estimate(SHELF.findBook("war-and-peace"));
-  assert.equal(est.what, "folds into 12 parts on arrival");
-  assert.equal(est.price, "~13 summarizer calls ≈ $2.09");
-  assert.equal(est.line, "folds into 12 parts on arrival · ~13 summarizer calls ≈ $2.09");
+  const est = estimate(SHELF.findBook("war-and-peace"), { price: PLACEHOLDER_RATE });
+  assert.equal(est.what, "folds into 18 parts on arrival");
+  assert.equal(est.price, "~19 summarizer calls ≈ $0.1069 at an illustrative rate");
+  assert.equal(est.line,
+    "folds into 18 parts on arrival · ~19 summarizer calls ≈ $0.1069 at an illustrative rate");
 
-  const one = estimate(SHELF.findBook("aesops-fables"));
-  assert.equal(one.line, "compacts on your first question · ~1 summarizer call ≈ $0.16");
+  const one = estimate(SHELF.findBook("aesops-fables"), { price: PLACEHOLDER_RATE });
+  assert.equal(one.line,
+    "compacts on your first question · ~1 summarizer call ≈ $0.0081 at an illustrative rate");
 
-  // singular and plural both read as English, and a sub-cent bill is not "$0.00"
+  // singular and plural both read as English
   assert.equal(estimate(bookOf(200000)).what, "folds into 4 parts on arrival");
-  assert.equal(SHELF.usdLabel(0.004), "under a cent");
-  assert.equal(SHELF.usdLabel(0), "$0.00");
-  assert.equal(SHELF.usdLabel(2.0925), "$2.09");
+  assert.equal(estimate(bookOf(161000)).what, "folds into 3 parts on arrival");
+
+  // the money formatter is the meter's rule — four decimals under a dollar, two
+  // above — and a caller may hand in the meter's own so the two cannot drift
+  assert.equal(SHELF.formatUsd(0.0042), "$0.0042");
+  assert.equal(SHELF.formatUsd(2.0925), "$2.09");
+  assert.equal(SHELF.formatUsd(0), "$0.0000");
+  assert.equal(
+    estimate(SHELF.findBook("war-and-peace"), { price: LIST_RATE, formatUsd: (v) => `~${v.toFixed(1)} dollars` }).price,
+    "~19 summarizer calls ≈ ~1.1 dollars at a list price");
 });
 
 test("grouping covers the shelf exactly once, cheapest regime first", () => {
   const groups = groupByRegime();
-  assert.deepEqual(groups.map((g) => g.regime), ["budget-compact", "oversize-fold", "cost-gated"],
+  assert.deepEqual(groups.map((g) => g.regime), ["budget-compact", "oversize-fold"],
     "an empty regime prints no heading");
   const seen = groups.flatMap((g) => g.entries.map((e) => e.book.slug));
   assert.equal(seen.length, SHELF.books.length);
@@ -323,4 +395,8 @@ test("grouping covers the shelf exactly once, cheapest regime first", () => {
   }
   assert.deepEqual(Object.keys(REGIMES).sort(), REGIME_ORDER.slice().sort(),
     "every regime the helper can return has copy, and vice versa");
+
+  // the gate opens a third group without touching the manifest
+  assert.deepEqual(groupByRegime({ price: LIST_RATE }).map((g) => g.regime),
+    ["budget-compact", "oversize-fold", "cost-gated"]);
 });
