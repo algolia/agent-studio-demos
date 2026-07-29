@@ -133,6 +133,20 @@
 /* one digit, one span, so only the digits that changed move */
 .ct-value .dg { display: inline-block; }
 
+/* ── The third tile, unlocked ──────────────────────────────────────
+   When the naive run no longer fits the model's window there is no delta to
+   roll, so the odometer is swapped for two token figures. They keep the fold's
+   colour and lose the hero's size: it is a sentence, not a number. ──── */
+.cost-tile.is-hero .ct-unlocked {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--crease);
+  overflow: visible;
+}
+.ct-unlocked-sub { color: var(--ink-2); }
+/* the UA's [hidden] loses to .ct-sub's display:flex, so say it here */
+.cost-tile [hidden] { display: none; }
+
 .cost-toggle {
   display: none;
   margin-left: auto;
@@ -432,6 +446,73 @@ textarea { font-family: var(--mono); font-size: 12.4px; resize: vertical; }
   cursor: help;
 }
 .info:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* ── The bookshelf ────────────────────────────────────────────────
+   Four tiles, and deliberately not four buttons in a row: the size and the hook
+   are half the choice, so each one gets the room to carry them. The left rule
+   turns the fold's colour on the picked book, which is the same vocabulary the
+   meter's hero tile uses — one page, one meaning per colour. ────── */
+
+.shelf { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .shelf { grid-template-columns: 1fr; } }
+
+.shelf-book {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--body);
+  text-align: left;
+  cursor: pointer;
+}
+.shelf-book:hover:not(:disabled) { border-color: var(--ink-3); border-left-color: var(--crease); }
+.shelf-book:disabled { opacity: 0.5; cursor: not-allowed; }
+.shelf-book.is-picked {
+  border-color: var(--crease);
+  border-left-color: var(--crease);
+  background: var(--surface);
+}
+.shelf-book.is-picked .sb-title { color: var(--crease); }
+
+.sb-title {
+  font-family: var(--display);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.sb-by { font-size: 11.5px; color: var(--ink-3); }
+.sb-size {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+.sb-hook { margin-top: 3px; font-size: 11.5px; font-style: italic; color: var(--ink-3); }
+
+#shelf-status:empty { display: none; }
+#shelf-status.is-working { color: var(--ink-2); }
+#shelf-status.is-ok { color: var(--ok); }
+#shelf-status.is-err { color: var(--over); }
+
+/* paste, file and URL still work exactly as they did — they are just no longer
+   the first thing asked of a reader who came to see a book folded */
+.byo { margin-top: 16px; }
+.byo > summary {
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.byo > summary:hover { color: var(--ink); }
+.byo[open] > summary { margin-bottom: 10px; }
+
+p.ingest-status { margin: 12px 0 0; }
+.ingest-status:empty { display: none; }
 
 /* ── Meter ────────────────────────────────────────────────────── */
 
@@ -967,6 +1048,46 @@ textarea { font-family: var(--mono); font-size: 12.4px; resize: vertical; }
 .error-body { margin: 0; font-size: 12.8px; color: var(--ink-2); }
 .error-body + .error-body { margin-top: 6px; }
 .error-hint { margin: 8px 0 0; font-size: 11.5px; color: var(--ink-3); }
+
+/* ── Suggestion chips ─────────────────────────────────────────────
+   The two families are labelled in the two colours this page already uses for
+   the two ideas: violet for the ordinary action a search could serve, the
+   fold's pink for the question only a carried book can answer. A pill shows a
+   short handle and its tooltip shows the exact question that will be sent —
+   truncating the question itself would be the dishonest version. ──── */
+
+.chips { display: grid; gap: 7px; margin-top: 14px; }
+.chip-group { display: grid; grid-template-columns: 54px 1fr; gap: 8px; align-items: start; }
+@media (max-width: 520px) { .chip-group { grid-template-columns: 1fr; } }
+
+.chip-label {
+  padding-top: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.chip-label-needle { color: var(--accent); }
+.chip-label-arc { color: var(--crease); }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.chip {
+  max-width: 100%;
+  padding: 5px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-family: var(--body);
+  font-size: 11.8px;
+  text-align: left;
+  cursor: pointer;
+}
+.chip:hover:not(:disabled) { color: var(--ink); }
+.chip-needle:hover:not(:disabled) { border-color: var(--accent); }
+.chip-arc:hover:not(:disabled) { border-color: var(--crease); }
+.chip:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .composer { display: flex; gap: 10px; margin-top: 14px; }
 .composer input { flex: 1; }
