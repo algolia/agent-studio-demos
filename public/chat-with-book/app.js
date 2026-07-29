@@ -13,6 +13,16 @@
 
 const CFG = window.DEMO_CONFIG;
 
+/**
+ * The meter — its cost model, its two modes and its rendering — lives in the
+ * shared demo kit (`shared/meter.js`), so the next demo inherits the whole thing
+ * instead of a copy of it. What stays in this file is only what is specific to
+ * this page: which model is selected, and which of its calls belong on which
+ * side of the ledger. The bookshelf manifest arrives the same way.
+ */
+const M = window.DemoMeter;
+const BOOKS = window.DEMO_BOOKS;
+
 const state = {
   messages: [],        // v5 messages, the live history
   weights: [],         // per-message token estimate, parallel to messages
@@ -42,8 +52,10 @@ const state = {
   // set by an in-flight agent-driven unfold, so the event card can be told how
   // long the second completion took once it lands
   unfoldSettle: null,
-  // the two prices for this conversation — see "The meter" below
-  cost: freshCost(),
+  // the two prices for this conversation — see shared/meter.js
+  cost: M.freshCost(),
+  // the book taken off the shelf, if any: carries this book's suggestion chips
+  book: null,
 };
 
 /**
@@ -73,6 +85,8 @@ const $ = (id) => document.getElementById(id);
 const el = {
   doc: $("doc"), file: $("file"), ingest: $("ingest-btn"), ingestStatus: $("ingest-status"),
   url: $("url"), urlBtn: $("url-btn"), urlStatus: $("url-status"),
+  shelf: $("shelf"), shelfStatus: $("shelf-status"), byo: $("byo"),
+  chips: $("chips"), chipsNeedle: $("chips-needle"), chipsArc: $("chips-arc"),
   sample: $("sample-btn"), model: $("model"), modelHint: $("model-hint"),
   budget: $("budget"), budgetHint: $("budget-hint"),
   meter: $("meter"), fill: $("meter-fill"), threshold: $("meter-threshold"),
@@ -84,16 +98,21 @@ const el = {
   heroTokens: $("hero-tokens"), heroFolds: $("hero-folds"), heroSaved: $("hero-saved"),
   tooltip: $("tooltip"),
   themeToggle: $("theme-toggle"), themeGlyph: $("theme-glyph"), themeLabel: $("theme-label"),
-  costbar: $("costbar"), costToggle: $("cost-toggle"),
+  costbar: $("costbar"), costToggle: $("cost-toggle"), meterInfo: $("meter-info"),
   tileNaive: $("tile-naive"), tileReal: $("tile-real"), tileSaved: $("tile-saved"),
   naiveUsd: $("naive-usd"), realUsd: $("real-usd"), savedUsd: $("saved-usd"),
   naiveTok: $("naive-tok"), realTok: $("real-tok"), savedTok: $("saved-tok"),
   naiveBadge: $("naive-badge"), realEst: $("real-est"),
+  savedLabel: $("saved-label"), savedSub: $("saved-sub"),
   savedPct: $("saved-pct"), savedFill: $("saved-fill"), savedTrack: $("saved-track"),
+  opMinus: $("op-minus"), opEquals: $("op-equals"),
+  unlockedValue: $("unlocked-value"), unlockedSub: $("unlocked-sub"),
+  unlockedInfo: $("unlocked-info"),
 };
 
-const nf = new Intl.NumberFormat("en-US");
-const fmt = (n) => nf.format(Math.round(n || 0));
+/* number and money formatting come from the kit, so the strip at the top of the
+   page and the wire log below it can never disagree about a figure */
+const { usd, fmt } = M;
 
 /* ── API ──────────────────────────────────────────────────────── */
 
@@ -336,27 +355,14 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
-/* ── The meter: what this cost, and what the fold saved ────────────
-   The question colleagues actually ask about this page is "how many tokens, and
-   how much money, does the fold save?" — so the answer is on screen, live, and
-   accounted for in the direction that is least flattering to the demo.
+/* ── The meter: what this cost, and what the fold bought ───────────
+   The cost model, the two modes and the strip's rendering are all in
+   shared/meter.js — read the comment at the top of that file for how naive and
+   real are defined and why the subtraction stops once the naive run no longer
+   fits the model's window.
 
-   Two running totals, priced on the same per-model rates:
-
-     NAIVE  what the same conversation would have cost with no context APIs at
-            all: the full ORIGINAL document plus the entire unsummarized history
-            re-sent on every turn, with the answer charged at the size it really
-            came back. This is the counterfactual, so it never pays for a
-            summarizer call — there are none in that world.
-     REAL   what was actually spent. Every /completions payload, AND every
-            /context/compact call the folds, refolds, rebuilt digests and
-            agent-driven unfolds needed. The summarizer is not free and this
-            meter does not pretend it is: put its bill on the other side and a
-            fold "saves" money it never saved.
-
-   SAVED is the difference, and it is allowed to be negative — on the very first
-   turn after an oversize fold the summarizer has been billed and nothing has yet
-   benefited from it, which is true and worth showing rather than hiding.
+   What lives here is the part that cannot be shared: which model is selected,
+   and which of this page's calls belong on which side of the ledger.
 
    Token counts come from the trim probe and the compact stats wherever the API
    reports them; the increments it never saw (a fresh question, a loaned extract,
@@ -364,99 +370,17 @@ function escapeHtml(s) {
    this very conversation, not at the chars/4 folklore.
    ─────────────────────────────────────────────────────────────── */
 
-/**
- * Published list prices, per million tokens. Deliberately here and not in
- * config.js: config.js carries credentials and environment, and a price list is
- * neither. Every entry states where its number came from, and the one number
- * with no public source says so in those words.
- */
-const PRICING = {
-  "claude-haiku-4-5": {
-    label: "claude-haiku-4.5", inPerMTok: 1.00, outPerMTok: 5.00,
-    source: "Anthropic published list price for claude-haiku-4.5 — $1.00 input / $5.00 output " +
-      "per million tokens.",
-  },
-  "gpt-4.1-mini": {
-    label: "gpt-4.1-mini", inPerMTok: 0.40, outPerMTok: 1.60,
-    source: "OpenAI published list price for gpt-4.1-mini — $0.40 input / $1.60 output per " +
-      "million tokens.",
-  },
-  "gpt-4.1-nano": {
-    label: "gpt-4.1-nano", inPerMTok: 0.10, outPerMTok: 0.40,
-    source: "OpenAI published list price for gpt-4.1-nano — $0.10 input / $0.40 output per " +
-      "million tokens.",
-  },
-  "small": {
-    label: "Enablers small", inPerMTok: 0.10, outPerMTok: 0.10, placeholder: true,
-    source: "Internal model — illustrative pricing. There is no public list price for it, so " +
-      "$0.10 / $0.10 per million tokens is a placeholder chosen to keep the arithmetic " +
-      "readable, not a quote. Read the ratio, not the absolute figure.",
-  },
-};
-
-const NO_PRICE = {
-  label: "unpriced", inPerMTok: 0, outPerMTok: 0, placeholder: true,
-  source: "No price is configured for this model, so both sides of the meter are billed at " +
-    "zero for it — the figures below undercount rather than guess.",
-};
-
-/** longest matching key wins: config ids are dated, e.g. claude-haiku-4-5-20251001 */
-function priceOf(modelName) {
-  const name = String(modelName || "").toLowerCase();
-  let best = NO_PRICE, bestLen = -1;
-  for (const key of Object.keys(PRICING)) {
-    if ((name === key || name.startsWith(key)) && key.length > bestLen) {
-      best = PRICING[key];
-      bestLen = key.length;
-    }
-  }
-  return best;
-}
-
 function currentPrice() {
-  return priceOf(state.model && state.model.model);
+  return M.priceOf(state.model && state.model.model);
 }
 
-function priceLine(p) {
-  const q = p || currentPrice();
-  return `${q.label}: $${q.inPerMTok.toFixed(2)} in / $${q.outPerMTok.toFixed(2)} out per ` +
-    `million tokens${q.placeholder ? " (illustrative)" : ""}. ${q.source}`;
-}
-
-function freshCost() {
-  return {
-    realUsd: 0, naiveUsd: 0,
-    // billed tokens, input + output, on each side
-    realTokens: 0, naiveTokens: 0,
-    // the summarizer's share of the real side, broken out for the tooltip
-    summUsd: 0, summTokens: 0, summCalls: 0,
-    chatCalls: 0, turns: 0,
-    // the counterfactual history: what would still be carried if nothing folded
-    naiveHistory: 0,
-    // largest single naive payload, for the "wouldn't even fit" badge
-    naivePeak: 0,
-  };
-}
-
-/** 4 decimals under a dollar, 2 above — a demo turn costs fractions of a cent */
-function usd(v) {
-  const n = Number.isFinite(v) ? v : 0;
-  const a = Math.abs(n);
-  return `${n < -1e-12 ? "-" : ""}$${a < 1 ? a.toFixed(4) : a.toFixed(2)}`;
-}
-
-function signedTokens(n) {
-  const r = Math.round(n || 0);
-  return `${r < 0 ? "-" : ""}${fmt(Math.abs(r))} tok`;
+/** every call site in this file means "the model selected right now" */
+function priceLine() {
+  return M.priceLine(currentPrice());
 }
 
 function charge(side, inTok, outTok, price) {
-  const p = price || currentPrice();
-  const value = (Math.max(inTok, 0) * p.inPerMTok + Math.max(outTok, 0) * p.outPerMTok) / 1e6;
-  const c = state.cost;
-  if (side === "real") { c.realUsd += value; c.realTokens += Math.max(inTok, 0) + Math.max(outTok, 0); }
-  else { c.naiveUsd += value; c.naiveTokens += Math.max(inTok, 0) + Math.max(outTok, 0); }
-  return value;
+  return M.charge(state.cost, side, inTok, outTok, price || currentPrice());
 }
 
 /** one real /completions call — an unfolding turn makes two, and both are billed */
@@ -513,129 +437,33 @@ function realInputTokens(newChars, extras) {
   return Math.round(state.tokens + estTokens(newChars + notes + loaned));
 }
 
-/* ── Rendering the strip ────────────────────────────────────────── */
+/* ── Rendering the strip ──────────────────────────────────────────
+   The odometer, the tile states and every word of the tooltips are in
+   shared/meter.js. This page's job is to say what the model context is —
+   window, label, price — and to hand the kit a view. ─────────────── */
+
+const strip = M.createStrip(el);
 
 /**
- * A taxi meter, not a slot machine. The value eases to its target over ~600ms so
- * the reader sees it climb, and the digits that actually changed roll into place
- * on the landing — plus, mid-climb, any digit slow enough that a roll reads as a
- * tick rather than a blur. prefers-reduced-motion gets the number and none of it.
- *
- * Digits animate through the Web Animations API rather than a class toggle: no
- * forced reflow per digit, and a re-fired animation replaces the running one
- * instead of needing to be restarted by hand.
+ * The model's REAL window, never the demo's working budget: the mode switch is a
+ * statement about what the provider would accept, and the budget is a device
+ * this page invented to make the fold visible.
  */
-function makeRoller(node, format) {
-  let shown = 0, from = 0, target = 0, t0 = 0, raf = null;
-  const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  const roll = (span) => {
-    if (reduced() || !span.animate) return;
-    span.animate(
-      [{ transform: "translateY(-0.62em)", opacity: 0.12 }, { transform: "none", opacity: 1 }],
-      { duration: 240, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
-  };
-
-  function paint(v, settle) {
-    const chars = Array.from(format(v));
-    // a length change (crossing $1, gaining a digit) rebuilds; otherwise the
-    // spans are reused so an unchanged digit is never touched
-    if (node.children.length !== chars.length) {
-      node.textContent = "";
-      chars.forEach((ch) => {
-        const sp = document.createElement("span");
-        sp.className = "dg";
-        sp.textContent = ch;
-        node.appendChild(sp);
-      });
-      return;
-    }
-    for (let i = 0; i < chars.length; i++) {
-      const sp = node.children[i];
-      if (sp.textContent === chars[i]) continue;
-      sp.textContent = chars[i];
-      // mid-climb the last three places change every frame; rolling them would
-      // restart the animation before it moved and read as a smear
-      if (settle || chars.length - i > 3) roll(sp);
-    }
-  }
-
-  function step(now) {
-    const k = Math.min((now - t0) / 600, 1);
-    const eased = 1 - Math.pow(1 - k, 3);
-    shown = from + (target - from) * eased;
-    if (k < 1) {
-      paint(shown, false);
-      raf = requestAnimationFrame(step);
-    } else {
-      raf = null;
-      shown = target;
-      paint(shown, true);
-    }
-  }
-
-  paint(0, false);
-  return {
-    set(v) {
-      const next = Number.isFinite(v) ? v : 0;
-      if (Math.abs(next - target) < 1e-12) return;
-      target = next;
-      if (reduced()) {
-        if (raf !== null) { cancelAnimationFrame(raf); raf = null; }
-        shown = next;
-        paint(next, true);
-        return;
-      }
-      from = shown;
-      t0 = performance.now();
-      if (raf === null) raf = requestAnimationFrame(step);
-    },
-    reset() {
-      if (raf !== null) { cancelAnimationFrame(raf); raf = null; }
-      shown = from = target = 0;
-      paint(0, false);
-    },
-  };
+function meterView() {
+  return M.meterView(state.cost, {
+    modelWindow: state.model ? modelWindow() : Infinity,
+    modelLabel: state.model ? state.model.label : "this model",
+    price: currentPrice(),
+  });
 }
 
-const rollers = {
-  naive: makeRoller(el.naiveUsd, usd),
-  real: makeRoller(el.realUsd, usd),
-  saved: makeRoller(el.savedUsd, usd),
-};
-
 function renderCost() {
-  const c = state.cost;
-  const saved = c.naiveUsd - c.realUsd;
-  const behind = saved < -1e-12;
-
-  rollers.naive.set(c.naiveUsd);
-  rollers.real.set(c.realUsd);
-  rollers.saved.set(saved);
-
-  el.naiveTok.textContent = signedTokens(c.naiveTokens);
-  el.realTok.textContent = signedTokens(c.realTokens);
-  el.savedTok.textContent = signedTokens(c.naiveTokens - c.realTokens);
-
-  // a ratio of naive, so it cannot exceed 100% and the track needs no other scale
-  const pct = c.naiveUsd > 0 ? (saved / c.naiveUsd) * 100 : 0;
-  el.savedPct.textContent = c.naiveUsd > 0
-    ? (behind ? "paying itself back" : `${Math.round(pct)}% of naive`)
-    // a fold with no question after it has a bill but no ratio: say which
-    : (c.realUsd > 0 ? "no turn yet" : "—");
-  el.savedFill.style.width = `${Math.max(0, Math.min(100, pct)).toFixed(1)}%`;
-  el.tileSaved.classList.toggle("is-behind", behind);
-
-  // the naive run is not merely dearer when its largest payload clears the
-  // provider's ceiling — it is impossible, and that is the selling point
-  const window_ = state.model ? modelWindow() : Infinity;
-  el.naiveBadge.hidden = !(c.naivePeak > window_);
-  el.realEst.hidden = c.summCalls === 0;
+  strip.render(meterView());
 }
 
 function resetCost() {
-  state.cost = freshCost();
-  rollers.naive.reset(); rollers.real.reset(); rollers.saved.reset();
+  state.cost = M.freshCost();
+  strip.reset();
   renderCost();
 }
 
@@ -648,64 +476,16 @@ function initCostbar() {
     el.costToggle.textContent = open ? "Hide" : "Breakdown";
   });
 
+  // bound once, read live: every one of these asks the kit for the wording that
+  // matches the mode the meter is in at the moment it is opened
+  tip(el.meterInfo, () => M.tileCopy.eyebrow);
   // the badge shrinks to a bare ✗ on a phone, so it carries its own explanation
-  tip(el.naiveBadge, () => {
-    const c = state.cost;
-    return `The largest single payload on the naive side is ${fmt(c.naivePeak)} tokens, and ` +
-      `${state.model.label}'s window is ${fmt(modelWindow())}. A naive run of this conversation ` +
-      `would be refused by the provider, not merely billed — the price beside this badge is what ` +
-      `it would have cost if it had been possible at all.`;
-  });
-
-  tip(el.tileNaive, () => {
-    const c = state.cost;
-    const base = `What this conversation would have cost with no context APIs in it: the full ` +
-      `original document plus the entire unsummarized history re-sent on every turn, with the ` +
-      `answer charged at the size it actually came back. No summarizer appears on this side — ` +
-      `in that world there is nothing to summarize with. ` +
-      `${fmt(c.naiveTokens)} billed tokens over ${c.turns} turn${c.turns === 1 ? "" : "s"}.`;
-    const fit = c.naivePeak > (state.model ? modelWindow() : Infinity)
-      ? ` Its largest single payload is ${fmt(c.naivePeak)} tokens against ` +
-        `${state.model.label}'s ${fmt(modelWindow())}-token window, so a naive run of this ` +
-        `conversation would not just cost more — the provider would refuse it outright. It is ` +
-        `priced here anyway, because "you cannot buy this at any price" is the stronger claim.`
-      : "";
-    return `${base}${fit} ${priceLine()}`;
-  }, () => "naive = Σ (original document + full history) × $in  +  answer × $out");
-
-  tip(el.tileReal, () => {
-    const c = state.cost;
-    return `What was actually spent, with nothing left off the bill: ${c.chatCalls} ` +
-      `/completions call${c.chatCalls === 1 ? "" : "s"} plus ${c.summCalls} ` +
-      `/context/compact call${c.summCalls === 1 ? "" : "s"} — the folds, refolds, rebuilt ` +
-      `digests and agent-driven unfolds — which come to ${usd(c.summUsd)} of the total, ` +
-      `${fmt(c.summTokens)} tokens. Charging the summarizer to ourselves is the whole point: a ` +
-      `fold whose own bill is hidden saves money it never saved. ` +
-      `Summarizer usage is estimated — the API does not yet expose the summarizer's own token ` +
-      `counts, so input is read as the call's tokensBeforeEstimate and output as its ` +
-      `tokensAfterEstimate; a pending PR closes that gap. ${priceLine()}`;
-  }, () => "real = Σ every /completions payload  +  Σ every /context/compact call");
-
-  tip(el.tileSaved, () => {
-    const c = state.cost;
-    const saved = c.naiveUsd - c.realUsd;
-    const pct = c.naiveUsd > 0 ? (saved / c.naiveUsd) * 100 : 0;
-    if (c.naiveUsd <= 0) {
-      return `Naive minus real. Nothing has been asked yet, so there is nothing to compare — ` +
-        `ingest a document and ask a question and both sides start moving. ${priceLine()}`;
-    }
-    const head = `Naive minus real: ${usd(c.naiveUsd)} − ${usd(c.realUsd)} = ${usd(saved)}, ` +
-      `${Math.abs(Math.round(pct))}% of what the naive run would have cost. Both sides use the ` +
-      `same per-model rates and the real side carries the summarizer's bill, so this is the ` +
-      `honest difference rather than the flattering one.`;
-    const tail = saved < 0
-      ? ` It is negative right now, and that is not a bug: the fold has been paid for and the ` +
-        `turns that benefit from it have not happened yet. Every question from here costs the ` +
-        `folded price instead of the whole document, so it crosses over shortly.`
-      : ` The saving compounds: the fold is paid once, and every turn afterwards carries the ` +
-        `digest instead of the document.`;
-    return `${head}${tail} ${priceLine()}`;
-  }, () => "saved = naive − real   ·   ratio = saved ÷ naive");
+  tip(el.naiveBadge, () => M.tileCopy.badge(meterView()));
+  tip(el.tileNaive, () => M.tileCopy.naive(meterView()), M.tileCopy.naiveFormula);
+  tip(el.tileReal, () => M.tileCopy.real(meterView()), M.tileCopy.realFormula);
+  tip(el.tileSaved, () => M.tileCopy.saved(meterView()),
+    () => M.tileCopy.savedFormula(meterView()));
+  tip(el.unlockedInfo, () => M.tileCopy.unlocked(meterView()));
 
   renderCost();
 }
@@ -2201,6 +1981,162 @@ function closeTip() {
   el.tooltip.style.width = "";
 }
 
+/* ── The bookshelf ────────────────────────────────────────────────
+   Four whole books, on this origin, as plain text. A tile is one fetch and one
+   ingest: no upload, no paste, no third party — and the wire log records the
+   fetch alongside the API calls so it is clear which is which.
+
+   The token figure on a tile is derived, not stored: before the first probe it
+   is a chars/4 guess, and after it the ratio the trim endpoint actually measured
+   on this conversation. A book is a book; how many tokens it is depends on the
+   tokenizer, and pretending otherwise is the sort of round number this page is
+   trying to talk people out of. ────────────────────────────────── */
+
+function bookSizeLine(book) {
+  return `${fmt(book.words)} words · ≈${fmt(estTokens(book.chars))} tokens`;
+}
+
+function renderShelf() {
+  el.shelf.textContent = "";
+  BOOKS.books.forEach((book) => {
+    const tile = document.createElement("button");
+    tile.type = "button";
+    tile.className = "shelf-book";
+    tile.dataset.slug = book.slug;
+    tile.setAttribute("aria-pressed", "false");
+
+    const title = document.createElement("span");
+    title.className = "sb-title";
+    title.textContent = book.title;
+    const by = document.createElement("span");
+    by.className = "sb-by";
+    by.textContent = `${book.author} · ${book.year}`;
+    const size = document.createElement("span");
+    size.className = "sb-size";
+    size.textContent = bookSizeLine(book);
+    const hook = document.createElement("span");
+    hook.className = "sb-hook";
+    hook.textContent = book.hook;
+
+    tile.append(title, by, size, hook);
+    tip(tile, () =>
+      `${book.title} — ${fmt(book.chars)} characters of plain text, served from this origin as a ` +
+      `static file. Clicking it loads the file and ingests it as the first user message: the trim ` +
+      `endpoint counts what that costs, and anything past ${fmt(oversizeLimit())} tokens is folded ` +
+      `section by section before a word of it is sent. Project Gutenberg ebook ` +
+      `#${book.gutenbergId}, licence header and footer removed and nothing else edited. The token ` +
+      `figure is ${state.charsPerToken
+        ? `converted at the ${charsPerToken().toFixed(1)} chars per token this conversation measured`
+        : `a chars/${CFG.charsPerTokenFallback} guess until the first probe measures the real ratio`}.`);
+    tile.addEventListener("click", () => pickBook(book));
+    el.shelf.appendChild(tile);
+  });
+}
+
+function markShelf(slug) {
+  el.shelf.querySelectorAll(".shelf-book").forEach((tile) => {
+    const on = tile.dataset.slug === slug;
+    tile.classList.toggle("is-picked", on);
+    tile.setAttribute("aria-pressed", String(on));
+  });
+}
+
+/** the probe has measured the real ratio: re-price every tile with it */
+function refreshShelfSizes() {
+  el.shelf.querySelectorAll(".shelf-book").forEach((tile) => {
+    const book = BOOKS.findBook(tile.dataset.slug);
+    const size = tile.querySelector(".sb-size");
+    if (book && size) size.textContent = bookSizeLine(book);
+  });
+}
+
+function shelfStatus(text, kind) {
+  el.shelfStatus.textContent = text;
+  el.shelfStatus.className = `hint${kind ? ` is-${kind}` : ""}`;
+}
+
+/**
+ * One tile, one whole book. A second pick starts over rather than stacking two
+ * books in one history — two documents in one conversation is a different demo,
+ * and silently concatenating them would make every number on the page harder to
+ * account for.
+ */
+async function pickBook(book) {
+  if (state.busy) return;
+  if (state.messages.length) resetAll();
+  markShelf(book.slug);
+  state.book = book;
+  renderChips(book);
+
+  const url = BOOKS.bookUrl(book);
+  let text;
+  busy(true);
+  try {
+    shelfStatus(`Fetching ${book.title}…`, "working");
+    const t0 = performance.now();
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    text = await res.text();
+    logCall(url, null, null,
+      `${fmt(text.length)} chars in ${Math.round(performance.now() - t0)}ms · a static file on ` +
+      `this origin — no API, no key, no third party`, "GET");
+    shelfStatus(`${book.title} · ${fmt(text.length)} chars — ingesting`, "working");
+  } catch (e) {
+    shelfStatus(`Could not load ${book.title} from this site.`, "err");
+    logCall(url, null, e.message, "failed", "GET");
+    busy(false);
+    return;
+  }
+  busy(false);
+
+  const ok = await ingest(text);
+  if (ok) {
+    shelfStatus(`${book.title} is in the conversation — ask it something.`, "ok");
+    refreshShelfSizes();
+  } else {
+    shelfStatus("", null);
+  }
+}
+
+/* ── Suggestion chips ─────────────────────────────────────────────
+   Two families, and the labels are not decoration. A needle question has its
+   answer in one place, which is what a search index is for; an arc question is
+   about the whole book, which is what carrying it in context is for. Both go
+   down the same path today — the point of showing them side by side is that one
+   of them has no retrievable answer at all. ────────────────────── */
+
+function renderChips(book) {
+  const rows = { needle: el.chipsNeedle, arc: el.chipsArc };
+  rows.needle.textContent = "";
+  rows.arc.textContent = "";
+  if (!book) {
+    el.chips.hidden = true;
+    return;
+  }
+  book.chips.forEach((chip) => {
+    const row = rows[chip.kind];
+    if (!row) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `chip chip-${chip.kind}`;
+    btn.disabled = state.busy;
+    // the pill wears a handle; the question itself is the accessible name and the
+    // tooltip, because a truncated question is a question nobody can check
+    btn.textContent = chip.short;
+    btn.setAttribute("aria-label", chip.text);
+    tip(btn, `Sends: “${chip.text}”` + (chip.kind === "needle"
+      ? " — one answer, in one place. A search index would find this."
+      : " — a property of the whole book. There is no single passage to retrieve."));
+    btn.addEventListener("click", () => {
+      if (state.busy) return;
+      el.prompt.value = "";
+      send(chip.text);
+    });
+    row.appendChild(btn);
+  });
+  el.chips.hidden = false;
+}
+
 /* ── Core flows ───────────────────────────────────────────────── */
 
 async function refreshContext() {
@@ -2218,11 +2154,19 @@ async function refreshContext() {
   if (state.tokens > 0 && chars > 0) state.charsPerToken = chars / state.tokens;
   renderMeter();
   renderLedger();
+  // the shelf quotes token figures too, and they were a guess until just now
+  refreshShelfSizes();
 }
 
-async function ingest() {
-  const text = el.doc.value.trim();
-  if (!text) { el.doc.focus(); return; }
+/**
+ * `source` is passed in rather than read from the textarea, because a book off
+ * the shelf is over a million characters and routing that through a form control
+ * buys nothing but a paint stall.
+ */
+async function ingest(source) {
+  const fromBox = source === undefined;
+  const text = String(fromBox ? el.doc.value : source).trim();
+  if (!text) { el.doc.focus(); return false; }
   busy(true);
   try {
     state.messages.push(userMsg(
@@ -2246,7 +2190,7 @@ async function ingest() {
     tip(el.ingestStatus,
       `Counted by the trim endpoint with no constraints — nothing was dropped, it just reported the estimate.`,
       `POST /1/unstable/context/trim\n{ messages }`);
-    el.doc.value = "";
+    if (fromBox) el.doc.value = "";
     // the probe just told us this cannot be sent at all: fold it now rather than
     // letting the first question collect a 400
     if (state.tokens > oversizeLimit()) {
@@ -2254,9 +2198,11 @@ async function ingest() {
       await foldOversize();
       el.ingestStatus.textContent = `✓ folded to ~${fmt(state.tokens)} tokens`;
     }
+    return true;
   } catch (e) {
     el.ingestStatus.textContent = "";
     addErrorCard("Could not ingest that document", humanize(e));
+    return false;
   } finally {
     busy(false);
   }
@@ -3108,6 +3054,33 @@ function busy(on) {
   el.reset.disabled = on;
   el.compact.disabled = on || !canCompact();
   el.send.textContent = on ? "…" : "Send";
+  // a second book or a second question mid-fold would race the history swap
+  document.querySelectorAll(".shelf-book, .chip").forEach((b) => { b.disabled = on; });
+}
+
+/**
+ * Back to an empty conversation, with the model and budget choices left alone.
+ * Also what a second book pick runs first — one document per conversation keeps
+ * every figure on the page accountable to one source.
+ */
+function resetAll() {
+  state.messages = []; state.weights = []; state.kinds = [];
+  state.tokens = 0; state.folds = 0; state.reclaimed = 0;
+  state.charsPerToken = null;
+  state.foldProgress = null;
+  state.fold = null;
+  state.unfoldSettle = null;
+  resetCost();
+  // the chips go with the document they belong to: a Moby-Dick question sent
+  // against an empty history reads as the demo failing to answer
+  renderChips(null);
+  markShelf(null);
+  tipPinned = null; closeTip();
+  el.thread.innerHTML = '<div class="empty"><p><strong>Cleared.</strong></p>' +
+    '<p>Take a book off the shelf, or ingest a document of your own.</p></div>';
+  el.ingestStatus.textContent = "";
+  urlStatus("");
+  renderMeter(); renderLedger();
 }
 
 /* ── Wiring ───────────────────────────────────────────────────── */
@@ -3161,6 +3134,11 @@ function initModels() {
     state.model = CFG.models[Number(el.model.value)];
     setModelHint();
     renderMeter();
+    // the meter's mode is a statement about THIS model's window: a history that
+    // cannot be sent naively to a 200k model fits a 1M one, so switching the
+    // picker can make an impossible run possible again. Re-render or the tile
+    // keeps asserting the old answer until the next charge lands.
+    renderCost();
   });
   state.model = CFG.models[0];
   setModelHint();
@@ -3276,6 +3254,7 @@ function init() {
   initModels();
   initBudgets();
   initCostbar();
+  renderShelf();
   renderMeter();
 
   // the panel takes the pointer when it is scrollable, so travelling into it
@@ -3304,7 +3283,7 @@ function init() {
     $("repo-link").href = CFG.repoUrl;
   }
 
-  el.ingest.addEventListener("click", ingest);
+  el.ingest.addEventListener("click", () => ingest());
   el.urlBtn.addEventListener("click", fetchUrl);
   el.url.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); if (!state.busy) fetchUrl(); }
@@ -3318,18 +3297,9 @@ function init() {
   });
   el.compact.addEventListener("click", () => runCompact());
   el.reset.addEventListener("click", () => {
-    state.messages = []; state.weights = []; state.kinds = [];
-    state.tokens = 0; state.folds = 0; state.reclaimed = 0;
-    state.charsPerToken = null;
-    state.foldProgress = null;
-    state.fold = null;
-    state.unfoldSettle = null;
-    resetCost();
-    tipPinned = null; closeTip();
-    el.thread.innerHTML = '<div class="empty"><p><strong>Cleared.</strong></p><p>Ingest a document, or just ask a question.</p></div>';
-    el.ingestStatus.textContent = "";
-    urlStatus("");
-    renderMeter(); renderLedger();
+    resetAll();
+    // the shelf keeps its selection: the chips are the reason to come back to it
+    if (state.book) shelfStatus(`${state.book.title} cleared — pick it again, or another.`, null);
   });
   el.composer.addEventListener("submit", (e) => {
     e.preventDefault();

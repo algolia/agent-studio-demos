@@ -10,25 +10,26 @@
      path against. The image is a real 1200×630 screenshot of this page with a
      document already ingested, so the token count on the card is one the trim
      endpoint actually returned. ──── -->
-<meta name="description" content="Chat with an entire book on a small-context model — hierarchical compaction folds 800k characters into a conversation that never overflows, and every API call is shown on screen.">
+<meta name="description" content="Chat with an entire book on a small-context model — hierarchical compaction folds Moby-Dick's 1.2M characters into a conversation that never overflows a 200k window, and every API call is shown on screen.">
 <meta property="og:site_name" content="Agent Studio demos">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://agent-studio-demos.pages.dev/chat-with-book/">
 <meta property="og:title" content="Chat with a book — Agent Studio context APIs">
-<meta property="og:description" content="Chat with an entire book on a small-context model — hierarchical compaction folds 800k characters into a conversation that never overflows, and every API call is shown on screen.">
+<meta property="og:description" content="Chat with an entire book on a small-context model — hierarchical compaction folds Moby-Dick's 1.2M characters into a conversation that never overflows a 200k window, and every API call is shown on screen.">
 <meta property="og:image" content="https://agent-studio-demos.pages.dev/assets/og/chat-with-book.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="The Chat with a book demo, a document ingested and the token meter carrying its count.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Chat with a book — Agent Studio context APIs">
-<meta name="twitter:description" content="Chat with an entire book on a small-context model — hierarchical compaction folds 800k characters into a conversation that never overflows, and every API call is shown on screen.">
+<meta name="twitter:description" content="Chat with an entire book on a small-context model — hierarchical compaction folds Moby-Dick's 1.2M characters into a conversation that never overflows a 200k window, and every API call is shown on screen.">
 <meta name="twitter:image" content="https://agent-studio-demos.pages.dev/assets/og/chat-with-book.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/tokens.css">
+<link rel="stylesheet" href="../shared/meter.css">
 <link rel="stylesheet" href="style.css">
 <script>
   /* Resolve the theme before first paint, or the page flashes the wrong one.
@@ -54,7 +55,7 @@
   <div class="costbar-inner">
     <span class="costbar-eyebrow">
       the meter
-      <button class="info" type="button" data-tip="Two prices for the same conversation. Naive is what it would have cost re-sending the full original document and the whole unsummarized history on every turn. Real is what was actually spent — every completion, plus every summarizer call the folds, refolds and unfolds needed. The difference is the saving, and it is only worth quoting because the summarizer's own bill is on the real side of it.">?</button>
+      <button class="info" id="meter-info" type="button">?</button>
     </span>
     <div class="cost-tiles" id="cost-tiles">
       <div class="cost-tile" id="tile-naive" tabindex="0">
@@ -62,23 +63,32 @@
         <span class="ct-value" id="naive-usd"></span>
         <span class="ct-sub"><span id="naive-tok">0 tok</span></span>
       </div>
-      <span class="cost-op" aria-hidden="true">−</span>
+      <span class="cost-op" id="op-minus" aria-hidden="true">−</span>
       <div class="cost-tile" id="tile-real" tabindex="0">
         <span class="ct-label">Real<span class="ct-est" id="real-est" hidden>est.</span></span>
         <span class="ct-value" id="real-usd"></span>
         <span class="ct-sub"><span id="real-tok">0 tok</span></span>
       </div>
-      <span class="cost-op" aria-hidden="true">=</span>
+      <span class="cost-op" id="op-equals" aria-hidden="true">=</span>
+      <!-- ── The third tile has two states ──────────────────────────────
+           While the naive run still fits the model's window it is Saved =
+           naive − real. Once the naive run is bigger than the window there is
+           nothing to subtract from, so it becomes Unlocked and quotes the two
+           token figures instead of a dollar delta. Two sets of nodes rather
+           than one reformatted set: the odometer owns the dollar value, and
+           the unlocked copy is prose. ──── -->
       <div class="cost-tile is-hero" id="tile-saved" tabindex="0">
-        <span class="ct-label">Saved</span>
+        <span class="ct-label"><span id="saved-label">Saved</span><button class="info" id="unlocked-info" type="button" hidden>?</button></span>
         <span class="ct-value" id="saved-usd"></span>
-        <span class="ct-sub">
+        <span class="ct-value ct-unlocked" id="unlocked-value" hidden></span>
+        <span class="ct-sub" id="saved-sub">
           <span id="saved-tok">0 tok</span>
           <span class="ct-chip">
             <span class="ct-chip-num" id="saved-pct">—</span>
             <span class="ct-chip-track" id="saved-track" aria-hidden="true"><span id="saved-fill"></span></span>
           </span>
         </span>
+        <span class="ct-sub ct-unlocked-sub" id="unlocked-sub" hidden></span>
       </div>
     </div>
     <button class="cost-toggle" id="cost-toggle" type="button" aria-expanded="false" aria-controls="cost-tiles">Breakdown</button>
@@ -99,10 +109,10 @@
     <p class="lede">
       A conversation runs out of room long before it runs out of things to say.
       Two endpoints fix that: <code>context/trim</code> counts what you are carrying,
-      <code>context/compact</code> folds the old part into a summary. Paste a long
-      document below, or fetch a URL, and watch the fold happen. Bring something
-      that overflows the model window outright and it gets folded in sections
-      first — a summary is only useful if it fits. A fold is not a shredder,
+      <code>context/compact</code> folds the old part into a summary. Take a whole
+      book off the shelf below — or paste your own document, or fetch a URL — and
+      watch the fold happen. Anything that overflows the model window outright is
+      folded in sections first: a summary is only useful if it fits. A fold is not a shredder,
       though: every folded section is still here. Dive into one to ask a question
       against its full original text, refold it around what you actually care
       about, or watch the assistant reopen a section by itself when your question
@@ -132,34 +142,47 @@
   <!-- ── Left rail: ingest, model, meter, ledger ─────────────────── -->
   <section class="panel" aria-labelledby="ingest-h">
     <h2 id="ingest-h" class="panel-h">1 · Load the context</h2>
-    <p class="panel-sub">Whatever you paste becomes the first user message. Nothing leaves your browser except the API calls shown in the wire log.</p>
+    <p class="panel-sub">Take a book off the shelf, or bring your own text. Whatever you load becomes the first user message. Nothing leaves your browser except the API calls shown in the wire log.</p>
 
-    <label class="field-label" for="doc">Paste a long document</label>
-    <textarea id="doc" rows="7" placeholder="Release notes, a spec, a transcript, a chapter…"></textarea>
+    <!-- ── The bookshelf ───────────────────────────────────────────────
+         Four public-domain books, served from this origin as plain text. The
+         tiles are built in app.js because the token figure beside each one is
+         derived from the chars-per-token ratio the page has measured so far,
+         not from a number hard-coded in the markup. ──── -->
+    <div class="shelf" id="shelf" role="group" aria-label="Books to load"></div>
+    <p class="hint" id="shelf-status" role="status"></p>
 
-    <div class="row">
-      <label class="file-btn">
-        <input type="file" id="file" accept=".txt,.md,.markdown,text/plain" hidden>
-        Choose a .txt or .md file
+    <details class="byo" id="byo">
+      <summary>…or bring your own — paste, a file, or a URL</summary>
+
+      <label class="field-label" for="doc">Paste a long document</label>
+      <textarea id="doc" rows="7" placeholder="Release notes, a spec, a transcript, a chapter…"></textarea>
+
+      <div class="row">
+        <label class="file-btn">
+          <input type="file" id="file" accept=".txt,.md,.markdown,text/plain" hidden>
+          Choose a .txt or .md file
+        </label>
+        <button class="btn ghost" id="sample-btn" type="button">Use a sample</button>
+      </div>
+
+      <label class="field-label url-label" for="url">
+        …or fetch a web page
+        <button class="info" type="button" data-tip="Fetched by your browser and stripped to plain text here — script, style, and navigation elements are dropped, whitespace is collapsed. A site that sends no CORS header cannot be read directly; that URL is read through the public reader named in config.js instead, and the substitution is stated on screen and in the wire log.">?</button>
       </label>
-      <button class="btn ghost" id="sample-btn" type="button">Use a sample</button>
-    </div>
+      <div class="row url-row">
+        <input id="url" type="url" inputmode="url" autocomplete="off"
+               placeholder="https://www.gutenberg.org/cache/epub/54873/pg54873-images.html">
+        <button class="btn" id="url-btn" type="button">Fetch</button>
+      </div>
+      <p class="hint" id="url-status" role="status"></p>
 
-    <label class="field-label url-label" for="url">
-      …or fetch a web page
-      <button class="info" type="button" data-tip="Fetched by your browser and stripped to plain text here — script, style, and navigation elements are dropped, whitespace is collapsed. A site that sends no CORS header cannot be read directly; that URL is read through the public reader named in config.js instead, and the substitution is stated on screen and in the wire log.">?</button>
-    </label>
-    <div class="row url-row">
-      <input id="url" type="url" inputmode="url" autocomplete="off"
-             placeholder="https://www.gutenberg.org/cache/epub/54873/pg54873-images.html">
-      <button class="btn" id="url-btn" type="button">Fetch</button>
-    </div>
-    <p class="hint" id="url-status" role="status"></p>
+      <div class="row">
+        <button class="btn primary" id="ingest-btn" type="button">Ingest</button>
+      </div>
+    </details>
 
-    <div class="row">
-      <button class="btn primary" id="ingest-btn" type="button">Ingest</button>
-      <span class="ingest-status" id="ingest-status" role="status"></span>
-    </div>
+    <p class="ingest-status" id="ingest-status" role="status"></p>
 
     <hr class="rule">
 
@@ -222,9 +245,31 @@
     <div class="thread" id="thread">
       <div class="empty">
         <p><strong>Nothing carried yet.</strong></p>
-        <p>Ingest a document, or just ask a question — the meter starts moving from the first turn.</p>
+        <p>Take a book off the shelf, ingest a document of your own, or just ask a question — the meter starts moving from the first turn.</p>
       </div>
     </div>
+    <!-- ── Suggestions ────────────────────────────────────────────────
+         Two families, labelled, because the difference between them is this
+         demo's whole argument: a needle is a fact sitting in one place, an arc
+         is a property of the whole book. Both go through the same flow today;
+         the needle side is what a search index would answer for. ──── -->
+    <div class="chips" id="chips" hidden>
+      <div class="chip-group">
+        <span class="chip-label chip-label-needle">
+          needle
+          <button class="info" type="button" data-tip="A needle question has one answer sitting in one place — a line, a scene, a number. Retrieval is made for this: search the book, return the passage that holds it, spend a few hundred tokens. Ask it here and the model answers from the folded record, reopening the section it needs if the digest dropped the detail.">?</button>
+        </span>
+        <div class="chip-row" id="chips-needle"></div>
+      </div>
+      <div class="chip-group">
+        <span class="chip-label chip-label-arc">
+          arc
+          <button class="info" type="button" data-tip="An arc question is about the shape of the whole book — a tone that shifts, sympathy that moves, a purpose that turns. No single passage holds the answer, so there is nothing for a search to retrieve: the model has to have carried the thing end to end. That is what the fold is for, and it is why this demo exists.">?</button>
+        </span>
+        <div class="chip-row" id="chips-arc"></div>
+      </div>
+    </div>
+
     <form class="composer" id="composer">
       <label class="sr-only" for="prompt">Your message</label>
       <input id="prompt" type="text" autocomplete="off" placeholder="Ask about what you pasted…">
@@ -257,6 +302,8 @@
 
 <script src="../shared/config.js"></script>
 <script src="../shared/md.js"></script>
+<script src="../shared/meter.js"></script>
+<script src="../shared/books.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

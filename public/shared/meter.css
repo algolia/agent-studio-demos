@@ -1,0 +1,204 @@
+/* ───────────────────────────────────────────────────────────────
+   meter.css — the cost strip's styling, shared with meter.js.
+
+   Every demo that mounts DemoMeter.createStrip() links this file, so the
+   strip looks the same wherever it appears. It declares no token of its own:
+   the colours come from tokens.css, which has to be linked first, and a demo's
+   own stylesheet comes after — that order is what lets a demo adjust the strip
+   without editing this file.
+   ─────────────────────────────────────────────────────────────── */
+
+/* ── The meter (cost / savings strip) ─────────────────────────────
+   A KPI row of three stat tiles, not a chart: three headline numbers whose job
+   is magnitude and one comparison, which is what a stat tile is for. Saved is
+   the tile the reader came for, so it is the one with the crease rule and the
+   larger figure — the fold's own colour, because the fold is what did the
+   saving. Sticky at top:0 as body's first child: never moves, never overlaps.
+   ─────────────────────────────────────────────────────────────── */
+
+.costbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  box-shadow: light-dark(0 10px 22px -22px rgba(20, 22, 42, 0.55), 0 12px 26px -24px #000);
+}
+.costbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 7px 28px;
+}
+.costbar-eyebrow {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.cost-tiles { display: flex; align-items: center; gap: 15px; min-width: 0; }
+.cost-op { font-family: var(--mono); font-size: 13px; color: var(--ink-3); }
+
+/* stat-tile contract: label · value · sub. The left rule carries which tile it
+   is; no tile wears a fill, so nothing here competes with the ledger below. */
+.cost-tile {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding: 1px 0 1px 9px;
+  border-left: 2px solid var(--line-strong);
+  cursor: help;
+}
+.ct-label {
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.ct-value {
+  /* tabular figures are deliberate here and only here: the value animates, and
+     proportional digits would re-measure the whole strip on every frame.
+     overflow:hidden is the odometer's mask — the digits roll behind it. */
+  font-family: var(--mono);
+  font-size: 15.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+}
+.ct-sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.cost-tile.is-hero { border-left-color: var(--crease); padding-left: 11px; }
+.cost-tile.is-hero .ct-label { color: var(--crease); }
+.cost-tile.is-hero .ct-value { font-size: 22px; letter-spacing: -0.025em; }
+/* the fold has been billed but not yet repaid: say so rather than showing a
+   cheerful zero */
+.cost-tile.is-hero.is-behind { border-left-color: var(--warn); }
+.cost-tile.is-hero.is-behind .ct-label,
+.cost-tile.is-hero.is-behind .ct-value { color: var(--warn); }
+
+.ct-badge, .ct-est {
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+.ct-badge { border: 1px solid var(--over); color: var(--over); }
+.ct-est { border: 1px dashed var(--line-strong); color: var(--ink-3); }
+
+/* the savings ratio. The track is 0→100% of naive by construction — there is no
+   axis to truncate, and a full track means every penny was saved. */
+.ct-chip { display: inline-flex; align-items: center; gap: 6px; }
+.ct-chip-num { color: var(--crease); }
+.cost-tile.is-hero.is-behind .ct-chip-num { color: var(--warn); }
+.ct-chip-track {
+  width: 34px; height: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ct-chip-track > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--crease);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* one digit, one span, so only the digits that changed move */
+.ct-value .dg { display: inline-block; }
+
+/* ── The third tile, unlocked ──────────────────────────────────────
+   When the naive run no longer fits the model's window there is no delta to
+   roll, so the odometer is swapped for two token figures. They keep the fold's
+   colour and lose the hero's size: it is a sentence, not a number. ──── */
+.cost-tile.is-hero .ct-unlocked {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--crease);
+  overflow: visible;
+}
+.ct-unlocked-sub { color: var(--ink-2); }
+/* the UA's [hidden] loses to .ct-sub's display:flex, so say it here */
+.cost-tile [hidden] { display: none; }
+
+.cost-toggle {
+  display: none;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-3);
+  font-family: var(--body);
+  font-size: 11px;
+  cursor: pointer;
+}
+.cost-toggle:hover { color: var(--ink); border-color: var(--ink-3); }
+
+@media (max-width: 720px) {
+  .costbar-inner { gap: 12px; padding: 6px 16px; }
+  .costbar-eyebrow { display: none; }
+  .cost-tiles { gap: 11px; }
+  .cost-op { display: none; }
+}
+/* phone: the saving is the headline, the two operands are one tap away */
+@media (max-width: 420px) {
+  .cost-toggle { display: inline-flex; }
+  .costbar[data-open="0"] .cost-tile:not(.is-hero) { display: none; }
+  .costbar[data-open="1"] .costbar-inner { flex-wrap: wrap; row-gap: 6px; }
+  /* a grid, not a flex row: minmax(0,…) is what stops three tiles whose content
+     is wider than a third of a phone from pushing the page sideways */
+  .costbar[data-open="1"] .cost-tiles {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 8px;
+    flex: 1 1 100%;
+  }
+  .costbar[data-open="1"] .ct-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* the sub line wraps rather than ellipsising: "80% of naive" is the answer, and
+     a clipped answer is worse than a two-line strip (which nothing overlaps) */
+  .costbar[data-open="1"] .ct-sub { min-width: 0; flex-wrap: wrap; gap: 0 7px; }
+  .costbar[data-open="1"] .ct-value { font-size: 12.5px; }
+  .costbar[data-open="1"] .cost-tile.is-hero .ct-value { font-size: 17px; }
+  .costbar[data-open="1"] .ct-chip-track { display: none; }
+  .cost-tile.is-hero .ct-value { font-size: 20px; }
+  /* the full wording is 110px of a ~107px column. font-size:0 hides it from the
+     eye and keeps it in the accessibility tree, where it is the useful version;
+     the glyph plus the tile's tooltip carry it for everyone else. */
+  .ct-badge { font-size: 0; padding: 0; border: 0; }
+  .ct-badge::after {
+    content: "✗";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px; height: 14px;
+    border: 1px solid var(--over);
+    border-radius: 50%;
+    font-size: 9px;
+    line-height: 1;
+    vertical-align: -3px;
+  }
+}
