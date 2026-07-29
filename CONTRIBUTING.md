@@ -121,11 +121,119 @@ calls `charge` per API call, and hands `meterView(...)` to the strip.
 
 ### `books.js` → `window.DEMO_BOOKS`
 
-`{ books, bookUrl(book), findBook(slug) }`. Four public-domain books under
-`public/assets/texts/`, with counted `chars`/`words` and the needle/arc
-suggestion chips. `bookUrl` is root-absolute, so it resolves from any demo
-folder. The counts are checked against the files themselves in
-`tests/books.test.js` — edit a text and that test names the number to update.
+Sixteen public-domain books under `public/assets/texts/`, with counted
+`chars`/`words` and the needle/arc suggestion chips.
+
+| Member | What it does |
+| --- | --- |
+| `books` | the manifest — slug, title, author, year, `gutenbergId`, counts, hook, chips |
+| `bookUrl(book)` | root-absolute path to the text, so it resolves from any demo folder |
+| `findBook(slug)` | one book or `null` |
+| `SHELF_DEFAULTS` | window, ratios, budget, section size, `price`, `costConfirmUsd` |
+| `estimate(book, opts)` | **the derived one**: tokens, regime, fold sections, summarizer calls, dollars, and the sentence a tile prints |
+| `regimeOf(book, opts)` | just the verdict, for grouping |
+| `groupByRegime(opts)` | the shelf in reading order, grouped, with each group's heading copy |
+| `REGIMES`, `REGIME_ORDER` | the four regimes and the copy for each |
+| `formatUsd(n)` | the meter's money rule, so a tile and the cost strip agree |
+
+`estimate` is where the honesty lives. No per-book verdict is written down: the
+regime, the call count and the bill all come from `book.chars` and whatever
+`opts` says about the model window, the working budget, the chars-per-token ratio
+and the price. Pass `DemoMeter.priceOf(model)` as `opts.price` and the figure
+tracks the model picker; pass nothing and it quotes no dollars at all rather than
+inventing a rate. A placeholder rate is labelled as one on the tile itself.
+
+The counts are checked against the files in `tests/books.test.js`, and so are the
+regime boundaries — edit a text or move a threshold and that file names what
+changed.
+
+## Adding a book
+
+1. Find it on [Project Gutenberg](https://www.gutenberg.org/) and note the ebook
+   number. It has to be public domain and it has to have a plain-text edition.
+2. Add an entry to `BOOKS` in `public/shared/books.js` with the slug, title,
+   author, the edition's `year`, the `gutenbergId`, a one-line `hook`, and
+   `words: 0, chars: 0` as placeholders.
+3. Run the fetcher. It downloads, strips the licence wrapper, writes
+   `public/assets/texts/<slug>.txt`, and exits non-zero naming the real counts:
+
+   ```bash
+   node scripts/fetch-books.js
+   ```
+
+4. Paste those two numbers into the manifest and run it again. It should now be a
+   no-op — nothing written, every count agreeing.
+5. Write the chips: two or three needle questions and one or two arc questions.
+   **Verify every needle premise against the committed file before you write the
+   question**, with whitespace collapsed first — the texts are hard-wrapped at
+   ~72 columns, so half of any interesting phrase straddles a line break and a
+   bare `rg` will report a false negative:
+
+   ```bash
+   node -e 'const t=require("fs").readFileSync("public/assets/texts/<slug>.txt","utf8").replace(/\s+/g," ");
+     for (const p of ["your phrase","another"]) console.log(t.includes(p)?"Y":"n", p)'
+   ```
+
+   Two real examples of why: Andrew Lang's selection of the *Arabian Nights* has
+   no Ali Baba and no "Open, Sesame" in it, and the Maude *War and Peace*
+   transliterates with accents, so a question about "Platon Karataev" would have
+   been a question the book cannot answer.
+6. Add the verified phrases to `PREMISES` in `tests/books.test.js`, add the
+   book's title-page phrase to `NAMES` in the same file, and add its measured row
+   to the regime table there. Then run both gates.
+7. If you also want it searchable, rebuild the passages — see below.
+
+Add the chapter-detection rule for the new book to `CHAPTERS` in
+`scripts/build-passages.js` at the same time, and check the section count it
+reports against the book's real chapter count. If the edition's headings cannot
+be detected reliably, leave the rule returning `[]` with a note: `chapter: null`
+is a true statement about the file, an invented chapter number is not.
+
+## The search index
+
+Some questions have an answer sitting in one place and some do not. The first
+kind is what a search index is for, and two scripts build one. Neither needs
+anything installed.
+
+```bash
+# 1 · cut the shelf into ~200-word passages → passages.jsonl (gitignored)
+node scripts/build-passages.js
+
+# 2 · see exactly what would be sent. This is the default mode and it
+#     needs no credentials, because it calls nothing.
+node scripts/index-passages.js
+```
+
+`build-passages.js` packs whole paragraphs into 150–300-word passages and cuts a
+too-long paragraph on sentence boundaries, never mid-sentence — except where a
+single sentence is longer than a passage, which happens 99 times across the shelf
+and is counted in the summary rather than hidden. It prints records per book,
+chapter counts, mean words and the largest record, and it fails if any record
+passes 10KB.
+
+`index-passages.js` applies `scripts/index-settings.json` and then batches the
+records, in that order, because settings applied afterwards mean a reindex. A
+real run needs two environment variables and reads them from nowhere else — not
+from a file, not from a flag, and neither is ever printed:
+
+```bash
+ALGOLIA_APP_ID=… ALGOLIA_WRITE_API_KEY=… node scripts/index-passages.js --push
+```
+
+`ALGOLIA_WRITE_API_KEY` wants `addObject` and `editSettings` on that one index. A
+search-only key will not do; an admin key is more than this needs. Run `--push`
+without them and the script names both variables and exits 2.
+
+The settings are data on purpose, so they can be reviewed as data; the reasons
+they differ from Algolia's defaults are in a comment block at the top of the
+script.
+
+**One rule worth knowing before you query it**: `attributeForDistinct` is
+settings-only and `distinct` is per-query. So the index fixes
+`attributeForDistinct: "book"` and leaves `distinct: false` as its default, and
+the caller decides per search — pass `distinct: 1` to sweep the whole shelf and
+get one passage per book, pass nothing to dig inside one book and get several
+passages from it. One index, both behaviours, no second copy of the data.
 
 ### Not extracted: the auto-compact loop
 

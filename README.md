@@ -25,15 +25,55 @@ public/                     the deployable root — this is what Cloudflare Page
     books.js                the bookshelf manifest and its suggestion chips (window.DEMO_BOOKS)
     config.example.js       template for local credentials — copy it, never edit it in place
     config.js               your real credentials (gitignored, never committed)
-  assets/texts/             four public-domain books, plain text, Gutenberg boilerplate removed
+  assets/texts/             sixteen public-domain books, plain text, Gutenberg boilerplate removed
   chat-with-book/           index.html + app.js + style.css
   infinite-conversation/    index.html (stub)
+scripts/                    node, zero dependencies — see § The shelf and § The search index
+  fetch-books.js            download, strip and count the texts
+  build-passages.js         cut the texts into ~200-word passages → passages.jsonl
+  index-passages.js         apply settings and push passages to Algolia (dry run by default)
+  index-settings.json       the index settings, as reviewable data
 tests/                      node:test smoke tests — no framework, no install
 eslint.config.js            flat config, rules written out, zero dependencies
 .github/workflows/          ci.yml (lint + tests), deploy.yml (Cloudflare Pages)
 ```
 
 Each demo links `../shared/tokens.css` first, then any shared stylesheet it uses (`meter.css`), then its own `style.css`. A demo's stylesheet never redeclares a token; the landing page uses nothing but `tokens.css`.
+
+## The shelf
+
+Sixteen books are committed under `public/assets/texts/` as plain text, from *The
+Yellow Wallpaper* at 6,085 words to *War and Peace* at 563,286. All sixteen are
+[Project Gutenberg](https://www.gutenberg.org/) ebooks in the public domain in the
+United States; each file is Gutenberg's own text with the licence header and footer
+removed and nothing else edited, so any claim a demo makes about a book can be
+checked against the file. `scripts/fetch-books.js` is that download-and-strip step
+written down — run it with `--force` and it re-derives all sixteen files and reports
+them identical.
+
+The shelf is grouped by what loading a book will do, and each tile says so before
+you click it:
+
+| Regime | What happens | On the shelf |
+| --- | --- | --- |
+| **budget-compact** | fits the model window whole, exceeds the working budget, so one summarizer call on the first question | the eight smaller books |
+| **oversize-fold** | past 0.8 × the model's real window, so summarized in *N* parts on arrival, then compacted as you chat | the eight larger books |
+| **cost-gated** | an estimate big enough to be worth a decision, so it asks before it spends | model-dependent — none at the default rate |
+
+None of that is written down per book. `window.DEMO_BOOKS.estimate(book, opts)`
+derives it from the book's character count and the config in force: the model's
+window decides what folds, its price decides what a fold costs, the budget decides
+where compaction fires, and the token count comes from a chars-per-token ratio the
+page re-measures on every trim probe. Change the model or the budget and the groups
+rearrange.
+
+**Ingesting a big book costs real money.** The summarizer reads every word once, on
+your own provider credentials, and that is a per-click cost rather than a one-off:
+*War and Peace* is about 1.07M tokens through the fold. At the default model's rate
+that is roughly eleven cents and at ten times the rate it is a dollar and change, so
+each tile carries its own estimate and the expensive ones ask first. The figures are
+estimates — the API does not report the summarizer's own token usage — and where the
+rate behind one is a placeholder rather than a published price, the tile says so.
 
 ## Run it locally
 
