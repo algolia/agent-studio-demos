@@ -19,7 +19,7 @@
 <meta property="og:image" content="https://agent-studio-demos.pages.dev/assets/og/landing.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The Agent Studio demos landing page: two demo cards, one live and one coming soon.">
+<meta property="og:image:alt" content="The Agent Studio demos landing page, with a card for each demo.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Agent Studio demos — context APIs in the browser">
 <meta name="twitter:description" content="Two single-page demos of what the Agent Studio context APIs make possible: context/trim counts what a conversation is carrying, context/compact folds the old part into a summary you can still open back up.">
@@ -205,21 +205,25 @@ h1 {
       </div>
     </a>
 
-    <a class="card is-soon" href="infinite-conversation/">
+    <a class="card" href="infinite-conversation/">
       <div class="thumb" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
       <div class="card-body">
-        <p class="card-status"><span class="dot"></span> Coming soon</p>
+        <p class="card-status"><span class="dot"></span> Live</p>
         <h2>Infinite conversation</h2>
         <p>
-          A conversation that never ends — auto-compaction keeps decades-long
-          threads alive on tiny context windows.
+          Arrive 252 exchanges into a thread that already carries more tokens
+          than the model's window. Fold the backlog once, in front of you — then
+          click suggested replies and watch it fold itself, turn after turn.
         </p>
         <ul class="card-meta">
+          <li>context/trim</li>
+          <li>context/compact</li>
           <li>auto-compaction</li>
           <li>seeded histories</li>
           <li>suggested replies</li>
+          <li>cost meter</li>
         </ul>
-        <p class="card-go">Read what is coming →</p>
+        <p class="card-go">Open the demo →</p>
       </div>
     </a>
 
