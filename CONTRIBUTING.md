@@ -39,9 +39,15 @@ put a backend in front of it before shipping anything like this.
 CI runs exactly these, and so should you before pushing:
 
 ```bash
-npx eslint public/ tests/ eslint.config.js   # flat config, zero dependencies
-node --test tests/*.test.js                  # node:test, no framework
+npx eslint .                  # flat config, zero dependencies
+node --test tests/*.test.js   # node:test, no framework
 ```
+
+eslint takes the repo root, not a list of directories: `public/`, `tests/`,
+`scripts/` and `tools/` all need linting and all declare their own globals in
+`eslint.config.js`, so a path list is one more thing to forget when a folder is
+added. Pass `tests/*.test.js` as a glob rather than `tests/` — the directory form
+is broken on Node 23.
 
 Both are green on a clean checkout with no `config.js` present — the tests read
 `config.example.js`, and eslint ignores the real config. If a gate passes for you

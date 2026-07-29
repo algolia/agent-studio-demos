@@ -1,12 +1,17 @@
 # Two gates, both runnable verbatim on a laptop — that is the point of keeping
 # them dependency-free:
 #
-#   npx eslint public/ tests/ eslint.config.js
+#   npx eslint .
 #   node --test tests/*.test.js
 #
 # No package.json, no lockfile, no install step. eslint arrives through npx and
 # the tests run on node:test, so a clean checkout can reproduce a red CI in one
 # command.
+#
+# eslint lints the repo root rather than a list of directories, so a new folder
+# of scripts is covered the day it lands instead of the day someone remembers to
+# widen this line. Every directory that needs different globals already declares
+# them in eslint.config.js.
 #
 # Note: public/shared/config.js is gitignored, so CI never sees it. eslint.config.js
 # ignores it explicitly and the tests read config.example.js, which means a local
@@ -36,7 +41,7 @@ jobs:
         with:
           node-version: '22'
       - name: eslint
-        run: npx --yes eslint@9 public/ tests/ eslint.config.js
+        run: npx --yes eslint@9 .
 
   test:
     name: node --test
