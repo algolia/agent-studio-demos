@@ -1,0 +1,46 @@
+{
+  "en": {},
+  "fr": {
+    "queryLanguages": ["fr"],
+    "indexLanguages": ["fr"],
+    "ignorePlurals": ["fr"],
+    "removeStopWords": ["fr"]
+  },
+  "de": {
+    "queryLanguages": ["de"],
+    "indexLanguages": ["de"],
+    "ignorePlurals": ["de"],
+    "removeStopWords": ["de"],
+    "decompoundedAttributes": { "de": ["text"] }
+  },
+  "es": {
+    "queryLanguages": ["es"],
+    "indexLanguages": ["es"],
+    "ignorePlurals": ["es"],
+    "removeStopWords": ["es"]
+  },
+  "it": {
+    "queryLanguages": ["it"],
+    "indexLanguages": ["it"],
+    "ignorePlurals": ["it"],
+    "removeStopWords": ["it"]
+  },
+  "ru": {
+    "queryLanguages": ["ru"],
+    "indexLanguages": ["ru"],
+    "ignorePlurals": ["ru"],
+    "removeStopWords": ["ru"]
+  },
+  "ja": {
+    "queryLanguages": ["ja"],
+    "indexLanguages": ["ja"],
+    "ignorePlurals": ["ja"],
+    "removeStopWords": ["ja"]
+  },
+  "zh": {
+    "queryLanguages": ["zh"],
+    "indexLanguages": ["zh"],
+    "ignorePlurals": ["zh"],
+    "removeStopWords": ["zh"]
+  }
+}

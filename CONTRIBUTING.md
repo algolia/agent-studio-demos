@@ -256,33 +256,69 @@ kind is what a search index is for, and two scripts build one. Neither needs
 anything installed.
 
 ```bash
-# 1 · cut the shelf into ~200-word passages → passages.jsonl (gitignored)
+# 1 · cut the shelf into passages → passages.jsonl (gitignored)
 node scripts/build-passages.js
 
-# 2 · see exactly what would be sent. This is the default mode and it
-#     needs no credentials, because it calls nothing.
-node scripts/index-passages.js
+# 2 · see exactly what would be sent, for one language. This is the default
+#     mode and it needs no credentials, because it calls nothing.
+node scripts/index-passages.js --lang fr
 ```
 
 `build-passages.js` packs whole paragraphs into 150–300-word passages and cuts a
 too-long paragraph on sentence boundaries, never mid-sentence — except where a
-single sentence is longer than a passage, which happens 99 times across the shelf
+single sentence is longer than a passage, which happens 101 times across the shelf
 and is counted in the summary rather than hidden. It prints records per book,
-chapter counts, mean words and the largest record, and it fails if any record
+chapter counts, mean size and the largest record, and it fails if any record
 passes 10KB.
 
-`index-passages.js` applies `scripts/index-settings.json` and then batches the
-records, in that order, because settings applied afterwards mean a reindex. A
+Japanese and Chinese are packed by CHARACTER instead, 250–550 of them, because
+`split(/\s+/)` over a script that writes no spaces returns one "word" for a whole
+page. Every record carries both `wordCount` and `charCount` so a caller never has
+to know which. Sentence boundaries there are `。！？…` — and `．`, which is not a
+typo: this edition of 紅樓夢 prints FULLWIDTH FULL STOP 21,285 times against 7,886
+for `。`, and leaving it out sent four fifths of the Chinese passages through the
+blind cut.
+
+### One index per language
+
+`indexLanguages` is a settings-global — it cannot vary per record — and CJK
+segmentation only happens when the CJK language is declared on the index itself.
+So `ja` and `zh` cannot share an index, and once the shelf is split for those two
+there is no reason to leave the rest mixed:
+
+```
+en → public_domain_books        fr de es it ru ja zh → public_domain_books_<lang>
+```
+
+`--lang` is required and it is the only knob: it picks the destination, filters
+`passages.jsonl` by the record's own `lang`, and selects the settings. There is no
+index-name argument. A name and a filter as two arguments can disagree with each
+other, and the application behind these credentials holds ~95 unrelated
+production indices, so the old default destination was designed out rather than
+documented around.
+
+`index-passages.js` applies `scripts/index-settings.json` with the
+`scripts/index-settings-languages.json` overlay on top, and then batches the
+records — in that order, because settings applied afterwards mean a reindex. A
 real run needs two environment variables and reads them from nowhere else — not
-from a file, not from a flag, and neither is ever printed:
+from a flag, and neither is ever printed:
 
 ```bash
-ALGOLIA_APP_ID=… ALGOLIA_WRITE_API_KEY=… node scripts/index-passages.js --push
+ALGOLIA_APP_ID=… ALGOLIA_WRITE_API_KEY=… node scripts/index-passages.js --lang fr --push
 ```
 
 `ALGOLIA_WRITE_API_KEY` wants `addObject` and `editSettings` on that one index. A
 search-only key will not do; an admin key is more than this needs. Run `--push`
 without them and the script names both variables and exits 2.
+
+Every language in the overlay names itself in `ignorePlurals` and
+`removeStopWords` rather than passing bare `true`: bare true resolves against
+`queryLanguages`, so on a mixed index it applies one language's plural rules to
+another's text. English keeps the bare `true` it was built with, which is the same
+value when the index holds one language. `de` also gets
+`decompoundedAttributes`. Typo tolerance is not in the overlay at all — it does
+not apply to logographic scripts, so there is nothing to set and nothing to lean
+on.
 
 The settings are data on purpose, so they can be reviewed as data; the reasons
 they differ from Algolia's defaults are in a comment block at the top of the

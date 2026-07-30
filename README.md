@@ -26,15 +26,18 @@ public/                     the deployable root — this is what Cloudflare Page
     compactor.js            the auto-compact loop, as a stateless driver (window.DemoCompactor)
     config.example.js       template for local credentials — copy it, never edit it in place
     config.js               your real credentials (gitignored, never committed)
-  assets/texts/             sixteen public-domain books, plain text, Gutenberg boilerplate removed
+  assets/texts/             25 public-domain works, plain text, source boilerplate removed
   assets/convs/             three seeded conversations, plus the manifest every figure derives from
   chat-with-book/           index.html + app.js + style.css
   infinite-conversation/    index.html + app.js + style.css
 scripts/                    node, zero dependencies — see § The shelf and § The search index
-  fetch-books.js            download, strip and count the texts
-  build-passages.js         cut the texts into ~200-word passages → passages.jsonl
-  index-passages.js         apply settings and push passages to Algolia (dry run by default)
+  fetch-books.js            download, strip and count the texts, from either source
+  wikisource.js             wikitext → prose, for the one work not on Gutenberg
+  build-passages.js         cut the texts into passages → passages.jsonl
+  index-passages.js         apply settings and push one language's passages (dry run by default)
   index-settings.json       the index settings, as reviewable data
+  index-settings-languages.json  the per-language overlay on those settings
+  measure-tokens.js         characters per token, per book, via /context/trim
 tools/                      node, zero dependencies — bakes the seeded conversations
 tests/                      node:test smoke tests — no framework, no install
 eslint.config.js            flat config, rules written out, zero dependencies

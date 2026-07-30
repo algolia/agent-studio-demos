@@ -7,10 +7,49 @@
    `fetch` each, and adding a client library to a repo that has no package.json
    would cost more than it saves.
 
-     node scripts/index-passages.js                  # dry run — calls nothing
-     node scripts/index-passages.js --push           # settings + records, for real
-     node scripts/index-passages.js --push --settings-only
-     node scripts/index-passages.js --push --records-only
+     node scripts/index-passages.js --lang fr           # dry run — calls nothing
+     node scripts/index-passages.js --lang fr --push    # settings + records, for real
+     node scripts/index-passages.js --lang fr --push --settings-only
+     node scripts/index-passages.js --lang fr --push --records-only
+
+   ── One knob, and it is the language ─────────────────────────────
+   `--lang` (or ALGOLIA_INDEX_LANG) is REQUIRED, and it decides all three things
+   at once: which index is written, which records go to it, and which settings it
+   gets. There is no separate index-name argument, on purpose.
+
+   This script used to default to `public_domain_books` when no name was given,
+   which is exactly the shape of accident worth designing out: the application
+   holding this index holds ~95 unrelated production indices, and a `--push`
+   whose env var failed to reach the process wrote the default. A name and a
+   record filter as two knobs can disagree with each other; one knob cannot. So:
+
+     en → public_domain_books        (the original index, unsuffixed)
+     xx → public_domain_books_xx
+
+   and INDEX_RE re-checks the derived name before any call goes out. A language
+   this script has no settings for is refused rather than guessed at.
+
+   ── Why one index per language ───────────────────────────────────
+   `indexLanguages` is a settings-global: it cannot vary per record, and CJK
+   segmentation requires the CJK language be declared on the index itself. So
+   Japanese and Chinese cannot share an index, and once the shelf is split for
+   those two there is no reason to leave the rest mixed.
+
+   scripts/index-settings-languages.json holds the per-language overlay on top of
+   index-settings.json. Every language there names itself explicitly in
+   `ignorePlurals` and `removeStopWords` rather than passing bare `true`: bare
+   true resolves against `queryLanguages`, so on a mixed index it applies English
+   plural rules to French and matches "chaise" against "chaises" where the
+   English rule is the wrong one to apply. English keeps the bare `true` it was
+   built with — with queryLanguages: ["en"] and only English on the index the two
+   are the same value, and rewriting it would put a phantom diff in front of the
+   next maintainer who reads this file against the live index.
+
+   Typo tolerance is not in the overlay because it does not apply to logographic
+   scripts at all: there is no edit distance over Han characters that means what
+   it means over a Latin word. ja and zh get the same `text:40` snippet setting as
+   everyone else — Algolia caps a snippet at 5,000 logograms, an order of
+   magnitude above any passage here.
 
    ── The credential boundary ──────────────────────────────────────
    `ALGOLIA_APP_ID` and `ALGOLIA_WRITE_API_KEY` are read from the environment, or
@@ -88,8 +127,7 @@ const { loadEnv, describeEnv } = require("./env.js");
 const ROOT = path.join(__dirname, "..");
 const PASSAGES = path.join(ROOT, "passages.jsonl");
 const SETTINGS = path.join(__dirname, "index-settings.json");
-
-const INDEX_NAME = process.env.ALGOLIA_INDEX_NAME || "public_domain_books";
+const LANG_SETTINGS = path.join(__dirname, "index-settings-languages.json");
 
 /** Algolia's guidance is 1,000–10,000 records per batch, or ~10MB, whichever first */
 const BATCH_RECORDS = 1000;
@@ -100,6 +138,72 @@ const has = (flag) => argv.includes(flag);
 const PUSH = has("--push");
 const SETTINGS_ONLY = has("--settings-only");
 const RECORDS_ONLY = has("--records-only");
+
+/* ── The one knob ──────────────────────────────────────────────────
+   Language in, index name out. Nothing else in this file decides where a record
+   goes, so the filter and the destination cannot come apart. ── */
+
+/** the only names this script is ever allowed to write */
+const INDEX_RE = /^public_domain_books(_[a-z]{2})?$/;
+
+const flagValue = (name) => {
+  const i = argv.indexOf(name);
+  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : null;
+};
+
+const LANGS = JSON.parse(fs.readFileSync(LANG_SETTINGS, "utf8"));
+const LANG = flagValue("--lang") || process.env.ALGOLIA_INDEX_LANG || null;
+
+function requireLang() {
+  const known = Object.keys(LANGS).join(", ");
+  if (!LANG) {
+    console.error(
+      "Which language? This script needs one, and it is the only argument that\n" +
+      "decides anything:\n" +
+      "\n" +
+      "  node scripts/index-passages.js --lang fr [--push]\n" +
+      "  ALGOLIA_INDEX_LANG=fr node scripts/index-passages.js [--push]\n" +
+      "\n" +
+      `Known: ${known}\n` +
+      "\n" +
+      "There is no default. The application behind these credentials holds ~95\n" +
+      "unrelated production indices, and a default destination is the one bug in\n" +
+      "this script that could not be undone.");
+    process.exit(2);
+  }
+  if (!LANGS[LANG]) {
+    console.error(`No settings for language "${LANG}". Known: ${known}\n\n` +
+      `Add it to ${path.relative(ROOT, LANG_SETTINGS)} first — an index built with ` +
+      "another language's\nanalysis is worse than no index.");
+    process.exit(2);
+  }
+  return LANG;
+}
+
+/** en keeps the original unsuffixed name; every other language is suffixed */
+const indexNameFor = (lang) =>
+  lang === "en" ? "public_domain_books" : `public_domain_books_${lang}`;
+
+/**
+ * The guard is deliberately downstream of the derivation rather than instead of
+ * it: `indexNameFor` is the rule, this is the assertion that the rule held. A
+ * name that fails here is a bug in this file, not bad input.
+ */
+function checkIndexName(name) {
+  if (INDEX_RE.test(name)) return name;
+  throw new Error(`refusing to touch "${name}" — this script only ever writes ` +
+    `indices matching ${INDEX_RE}`);
+}
+
+/** base settings with the language overlay on top */
+function settingsFor(lang) {
+  return Object.assign(JSON.parse(fs.readFileSync(SETTINGS, "utf8")), LANGS[lang]);
+}
+
+/* Resolved once, at load, so there is exactly one destination in this process and
+   every message below can name it. Missing or unknown language exits here. */
+const INDEX_LANG = requireLang();
+const INDEX_NAME = checkIndexName(indexNameFor(INDEX_LANG));
 
 /* ── Credentials ───────────────────────────────────────────────────
    Read once, held in one place, never rendered. `credentials()` returns null
@@ -160,9 +264,14 @@ async function call(creds, method, urlPath, body) {
 /* ── Input ─────────────────────────────────────────────────────── */
 
 function loadSettings() {
-  return JSON.parse(fs.readFileSync(SETTINGS, "utf8"));
+  return settingsFor(INDEX_LANG);
 }
 
+/**
+ * Only this language's records. passages.jsonl carries the whole shelf in every
+ * language it has, and `lang` on the record is what decides — not the order of
+ * the file, and not the book's slug.
+ */
 function loadPassages() {
   if (!fs.existsSync(PASSAGES)) {
     console.error(`No ${path.relative(ROOT, PASSAGES)}. Build it first:\n\n` +
@@ -170,9 +279,23 @@ function loadPassages() {
     process.exit(2);
   }
   const records = [];
+  let skipped = 0;
   for (const line of fs.readFileSync(PASSAGES, "utf8").split("\n")) {
-    if (line.trim()) records.push(JSON.parse(line));
+    if (!line.trim()) continue;
+    const record = JSON.parse(line);
+    if (record.lang === INDEX_LANG) records.push(record);
+    else skipped += 1;
   }
+  if (!records.length) {
+    console.error(`No records with lang: "${INDEX_LANG}" in ` +
+      `${path.relative(ROOT, PASSAGES)} (${skipped} in other languages).\n\n` +
+      "Rebuild it — an empty push would leave the index carrying whatever was\n" +
+      "there before, which is the one outcome worse than failing:\n\n" +
+      "  node scripts/build-passages.js\n");
+    process.exit(2);
+  }
+  console.log(`${records.length} of ${records.length + skipped} passages carry ` +
+    `lang: "${INDEX_LANG}" — the rest belong to other indices\n`);
   return records;
 }
 
@@ -206,7 +329,17 @@ const asRequests = (chunk) => chunk.map((body) => ({ action: "updateObject", bod
 const num = (n) => n.toLocaleString("en-US");
 const mb = (n) => `${(n / 1024 / 1024).toFixed(1)}MB`;
 
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+/**
+ * Equal for the purposes of a settings diff. The extra clause is not cosmetic: an
+ * empty list sent to Algolia comes back as null, so `attributesForFaceting: []`
+ * reported itself as a pending change on every index forever — including the
+ * English one, which has carried the value since it was built. A diff that always
+ * shows one change teaches a reader to skip the diff.
+ */
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b) ||
+  (isEmptyList(a) && isEmptyList(b));
+
+const isEmptyList = (v) => v === null || (Array.isArray(v) && v.length === 0);
 
 /**
  * What would change. With the current settings in hand this is a real diff; with
@@ -262,7 +395,7 @@ async function main() {
 
   if (!PUSH) {
     const creds = credentials();
-    console.log(`Dry run — nothing is sent. Index: ${INDEX_NAME}\n`);
+    console.log(`Dry run — nothing is sent. Language: ${INDEX_LANG} · index: ${INDEX_NAME}\n`);
     let current = null;
     let reason = "no credentials in the environment, and reading them is the only way to diff";
     if (creds) {

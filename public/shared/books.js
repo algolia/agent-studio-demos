@@ -300,6 +300,230 @@
     },
   ];
 
+  /* ── The multilingual shelf, staged ────────────────────────────────
+     Nine works in seven languages, none of them a translation: this is the shelf
+     that asks whether any of the above generalises past English.
+
+     It is a SEPARATE array on purpose. Nothing renders it yet — the pipeline
+     (fetch, passages, one Algolia index per language) is built and run, and the
+     page that shows it is not. Keeping `books` at sixteen means every existing
+     caller, including scripts/create-book-agents.js, is untouched by this landing.
+
+     Three fields the English shelf does not need:
+
+       lang           ISO 639-1, and the reason there is more than one index.
+                      `indexLanguages` is a settings-global — it cannot vary per
+                      record — and CJK segmentation only happens when the CJK
+                      language is declared on the index itself. So ja and zh
+                      cannot share, and once split for those two there is no
+                      reason to leave the rest mixed.
+       indexName      where this book's passages live. Derived from `lang`, and
+                      written down anyway: a UI that has to reconstruct a
+                      destination is a UI that can get it wrong.
+       charsPerToken  MEASURED, per language, against /context/trim — not the
+                      English 3.0 reused. A Cyrillic or Han character does not
+                      cost what a Latin one costs, and a wrong ratio does not
+                      just blur a label, it moves a book into the wrong regime.
+
+     `year` here is the WORK's year of publication, not an edition's. The English
+     shelf dates its files to the edition because half of them are translations
+     whose language is the translator's; these are originals, so the work's own
+     date is both the honest number and the interesting one — 1321 to 1927.
+
+     `source` says where the text came from. Eight are Gutenberg. Белые ночи is
+     not on Gutenberg as plain text at all, so it comes from ru.wikisource.org as
+     wikitext, and `gutenbergId` is null for it. The novel is public domain (1848,
+     PD-RusEmpire); Wikisource's CC BY-SA covers the editorial layer — footnotes,
+     source notes, navigation — and scripts/wikisource.js removes all of it.
+
+     Needle questions are in the book's own language, because they are sent to the
+     model and that is the demo: a Japanese question about a Japanese text, hitting
+     an index with Japanese segmentation. The `short` handle and the `hook` stay in
+     English — those are the page's own voice, and the page speaks English. ── */
+
+  const BOOKS_I18N = [
+    {
+      slug: "rashomon",
+      lang: "ja",
+      indexName: "public_domain_books_ja",
+      title: "羅生門",
+      author: "芥川龍之介",
+      year: 1915,
+      source: "gutenberg",
+      gutenbergId: 1982,
+      words: 256,
+      chars: 6597,
+      charsPerToken: 0.32,
+      hook: "6,597\u00a0characters and almost no spaces — counting words stops working here",
+      chips: [
+        { kind: "needle", short: "the old woman upstairs", text: "羅生門の楼の上で、下人は老婆が死人に何をしているところを見つけましたか。" },
+        { kind: "arc", short: "hunger against theft", text: "下人の心が飢えと盗みのあいだをどう動いていくか、話の始めから終わりまで追ってください。" },
+      ],
+    },
+    {
+      slug: "fleurs-du-mal",
+      lang: "fr",
+      indexName: "public_domain_books_fr",
+      title: "Les Fleurs du Mal",
+      author: "Charles Baudelaire",
+      year: 1857,
+      source: "gutenberg",
+      gutenbergId: 6099,
+      words: 24759,
+      chars: 155437,
+      charsPerToken: 2.49,
+      hook: "poems, not chapters — a hundred short sections instead of one long argument",
+      chips: [
+        { kind: "needle", short: "the reader addressed", text: "Par quels mots le poème liminaire Au lecteur s'adresse-t-il au lecteur, tout à la fin?" },
+        { kind: "needle", short: "the albatross", text: "Dans L'Albatros, à quoi le poète est-il comparé, et qu'est-ce qui le rend maladroit à terre?" },
+        { kind: "arc", short: "spleen against ideal", text: "Le recueil oppose le spleen et l'idéal. Comment cette tension se déplace-t-elle d'une section à l'autre?" },
+        { kind: "arc", short: "the city as a subject", text: "Comment Paris apparaît-il à travers le recueil entier, plutôt que dans un seul poème?" },
+      ],
+    },
+    {
+      slug: "faust",
+      lang: "de",
+      indexName: "public_domain_books_de",
+      title: "Faust: Der Tragödie erster Teil",
+      author: "Johann Wolfgang von Goethe",
+      year: 1808,
+      source: "gutenberg",
+      gutenbergId: 2229,
+      words: 30658,
+      chars: 187749,
+      charsPerToken: 2.66,
+      hook: "a verse drama: speakers and stage directions where the others have paragraphs",
+      chips: [
+        { kind: "needle", short: "the wager's words", text: "Mit welchen Worten beschreibt Faust den Augenblick, für den er seine Wette verlieren würde?" },
+        { kind: "needle", short: "the poodle", text: "Was stellt sich als der Kern des schwarzen Pudels heraus, den Faust in sein Studierzimmer mitnimmt?" },
+        { kind: "arc", short: "Gretchen's descent", text: "Verfolge Gretchens Weg von der ersten Begegnung auf der Straße bis zur Szene im Kerker." },
+        { kind: "arc", short: "who has the upper hand", text: "Wer führt im ersten Teil wen, Faust oder Mephistopheles? Begründe es über das ganze Stück." },
+      ],
+    },
+    {
+      slug: "belye-nochi",
+      lang: "ru",
+      indexName: "public_domain_books_ru",
+      title: "Белые ночи",
+      author: "Фёдор Михайлович Достоевский",
+      year: 1848,
+      source: "wikisource",
+      sourceHost: "ru.wikisource.org",
+      sourceTitle: "Белые ночи (Достоевский)",
+      gutenbergId: null,
+      words: 17457,
+      chars: 102036,
+      charsPerToken: 0.39,
+      hook: "the one text here that is not on Gutenberg — Wikisource, footnotes stripped",
+      chips: [
+        { kind: "needle", short: "her name", text: "Как зовут девушку, которую рассказчик встречает у канала, и когда она называет своё имя?" },
+        { kind: "needle", short: "pinned to grandmother", text: "Каким образом бабушка удерживала Настеньку дома, чтобы та никуда не уходила?" },
+        { kind: "arc", short: "four nights and a morning", text: "Проследи, как меняется настроение рассказчика от первой ночи до утра, ночь за ночью." },
+        { kind: "arc", short: "the dreamer explained", text: "Рассказчик называет себя мечтателем. Как повесть объясняет этот характер на всём своём протяжении?" },
+      ],
+    },
+    {
+      slug: "zarathustra",
+      lang: "de",
+      indexName: "public_domain_books_de",
+      title: "Also sprach Zarathustra",
+      author: "Friedrich Nietzsche",
+      year: 1885,
+      source: "gutenberg",
+      gutenbergId: 7205,
+      words: 82955,
+      chars: 519153,
+      charsPerToken: 2.89,
+      hook: "printed in Nietzsche's own 1885 spelling, which is not modern German",
+      chips: [
+        { kind: "needle", short: "the three changes", text: "Welche drei Verwandlungen des Geistes nennt Zarathustra, und in welcher Reihenfolge?" },
+        { kind: "needle", short: "the tightrope walker", text: "Was geschieht mit dem Seiltänzer auf dem Markt, und was sagt Zarathustra danach zu ihm?" },
+        { kind: "arc", short: "one claim, then a book", text: "Zarathustra sagt früh, Gott sei todt. Wie baut das Buch von dieser Stelle an alles Weitere darauf?" },
+        { kind: "arc", short: "the last man", text: "Wie stellt das Buch den letzten Menschen dem Übermenschen gegenüber, über alle Teile hinweg?" },
+      ],
+    },
+    {
+      slug: "divina-commedia",
+      lang: "it",
+      indexName: "public_domain_books_it",
+      title: "La Divina Commedia",
+      author: "Dante Alighieri",
+      year: 1321,
+      source: "gutenberg",
+      gutenbergId: 1000,
+      words: 97779,
+      chars: 533690,
+      charsPerToken: 2.23,
+      hook: "a hundred cantos of terza rima, where the line breaks are the structure",
+      chips: [
+        { kind: "needle", short: "the gate's words", text: "Che cosa è scritto sopra la porta dell'Inferno, e come reagisce Dante quando la legge?" },
+        { kind: "needle", short: "Ugolino in the ice", text: "Che cosa racconta il conte Ugolino a Dante nel ghiaccio, e che cosa fa mentre parla?" },
+        { kind: "arc", short: "where the guide changes", text: "Segui il passaggio delle guide, da Virgilio a Beatrice: dove avviene, e perché proprio lì?" },
+        { kind: "arc", short: "light, canto by canto", text: "Come cambia la luce dalla selva oscura fino all'ultimo canto del Paradiso?" },
+      ],
+    },
+    {
+      slug: "madame-bovary",
+      lang: "fr",
+      indexName: "public_domain_books_fr",
+      title: "Madame Bovary",
+      author: "Gustave Flaubert",
+      year: 1857,
+      source: "gutenberg",
+      gutenbergId: 14155,
+      words: 112516,
+      chars: 683723,
+      charsPerToken: 2.33,
+      hook: "long French paragraphs, so a passage here holds more than one in verse does",
+      chips: [
+        { kind: "needle", short: "his mangled name", text: "Comment le nouvel élève prononce-t-il son nom devant la classe, au premier chapitre?" },
+        { kind: "needle", short: "the agricultural show", text: "Que se passe-t-il entre Emma et Rodolphe pendant les comices agricoles?" },
+        { kind: "arc", short: "debt closing in", text: "Retrace comment les dettes d'Emma s'accumulent, de la première dépense chez Lheureux à la fin." },
+        { kind: "arc", short: "Charles all along", text: "Comment le roman traite-t-il Charles, du premier chapitre au dernier? Juge-le sur l'ensemble." },
+      ],
+    },
+    {
+      slug: "honglou-meng",
+      lang: "zh",
+      indexName: "public_domain_books_zh",
+      title: "紅樓夢",
+      author: "曹雪芹",
+      year: 1791,
+      source: "gutenberg",
+      gutenbergId: 24264,
+      words: 35000,
+      chars: 906089,
+      charsPerToken: 0.30,
+      hook: "906k\u00a0characters of traditional Chinese in 424 paragraphs — long ones",
+      chips: [
+        { kind: "needle", short: "the jade", text: "通靈寶玉是什麼來歷？賈寶玉為什麼一生下來就帶著它？" },
+        { kind: "needle", short: "the dream in chapter five", text: "賈寶玉在太虛幻境裡看見了什麼？警幻仙姑又給他看了哪些冊子？" },
+        { kind: "arc", short: "the garden's decline", text: "大觀園從建成到衰敗經歷了哪些變化？請就整部書來看，不要只看一回。" },
+        { kind: "arc", short: "who is telling this", text: "這部書的敘事聲音從第一回到最後一回有什麼變化？" },
+      ],
+    },
+    {
+      slug: "don-quijote",
+      lang: "es",
+      indexName: "public_domain_books_es",
+      title: "El ingenioso hidalgo don Quijote de la Mancha",
+      author: "Miguel de Cervantes Saavedra",
+      year: 1615,
+      source: "gutenberg",
+      gutenbergId: 2000,
+      words: 386614,
+      chars: 2110727,
+      charsPerToken: 2.60,
+      hook: "the largest work on either shelf but War and Peace — both parts, one file",
+      chips: [
+        { kind: "needle", short: "the windmills", text: "¿Qué cree don Quijote que son los molinos de viento, y cómo acaba su ataque al primero?" },
+        { kind: "needle", short: "Mambrino's helmet", text: "¿Qué objeto corriente toma don Quijote por el yelmo de Mambrino, y a quién se lo quita?" },
+        { kind: "arc", short: "knight and squire", text: "Sigue cómo cambia la relación entre don Quijote y Sancho desde la primera salida hasta el final." },
+        { kind: "arc", short: "part one inside part two", text: "En la segunda parte los personajes ya han leído la primera. ¿Cómo cambia eso el tono del libro?" },
+      ],
+    },
+  ];
+
   /* ── What happens when you click, and what it costs ────────────────
      A tile that says only "561,144 characters" tells a reader nothing they can
      act on. What they want to know is: will this fold, how many API calls is
@@ -420,8 +644,22 @@
    *     usdLabel, rateNote, costGated, oversizeAt, autoCompactAt, what, price,
    *     line, charsPerToken, price object echoed as `rate` }
    */
+  /**
+   * Precedence, and the order is the whole point: an explicit `opts` beats the
+   * book's own measurement, which beats the shelf default. The multilingual shelf
+   * carries a per-language `charsPerToken` — Japanese is nowhere near English's
+   * 3.0 — so a book that knows its own ratio uses it. But a live conversation
+   * re-measures on every probe and passes the result in, and that measurement is
+   * newer than anything written down here, so it still wins.
+   */
+  function configFor(book, opts) {
+    const cfg = Object.assign({}, SHELF_DEFAULTS);
+    if (book && typeof book.charsPerToken === "number") cfg.charsPerToken = book.charsPerToken;
+    return Object.assign(cfg, opts || {});
+  }
+
   function estimate(book, opts) {
-    const cfg = Object.assign({}, SHELF_DEFAULTS, opts || {});
+    const cfg = configFor(book, opts);
     const tokens = Math.round(book.chars / cfg.charsPerToken);
     const oversizeAt = Math.round(cfg.contextWindow * cfg.oversizeAtRatio);
     const autoCompactAt = Math.round(cfg.workingBudget * cfg.compactAtRatio);
@@ -535,6 +773,8 @@
 
   global.DEMO_BOOKS = {
     books: BOOKS,
+    /** staged, not wired: the multilingual shelf nothing renders yet */
+    booksI18n: BOOKS_I18N,
     bookUrl,
     findBook,
     SHELF_DEFAULTS,
