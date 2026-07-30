@@ -1,10 +1,18 @@
 #!/usr/bin/env node
 /* ───────────────────────────────────────────────────────────────
-   create-book-agents.js — one book-demo agent per model, with the shelf
-   search tool attached.
+   create-book-agents.js — one book-demo agent per model, plus one per greed
+   level, with the shelf search tool attached.
 
      node scripts/create-book-agents.js            # dry run — calls nothing
      node scripts/create-book-agents.js --push     # create, publish, verify
+
+   ── Why one agent per page size ──────────────────────────────────
+   `hitsPerPage` is welded at agent level: the tool's own value always beats the
+   number the model asks for, and `searchControls` keeps the parameter out of the
+   schema the model sees at all. A request cannot move it either. So the greedy
+   retrieval control in the book demo cannot be a request field — it is a
+   different agent, identical in every other byte, and the page swaps ids when
+   the reader moves the knob.
 
    ── Why clone instead of patching the existing agents ────────────
    The four agents the demos already share carry `tools: []`. Adding the search
@@ -89,6 +97,20 @@ const MODELS = [
   { slug: "haiku", model: "claude-haiku-4-5-20251001", providerId: "94e6bf5d-a9a4-4bf7-a53d-090a01edf162" },
 ];
 
+/* ── The greed levels ─────────────────────────────────────────────
+   5 is what a reader gets by default and what the demo has always used. The rest
+   exist to be over-fetching, on purpose: 1,000 is Algolia's hard ceiling for one
+   request, and at ~1,250 characters a passage it is roughly 372k tokens of tool
+   output in a single turn — 1.9x a 200k window. The point of the control is that
+   the meter prices that flood before the reader clicks it. */
+
+const GREEDS = [50, 100, 500, 1000];
+const DEFAULT_HITS = 5;
+
+/** every agent this file owns: the four defaults, then four greedy clones each */
+const VARIANTS = MODELS.flatMap((m) =>
+  [DEFAULT_HITS, ...GREEDS].map((hits) => ({ ...m, hits })));
+
 /* ── The shelf, as the model is told about it ─────────────────────
    Read from books.js so the tool description cannot drift from what is actually
    indexed. Naming the titles costs perhaps 200 tokens on every request and earns
@@ -99,23 +121,37 @@ const MODELS = [
 function shelfLine() {
   const src = fs.readFileSync(path.join(__dirname, "..", "public", "shared", "books.js"), "utf8");
   const sandbox = { window: {} };
-  // eslint-disable-next-line no-new-func
   new Function("window", src)(sandbox.window);
   const books = (sandbox.window.DEMO_BOOKS || {}).books || [];
   if (books.length < 2) throw new Error("could not read the shelf out of books.js");
   const shorten = (a) => a.replace(/\s*\(trans\..*?\)/, "").replace(/^selected by /, "");
   return {
     count: books.length,
+    titles: books.map((b) => b.title),
     line: books.map((b) => `${b.title} (${shorten(b.author)})`).join(" · "),
   };
 }
 
 const SHELF = shelfLine();
 
+/* Passages on THIS shelf, not every passage in the file. passages.jsonl carries
+   every book the repo has chunked — the i18n shelf went to one index per language
+   — so a bare line count would tell the model the index holds 17,345 passages
+   when the index it can search holds 11,115. Counted by book title against the
+   shelf read above, which is the same list the description names. */
+
 const PASSAGE_COUNT = (() => {
   const p = path.join(__dirname, "..", "passages.jsonl");
   if (!fs.existsSync(p)) return null;
-  return fs.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
+  const titles = new Set(SHELF.titles);
+  let n = 0;
+  for (const line of fs.readFileSync(p, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    let rec;
+    try { rec = JSON.parse(line); } catch (_) { continue; }
+    if (titles.has(rec.book)) n += 1;
+  }
+  return n;
 })();
 
 const shelfSize = PASSAGE_COUNT
@@ -170,11 +206,11 @@ LANGUAGE. Reply in the language the reader writes to you in, whatever language t
    are turned off here. Measured on this index: the attribute profile moves cost
    per record by about 10x, far more than any encoding choice.
 
-   `hitsPerPage: 5` is set on the tool, and a tool-level `hitsPerPage` always wins
+   `hitsPerPage` is set on the tool, and a tool-level `hitsPerPage` always wins
    over whatever the model asks for. Five ~190-word passages is roughly 1,250
-   tokens, which fits the 8k working budget this demo defaults to. The greedy
-   1,000-hit case gets its own agent when the over-fetch demo lands; it does not
-   belong on the agent a reader chats to.
+   tokens, which fits the 8k working budget this demo defaults to — so five is
+   what the agent a reader chats to carries. The greedy levels are the same tool
+   with one number changed, on their own agents.
 
    `mode: "static"` means this list is the only thing the tool can ever search:
    a per-request `algolia.indices` override is rejected with a 422 rather than
@@ -183,7 +219,7 @@ LANGUAGE. Reply in the language the reader writes to you in, whatever language t
 
 const RETRIEVE = ["book", "chapter", "chapterTitle", "position", "text"];
 
-const TOOLS = [{
+const toolsFor = (hitsPerPage) => [{
   type: "algolia_search_index",
   name: "search_the_shelf",
   mode: "static",
@@ -201,7 +237,7 @@ const TOOLS = [{
       attributesToRetrieve: RETRIEVE,
       attributesToHighlight: [],
       attributesToSnippet: [],
-      hitsPerPage: 5,
+      hitsPerPage,
     },
     // `searchControls` is the MCP server's own channel, and MCP is the platform
     // default — the completions router ORs the agent flag with an
@@ -210,7 +246,7 @@ const TOOLS = [{
     // it out of the tool schema the model sees, which is what we want for all of
     // these — the model chooses words, not page sizes.
     searchControls: {
-      hitsPerPage: { exposed: false, default: 5 },
+      hitsPerPage: { exposed: false, default: hitsPerPage },
       attributesToRetrieve: { exposed: false, default: RETRIEVE },
       custom: { attributesToHighlight: [], attributesToSnippet: [] },
     },
@@ -235,14 +271,28 @@ const SUGGESTIONS = {
   context: { maxMessages: 8, includeToolOutputs: false },
 };
 
-const payloadFor = ({ slug, model, providerId }) => ({
-  name: `context-management-demo-books-${slug}`,
-  description: `Chat-with-a-book demo agent (${model}) — shelf search over ${INDEX_NAME}, ` +
-    `${SHELF.count} titles`,
-  model,
-  providerId,
+/**
+ * The name a variant owns. The default agent keeps the bare name the demos
+ * already point at; every greedy clone is suffixed with its page size, so the
+ * live list reads as one family and the ids can be matched back by number.
+ */
+const nameFor = ({ slug, hits }) =>
+  `context-management-demo-books-${slug}` + (hits === DEFAULT_HITS ? "" : `-greedy-${hits}`);
+
+/* Instructions are byte-identical across all five variants, including the line
+   that says a whole-book question "cannot be answered by five passages". That
+   reads oddly on the 1,000-hit clone and it stays anyway: one knob differs
+   between these agents, which is what makes the reader's comparison a
+   measurement rather than an anecdote. */
+
+const payloadFor = (variant) => ({
+  name: nameFor(variant),
+  description: `Chat-with-a-book demo agent (${variant.model}) — shelf search over ` +
+    `${INDEX_NAME}, ${SHELF.count} titles, hitsPerPage=${variant.hits}`,
+  model: variant.model,
+  providerId: variant.providerId,
   instructions: INSTRUCTIONS,
-  tools: TOOLS,
+  tools: toolsFor(variant.hits),
   // MCP is the platform default and the feature flag forces it on regardless, so
   // the flag is set to match reality rather than to state a preference the
   // platform will not honour. temperature is up from the 0.3 the conversation
@@ -344,16 +394,17 @@ async function listAgents(creds) {
 async function main() {
   if (!PUSH) {
     console.log(`Dry run — nothing is sent. Host: ${HOST}\n`);
-    console.log(`Would POST ${MODELS.length} agents, then publish each:\n`);
-    for (const m of MODELS) {
-      console.log(`  context-management-demo-books-${m.slug}  model=${m.model}`);
+    console.log(`Would POST ${VARIANTS.length} agents, then publish each:\n`);
+    for (const v of VARIANTS) {
+      console.log(`  ${nameFor(v).padEnd(52)} model=${v.model} hitsPerPage=${v.hits}`);
     }
     console.log(`\nShelf read from books.js: ${SHELF.count} titles` +
       (PASSAGE_COUNT ? `, ${PASSAGE_COUNT.toLocaleString("en-US")} passages in passages.jsonl` : ""));
-    console.log(`Tool: search_the_shelf · mode=static · index=${INDEX_NAME} · hitsPerPage=5`);
+    console.log(`Tool: search_the_shelf · mode=static · index=${INDEX_NAME} · ` +
+      `hitsPerPage=${[DEFAULT_HITS, ...GREEDS].join("/")}`);
     console.log(`Tool description: ${INDEX_DESCRIPTION.length} chars\n`);
     console.log("First payload, exactly as it would be sent:\n");
-    console.log(JSON.stringify(payloadFor(MODELS[0]), null, 2));
+    console.log(JSON.stringify(payloadFor(VARIANTS[0]), null, 2));
     console.log("\nNothing was written. Re-run with --push, and with ALGOLIA_APP_ID and " +
       "ALGOLIA_WRITE_API_KEY set, to apply this.");
     return;
@@ -374,56 +425,76 @@ async function main() {
   const existing = await listAgents(creds);
   console.log(`${existing.size} agents already in this application\n`);
 
+  // slug → { 5: id, 50: id, … }, which is exactly the shape config.js wants
   const ids = {};
-  for (const m of MODELS) {
-    const payload = payloadFor(m);
+  const put = (v, id) => { (ids[v.slug] || (ids[v.slug] = {}))[v.hits] = id; };
+
+  for (const v of VARIANTS) {
+    const payload = payloadFor(v);
+    const label = `${v.slug}/${v.hits}`;
     if (existing.has(payload.name)) {
       // Converge rather than skip. This file is the desired state of these
       // agents, so a re-run after editing the instructions or the tool config
       // should MOVE the live agent to match — otherwise the only way to change a
       // prompt is to delete an agent and reissue its id into config.js.
       const id = existing.get(payload.name);
-      ids[m.slug] = id;
+      put(v, id);
       await call(creds, "PATCH", `/1/agents/${id}`, payload);
-      console.log(`${m.slug.padEnd(9)} ${id} · updated to match this file · ` +
+      console.log(`${label.padEnd(14)} ${id} · updated to match this file · ` +
         `${await publish(creds, id)}`);
       continue;
     }
     const created = await call(creds, "POST", "/1/agents", payload);
-    ids[m.slug] = created.id;
-    console.log(`${m.slug.padEnd(9)} created ${created.id} · status ${created.status}`);
-    console.log(`${" ".repeat(9)} ${await publish(creds, created.id)}`);
+    put(v, created.id);
+    console.log(`${label.padEnd(14)} created ${created.id} · status ${created.status}`);
+    console.log(`${" ".repeat(14)} ${await publish(creds, created.id)}`);
   }
 
   // Read back rather than trusting the create response: a tool array that failed
   // to persist is exactly the failure this script exists to make visible.
   console.log("\nReading each agent back:\n");
   let ok = 0;
-  for (const m of MODELS) {
-    const a = await call(creds, "GET", `/1/agents/${ids[m.slug]}`);
+  for (const v of VARIANTS) {
+    const id = ids[v.slug][v.hits];
+    const a = await call(creds, "GET", `/1/agents/${id}`);
     const tool = (a.tools || [])[0] || {};
     const index = (tool.indices || [])[0] || {};
     const cfg = a.config || {};
     const sugg = cfg.suggestions || {};
+    const controls = index.searchControls || {};
+    // The page size is the whole point of a greedy variant, so it is verified on
+    // BOTH channels: the internal tool reads searchParameters, the MCP server
+    // reads searchControls, and only one of them running is enough to make the
+    // knob a no-op without saying so.
+    const paged = (index.searchParameters || {}).hitsPerPage === v.hits &&
+      (controls.hitsPerPage || {}).default === v.hits;
     const good = tool.mode === "static" && index.index === INDEX_NAME &&
       a.status === "published" && sugg.enabled === true &&
-      !!index.searchControls && a.instructions === INSTRUCTIONS;
+      !!index.searchControls && a.instructions === INSTRUCTIONS && paged;
     if (good) ok++;
-    console.log(`${good ? "ok  " : "BAD "} ${m.slug.padEnd(9)} ${ids[m.slug]} · ${a.status} · ` +
+    console.log(`${good ? "ok  " : "BAD "} ${`${v.slug}/${v.hits}`.padEnd(14)} ${id} · ${a.status} · ` +
       `mode=${tool.mode} index=${index.index} · ` +
-      `hitsPerPage=${(index.searchParameters || {}).hitsPerPage} · ` +
-      `searchControls=${!!index.searchControls} · suggestions=${sugg.enabled} · ` +
-      `temp=${cfg.temperature} · instructionsMatch=${a.instructions === INSTRUCTIONS}`);
+      `hitsPerPage=${(index.searchParameters || {}).hitsPerPage}` +
+      `/${(controls.hitsPerPage || {}).default} · ` +
+      `suggestions=${sugg.enabled} · temp=${cfg.temperature} · ` +
+      `instructionsMatch=${a.instructions === INSTRUCTIONS}`);
   }
-  console.log(`\n${ok}/${MODELS.length} verified.`);
+  console.log(`\n${ok}/${VARIANTS.length} verified.`);
 
   console.log("\nAdd these to the matching entries in public/shared/config.js, and to the\n" +
     "DEMO_CONFIG_JS repository variable for production:\n");
   for (const m of MODELS) {
-    console.log(`  ${m.slug.padEnd(9)} bookAgentId: "${ids[m.slug]}",`);
+    const byHits = ids[m.slug];
+    console.log(`  ${m.slug}:`);
+    console.log(`    bookAgentId: "${byHits[DEFAULT_HITS]}",`);
+    console.log(`    greedyAgentIds: {`);
+    for (const n of GREEDS) console.log(`      "${n}": "${byHits[n]}",`);
+    console.log(`    },`);
   }
   console.log("\nThe book page falls back to `agentId` when `bookAgentId` is absent, so the demo\n" +
-    "keeps working — without shelf search — until the config lands.");
+    "keeps working — without shelf search — until the config lands. A missing\n" +
+    "greedyAgentIds entry disables that level in the picker rather than silently\n" +
+    "sending the default page size under a greedy label.");
 }
 
 main().catch((e) => {

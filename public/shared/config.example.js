@@ -35,6 +35,19 @@ window.DEMO_CONFIG = {
       // which prints the ids to paste here. Omit the field and the book page falls
       // back to `agentId`, working exactly as before but without shelf search.
       bookAgentId: "YOUR_BOOK_AGENT_ID",
+      // The same agent at four wider page sizes, keyed by hits per search.
+      // `hitsPerPage` is welded to the agent — the tool's value beats the number
+      // the model asks for, and a request cannot move it — so the greedy
+      // retrieval control swaps ids rather than sending a parameter. Measured on
+      // this shelf: ~1,300 characters a passage, so 1,000 hits is ~326,000
+      // tokens of tool output in one turn. The same script creates these; a
+      // level with no id here is shown disabled rather than quietly serving 5.
+      greedyAgentIds: {
+        "50": "YOUR_GREEDY_50_AGENT_ID",
+        "100": "YOUR_GREEDY_100_AGENT_ID",
+        "500": "YOUR_GREEDY_500_AGENT_ID",
+        "1000": "YOUR_GREEDY_1000_AGENT_ID",
+      },
       providerId: "c39b45b0-ff20-401f-a9ef-2c4c2fd016f8",
       model: "small",
       // The provider publishes no window: neither GET /1/providers/{id} nor

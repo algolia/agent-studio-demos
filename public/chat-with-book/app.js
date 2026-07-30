@@ -23,6 +23,50 @@ const CFG = window.DEMO_CONFIG;
 const M = window.DemoMeter;
 const BOOKS = window.DEMO_BOOKS;
 
+/* ── Greedy retrieval ─────────────────────────────────────────────
+   The third thing that fills a context window, after a long document and a long
+   conversation: what a tool hands back. `hitsPerPage` is welded to the agent —
+   the tool's value beats whatever the model asks for, and `searchControls` keeps
+   the parameter out of the schema the model ever sees — so this picker swaps
+   agent ids rather than sending a number, and config.js carries one id per level.
+
+   Every figure here was measured on this shelf, through these agents, on
+   2026-07-30 (query "sea", 1,479 matching passages):
+
+     5 hits    ·     6,490 chars ·   ≈1,600 tok · search 0.0s · turn  7.2s
+     50 hits   ·    62,889 chars ·  ≈15,700 tok · search 0.0s · turn  6.3s
+     500 hits  ·   651,161 chars · ≈163,000 tok · search 0.9s · turn 10.0s
+     1000 hits · 1,304,513 chars · ≈326,000 tok · search 2.1s · turn 13.1s
+
+   1,000 is Algolia's hard ceiling for one request and 1,305 characters is what a
+   ~190-word passage costs, so ~326k tokens is the largest flood this shelf can
+   produce in one turn. It answers on a 1M-token model and is REFUSED on a 200k
+   one: the search succeeds, the passages arrive, and the answering pass comes
+   back as an SSE error frame — 400, BadRequestError, no answer at all.
+
+   The other bound is the index: a search returns at most the number of passages
+   that match, so a narrow query at 1,000 hits brings back 16. Every level is a
+   ceiling, which is why every projection on this page says "up to". */
+
+const GREED_LEVELS = [5, 50, 100, 500, 1000];
+const GREED_DEFAULT = 5;
+
+/** measured across 1,555 retrieved passages: 1,258–1,305 characters each */
+const TOOL_CHARS_PER_HIT = 1300;
+
+/* The line above which a question asks before it sends. A token line and not
+   only a money one, on purpose: at gpt-4.1-mini's rate a 326k-token turn is
+   about $0.13, comfortably under the $0.50 money gate, and a public demo still
+   must not let one click spend six figures of context without a word. 100,000
+   puts the confirm on 500 and 1,000 hits and leaves 50 and 100 alone. */
+const GREED_CONFIRM_TOKENS = 100000;
+
+/** what a greedy answer is assumed to write back — these agents cap output at 1,200 */
+const GREED_ANSWER_TOKENS = 500;
+
+/** passages quoted in the "what came back" tooltip; the rest are counted, not printed */
+const PEEK_HITS = 12;
+
 const state = {
   messages: [],        // v5 messages, the live history
   weights: [],         // per-message token estimate, parallel to messages
@@ -63,6 +107,10 @@ const state = {
   // Follow-ups the agent wrote, from the most recent `data-suggestions` frame.
   // Replaced wholesale each turn — they describe the conversation as it is now.
   suggestions: [],
+  // Hits per shelf search: which of the greed agents this page is talking to.
+  // In memory only, never in localStorage — a reader who comes back gets the
+  // sane default rather than yesterday's experiment.
+  greed: GREED_DEFAULT,
 };
 
 /**
@@ -88,6 +136,7 @@ const TUNE = {
   keepSectionsAtRatio: CFG.keepSectionsAtRatio ?? 0.25,
 };
 
+
 const $ = (id) => document.getElementById(id);
 const el = {
   doc: $("doc"), file: $("file"), ingest: $("ingest-btn"), ingestStatus: $("ingest-status"),
@@ -97,6 +146,7 @@ const el = {
   chipsNext: $("chips-next"),
   sample: $("sample-btn"), model: $("model"), modelHint: $("model-hint"),
   budget: $("budget"), budgetHint: $("budget-hint"),
+  greed: $("greed"), greedHint: $("greed-hint"), greedLabel: $("greed-label"),
   meter: $("meter"), fill: $("meter-fill"), threshold: $("meter-threshold"),
   read: $("meter-read"), meterState: $("meter-state"),
   axisMax: $("axis-max"), axisThreshold: $("axis-threshold"),
@@ -2292,6 +2342,85 @@ function showCostGate(book, est) {
   shelfStatus(`${book.title} is waiting on your confirmation — no call has been made.`, "working");
 }
 
+/* ── The confirm, for a question that over-fetches ─────────────────
+   The shelf gate above asks before a document goes in. This one asks before a
+   greedy search comes back: at 500 hits one question carries ≈163,000 tokens of
+   passages, at 1,000 about twice that, and neither is something a visitor should
+   discover from the meter afterwards. Same two buttons, same shape, same rule —
+   nothing is sent until it is accepted. ──────────────────────────── */
+
+function closeGreedGate() {
+  document.querySelectorAll(".greed-gate").forEach((n) => n.remove());
+}
+
+function showGreedGate(text, est) {
+  closeGreedGate();
+  const panel = document.createElement("div");
+  panel.className = "shelf-gate greed-gate";
+  panel.setAttribute("role", "group");
+  panel.setAttribute("aria-label", "Confirm a greedy search");
+
+  const h = document.createElement("p");
+  h.className = "gate-h";
+  h.textContent = `This question carries ≈${fmt(est.tokens)} tokens · ~${usd(est.usd)}`;
+
+  const body = document.createElement("p");
+  body.className = "gate-body";
+  body.textContent =
+    `${fmt(est.level)} hits a search is up to ≈${fmt(est.searchTokens)} tokens of passages, on ` +
+    `top of the conversation, sent twice — once to decide, once to answer. ` +
+    (est.overWindow
+      ? `That is past ${state.model.label}'s ${fmt(modelWindow())}-token window, so the provider ` +
+        `will refuse the answer and the search will have been for nothing. `
+      : `An estimate, not a quote. `) +
+    `Nothing has been sent yet.`;
+
+  const why = document.createElement("button");
+  why.type = "button";
+  why.className = "info";
+  why.textContent = "?";
+  tip(why, () => `**${fmt(GREED_CONFIRM_TOKENS)} tokens** or ${usd(costConfirmUsd())}, whichever ` +
+    `comes first — the token line matters because a flood this size is cheap on a small model ` +
+    `and still enormous. ${M.priceLine(est.price)}`,
+  `${fmt(est.level)} hits × ${fmt(TOOL_CHARS_PER_HIT)} chars ÷ ${charsPerToken().toFixed(1)} ` +
+    `chars/tok  =  ≈${fmt(est.searchTokens)} tok`);
+  h.appendChild(why);
+
+  const row = document.createElement("div");
+  row.className = "gate-row";
+  const go = document.createElement("button");
+  go.type = "button";
+  go.className = "btn primary gate-go";
+  // the tokens are why this panel exists, and the dollars are already in the
+  // heading: on a cheap model $0.02 reads as a reason not to bother reading on
+  go.textContent = `Ask anyway · ≈${fmt(est.tokens)} tok`;
+  go.addEventListener("click", () => {
+    // a confirm left open while another turn started must not race it into the
+    // history: the panel outlives the state it was priced against
+    if (state.busy) return;
+    closeGreedGate();
+    send(text, { confirmed: true });
+  });
+  const no = document.createElement("button");
+  no.type = "button";
+  no.className = "btn ghost gate-no";
+  no.textContent = "Not now";
+  no.addEventListener("click", () => {
+    closeGreedGate();
+    // the question goes back in the box, exactly as a failed turn returns it
+    if (!el.prompt.value) el.prompt.value = text;
+    el.prompt.focus();
+  });
+  row.append(go, no);
+
+  panel.append(h, body, row);
+  panel.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); no.click(); }
+  });
+  el.composer.before(panel);
+  go.focus();
+}
+
 /**
  * One tile, one whole book. A second pick starts over rather than stacking two
  * books in one history — two documents in one conversation is a different demo,
@@ -2695,10 +2824,13 @@ async function streamAnswer(messages, { note, watchSentinel, into }) {
   // tool and book-specific instructions. `agentId` stays as the fallback so the
   // page keeps working against a config written before those agents existed; it
   // simply has no shelf search, which the header says out loud.
-  const agentId = state.model.bookAgentId || state.model.agentId;
+  // Greed swaps the agent, because the page size cannot be sent: one published
+  // agent per level, identical in every other byte.
+  const agentId = greedyAgentId(greed()) || state.model.bookAgentId || state.model.agentId;
   const path = `/1/agents/${agentId}/completions?compatibilityMode=ai-sdk-5&stream=true`;
   const res = await api(path, { messages }, { stream: true });
-  logCall(path.split("?")[0], null, null, note);
+  logCall(path.split("?")[0], null, null,
+    note + ` · hitsPerPage=${greed()}` + (greed() > GREED_DEFAULT ? " · greedy" : ""));
 
   const reader = res.body.getReader();
   const dec = new TextDecoder();
@@ -2898,7 +3030,7 @@ function addSearchCard({ search, before }) {
   const row = document.createElement("li");
   row.dataset.state = "working";
   row.innerHTML = '<span class="mark" aria-hidden="true"></span>' +
-    '<span class="lbl">searching 16 books, 11,115 passages</span>' +
+    `<span class="lbl">searching 16 books, 11,115 passages · up to ${fmt(greed())} hits</span>` +
     '<span class="val">…</span>';
   steps.appendChild(row);
   // above the answer bubble, because it happened before the answer did
@@ -2924,30 +3056,47 @@ function addSearchCard({ search, before }) {
         (hits ? `${hits.length} passage${hits.length === 1 ? "" : "s"} · ` : "") +
         `≈${fmt(estTokens(chars))} tok · ${took}`;
 
+      // One search can now outweigh the whole budget, so the row says which side
+      // of that line it landed on rather than leaving a big number to be read as
+      // an ordinary one.
+      const tok = estTokens(chars);
+      const flood = tok > currentWindow();
+      card.classList.toggle("is-flood", flood);
+
       if (hits && hits.length) {
         // one line per hit, so a reader can see WHICH passages grounded the answer
-        // and go check them — provenance, not a hit count
-        const cited = hits.map((h) => {
+        // and go check them — provenance, not a hit count. Capped: a thousand
+        // passages is a megabyte of markdown, and a tooltip is not a corpus.
+        const shown = hits.slice(0, PEEK_HITS);
+        const cited = shown.map((h) => {
           const where = h.chapterTitle
             ? `${h.chapterTitle}`
             : (h.chapter === null || h.chapter === undefined ? "no chapter" : `chapter ${h.chapter}`);
           return `**${h.book || "unknown book"}** · ${where}${h.position ? ` · passage ${h.position}` : ""}\n\n` +
             `${(h.text || "").slice(0, 700)}${(h.text || "").length > 700 ? "…" : ""}`;
-        }).join("\n\n---\n\n");
+        }).join("\n\n---\n\n") +
+          (hits.length > shown.length
+            ? `\n\n---\n\nand ${fmt(hits.length - shown.length)} more, all of them in the ` +
+              `model's context and none of them in this tooltip`
+            : "");
         const peek = document.createElement("button");
         peek.type = "button";
         peek.className = "sum-peek";
         const books = [...new Set(hits.map((h) => h.book).filter(Boolean))];
         peek.textContent = books.length === 1
-          ? `${hits.length} from ${books[0]}`
-          : `${hits.length} across ${books.length} books`;
+          ? `${fmt(hits.length)} from ${books[0]}`
+          : `${fmt(hits.length)} across ${books.length} books`;
         tip(peek, cited, null,
-          { rich: true, markdown: true, heading: `What came back · ${fmt(estTokens(chars))} tokens` });
+          { rich: true, markdown: true, heading: `What came back · ${fmt(tok)} tokens` });
         row.appendChild(peek);
       }
       live.textContent = hits && hits.length === 0
         ? "nothing matched — the model was told so, rather than left to invent"
-        : `${fmt(estTokens(chars))} tokens of passages went up with your question.`;
+        : `${fmt(tok)} tokens of passages went up with your question` +
+          (flood
+            ? ` — ${(tok / currentWindow()).toFixed(1)}× the ${fmt(currentWindow())}-token budget, ` +
+              `from one search.`
+            : ".");
     },
     fail(why) {
       clearInterval(ticker);
@@ -3135,7 +3284,7 @@ function recordAnswer(answer) {
  * is what makes the loop free — the turn after this one costs what the turn
  * before it did.
  */
-async function send(text) {
+async function send(text, { confirmed = false } = {}) {
   busy(true);
 
   // Pre-flight against the model's real window, not the demo budget. Past this
@@ -3148,6 +3297,20 @@ async function send(text) {
       return;
     }
   }
+
+  /* Nothing has been sent to a model yet, and the history is now whatever it is
+     going to be — which is why the confirm sits here and not at the top of this
+     function. A greedy page size makes one question expensive on its own, so the
+     reader gets the figure before the spend rather than on the meter after; and
+     priced before the fold above, that figure would quote a payload the fold was
+     about to make smaller. */
+  const est = greedEstimate(text.length);
+  if (est.gated && !confirmed) {
+    showGreedGate(text, est);
+    busy(false);
+    return;
+  }
+  closeGreedGate();
 
   state.messages.push(userMsg(text));
   state.kinds.push("user");
@@ -3177,6 +3340,13 @@ async function send(text) {
   // what the model wrote on the last attempt: the naive side is charged one
   // answer per turn, at whatever size the answer turned out to be
   let outChars = 0;
+  // Passages this turn's searches handed back. Charged to the real side as they
+  // land, and added to the naive side's single payload at the end: a naive run
+  // makes the same search and reads the same hits, so its peak carries them too.
+  // It is a PEAK and not a permanent history: the tool result lives inside the
+  // completions request on both sides — Agent Studio runs the tool loop server
+  // side — so no client is carrying these tokens into the next turn.
+  let turnToolTokens = 0;
 
   try {
     for (;;) {
@@ -3196,8 +3366,24 @@ async function send(text) {
       // answering pass with the passages added to its input.
       const searched = (out.searches || []).length > 0;
       if (searched) chargeToolStep(realIn, estTokens(JSON.stringify(out.searches.map((s) => s.input)).length));
-      // every attempt is a real call the provider will invoice, sentinel included
-      chargeChat(realIn + estTokens(out.toolChars || 0), estTokens(out.chars));
+      const toolTokens = estTokens(out.toolChars || 0);
+      turnToolTokens += toolTokens;
+      /* A pass that wrote nothing after an error frame was refused, not run — at
+         1,000 hits the passages alone can outweigh the window and the provider
+         answers 400 before reading a token. The call happened, so it is counted;
+         billing it would put "refused, not billed" on the wrong side of this
+         page's own ledger. */
+      const refused = !out.answer && !out.sentinel && out.streamErrors.length > 0;
+      if (refused) {
+        state.cost.chatCalls += 1;
+        // the payload was real even though the answer never was: the peak is what
+        // flips the meter into its impossible mode, and that is the honest reading
+        state.cost.naivePeak = Math.max(state.cost.naivePeak, realIn + toolTokens);
+        renderCost();
+      } else {
+        // every attempt is a real call the provider will invoice, sentinel included
+        chargeChat(realIn + toolTokens, estTokens(out.chars));
+      }
       outChars = out.chars;
 
       if (out.sentinel) {
@@ -3258,8 +3444,21 @@ async function send(text) {
         logCall("/1/agents/{id}/completions", null, detail, "stream error frame");
         if (!out.answer) {
           rollback();
-          addErrorCard("The model stopped before answering", humanize({ detail }),
-            "Your question is back in the box — nothing was left half-recorded in the history.");
+          // The greedy failure has its own words, because the ordinary ones would
+          // hide the cause: the search worked perfectly and that is the problem.
+          if (turnToolTokens > 0 && realIn + turnToolTokens > modelWindow()) {
+            addErrorCard(
+              `${fmt(turnToolTokens)} tokens of passages — ${state.model.label} takes ` +
+              `${fmt(modelWindow())}`,
+              humanize({ detail }),
+              `The search succeeded: ${fmt(greed())} hits came back in ` +
+              `${fmt(turnToolTokens)} tokens, and the answering pass was refused before it read ` +
+              `one of them. Ask again at a smaller page size, or on a model with a wider window. ` +
+              `Only the deciding pass is on the meter — a refused request is not billed.`);
+          } else {
+            addErrorCard("The model stopped before answering", humanize({ detail }),
+              "Your question is back in the box — nothing was left half-recorded in the history.");
+          }
           busy(false);
           return;
         }
@@ -3273,9 +3472,11 @@ async function send(text) {
     }
     // One turn, one naive call — however many calls the real side needed to get
     // here. That asymmetry is the comparison, not a thumb on the scale: the naive
-    // run would have answered in one call because it never lost the detail.
+    // run would have answered in one call because it never lost the detail. The
+    // passages are the one thing it would have carried too, so they go on this
+    // payload: the flood is not something the fold saves anybody from.
     const naiveAnswer = estTokens(outChars);
-    chargeNaiveTurn(naiveIn, naiveAnswer);
+    chargeNaiveTurn(naiveIn + turnToolTokens, naiveAnswer);
     state.cost.naiveHistory += naiveAnswer;
   } catch (e) {
     rollback();
@@ -3574,10 +3775,11 @@ function busy(on) {
   el.compact.disabled = on || !canCompact();
   el.send.textContent = on ? "…" : "Send";
   // a second book or a second question mid-fold would race the history swap
-  document.querySelectorAll(".shelf-book, .chip").forEach((b) => {
-    // A spent chip is disabled for a reason that outlives the busy state, so
-    // releasing the page must not hand it back: `on || spent`, never a bare `on`.
-    b.disabled = on || b.classList.contains("is-spent");
+  document.querySelectorAll(".shelf-book, .chip, .greed-btn").forEach((b) => {
+    // A spent chip — or a greed level with no agent id — is disabled for a reason
+    // that outlives the busy state, so releasing the page must not hand it back:
+    // `on || spent`, never a bare `on`.
+    b.disabled = on || b.classList.contains("is-spent") || b.classList.contains("is-unwired");
   });
 }
 
@@ -3597,6 +3799,9 @@ function resetAll() {
   // conversation that no longer exists
   state.askedChips = new Set();
   state.suggestions = [];
+  // the greed choice survives — it describes what the next search will do, not
+  // what this conversation did — but a confirm for a question nobody asked does not
+  closeGreedGate();
   resetCost();
   // the chips go with the document they belong to: a Moby-Dick question sent
   // against an empty history reads as the demo failing to answer
@@ -3670,6 +3875,10 @@ function initModels() {
     // what folds, its rate decides what asks first. A dearer model can move a
     // book into the confirm group without anything else on the page changing.
     renderShelf();
+    // greed is one agent id per model, so the picker's wiring and its projection
+    // both belong to the model selected
+    renderGreed();
+    closeGreedGate();
   });
   state.model = CFG.models[0];
   setModelHint();
@@ -3734,6 +3943,8 @@ function initBudgets() {
     // the compaction threshold moved, so "compacts on your first question" may no
     // longer be true of the smaller books
     renderShelf();
+    // the greed hint is a multiple of this budget, so it moved too
+    setGreedHint();
   });
   setBudgetHint();
 }
@@ -3742,6 +3953,104 @@ function setBudgetHint() {
   el.budgetHint.textContent = state.budget
     ? `Auto-compaction fires at ${fmt(state.budget * CFG.compactAtRatio)} tokens`
     : `Full model window — a demo will not reach it`;
+}
+
+/* ── The greed picker ─────────────────────────────────────────────
+   Five buttons and one line of numbers. The line is the whole argument: it is
+   read live, so moving the model or the budget moves it, and at 1,000 hits it
+   says out loud that the flood is past the window before anything is sent.
+   ────────────────────────────────────────────────────────────── */
+
+/** hits per shelf search right now */
+const greed = () => state.greed || GREED_DEFAULT;
+
+/**
+ * The agent carrying this page size, or null when config.js has no id for it.
+ * A missing id disables the level rather than sending the default page size
+ * under a greedy label — a knob that silently does nothing is worse than a
+ * knob that says it is not wired.
+ */
+function greedyAgentId(level) {
+  if (!state.model) return null;
+  if (level === GREED_DEFAULT) return state.model.bookAgentId || null;
+  return (state.model.greedyAgentIds || {})[String(level)] || null;
+}
+
+/** tokens one search at this level is expected to hand back, at the live ratio */
+const greedTokens = (level) => estTokens(level * TOOL_CHARS_PER_HIT);
+
+/**
+ * What one question is expected to cost before it is sent — the only estimate on
+ * this page that arrives BEFORE the spend, and the reason the confirm exists.
+ * Two passes over the conversation, because a search runs the model twice, plus
+ * the passages on the second one.
+ */
+function greedEstimate(chars) {
+  const level = greed();
+  const searchTokens = greedTokens(level);
+  const inTok = realInputTokens(chars, []);
+  const price = currentPrice();
+  const tokens = inTok * 2 + searchTokens;
+  const usd = (tokens * price.inPerMTok + GREED_ANSWER_TOKENS * price.outPerMTok) / 1e6;
+  return {
+    level, searchTokens, tokens, usd, price,
+    // the answering pass carries the conversation AND the passages
+    overWindow: inTok + searchTokens > modelWindow(),
+    gated: level > GREED_DEFAULT &&
+      (searchTokens >= GREED_CONFIRM_TOKENS || usd > costConfirmUsd()),
+  };
+}
+
+function renderGreed() {
+  el.greed.textContent = "";
+  GREED_LEVELS.forEach((level) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "greed-btn";
+    btn.textContent = fmt(level);
+    btn.dataset.level = String(level);
+    const wired = !!greedyAgentId(level);
+    const on = level === greed();
+    btn.setAttribute("aria-pressed", String(on));
+    btn.classList.toggle("is-on", on);
+    btn.disabled = state.busy || !wired;
+    btn.classList.toggle("is-unwired", !wired);
+    btn.setAttribute("aria-label", `${fmt(level)} hits per search`);
+    if (!wired) {
+      tip(btn, `No agent id for ${fmt(level)} hits in config.js. Create one with ` +
+        `scripts/create-book-agents.js --push.`);
+    } else {
+      tip(btn, () => {
+        const tok = greedTokens(level);
+        const win = modelWindow();
+        return `**≈${fmt(tok)} tokens** per search, at ${fmt(TOOL_CHARS_PER_HIT)} characters a ` +
+          `passage. ${tok > win
+            ? `Past ${state.model.label}'s ${fmt(win)}: the provider refuses the turn.`
+            : `${(tok / currentWindow()).toFixed(1)}× the ${fmt(currentWindow())}-token budget.`}`;
+      }, null, { heading: `${fmt(level)} hits · agent ${greedyAgentId(level).slice(0, 8)}` });
+    }
+    btn.addEventListener("click", () => {
+      if (state.busy) return;
+      state.greed = level;
+      closeGreedGate();
+      renderGreed();
+    });
+    el.greed.appendChild(btn);
+  });
+  setGreedHint();
+}
+
+function setGreedHint() {
+  const level = greed();
+  const tok = greedTokens(level);
+  const win = modelWindow();
+  const tail = tok > win
+    ? ` · past ${state.model.label}'s ${fmt(win)}-token window`
+    : (level > GREED_DEFAULT && tok >= GREED_CONFIRM_TOKENS ? " · asks before it sends" : "");
+  el.greedHint.textContent =
+    `up to ≈${fmt(tok)} tokens a search` +
+    (level === GREED_DEFAULT ? " · today's default" : tail);
+  el.greedHint.classList.toggle("is-warn", tok > win);
 }
 
 /* ── Theme ────────────────────────────────────────────────────────
@@ -3787,6 +4096,7 @@ function init() {
   initTheme();
   initModels();
   initBudgets();
+  renderGreed();
   initCostbar();
   renderShelf();
   renderMeter();
