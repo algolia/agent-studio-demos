@@ -108,15 +108,9 @@
     <h1 aria-label="Chat with a book">Chat with<span class="fold-mark" aria-hidden="true"></span>a book</h1>
     <p class="lede">
       A conversation runs out of room long before it runs out of things to say.
-      Two endpoints fix that: <code>context/trim</code> counts what you are carrying,
-      <code>context/compact</code> folds the old part into a summary. Take a whole
-      book off the shelf below — or paste your own document, or fetch a URL — and
-      watch the fold happen. Anything that overflows the model window outright is
-      folded in sections first: a summary is only useful if it fits. A fold is not a shredder,
-      though: every folded section is still here. Dive into one to ask a question
-      against its full original text, refold it around what you actually care
-      about, or watch the assistant reopen a section by itself when your question
-      needs a detail the digest dropped.
+      Two calls fix that: <code>context/trim</code> counts,
+      <code>context/compact</code> folds. Take a book off the shelf and watch.
+      A fold is not a shredder — every folded section opens back up.
     </p>
     <div class="masthead-meters">
       <div class="hero-stat">
@@ -142,7 +136,7 @@
   <!-- ── Left rail: ingest, model, meter, ledger ─────────────────── -->
   <section class="panel" aria-labelledby="ingest-h">
     <h2 id="ingest-h" class="panel-h">1 · Load the context</h2>
-    <p class="panel-sub">Take a book off the shelf, or bring your own text. Whatever you load becomes the first user message. Nothing leaves your browser except the API calls shown in the wire log. Each tile says what loading it will do and roughly what that costs, before you click it.</p>
+    <p class="panel-sub">Take a book off the shelf, or bring your own text. Every tile says what loading it will cost, before you click. Nothing leaves your browser except the calls in the wire log.</p>
 
     <!-- ── The bookshelf ───────────────────────────────────────────────
          Sixteen public-domain books, served from this origin as plain text. The
@@ -170,7 +164,7 @@
 
       <label class="field-label url-label" for="url">
         …or fetch a web page
-        <button class="info" type="button" data-tip="Fetched by your browser and stripped to plain text here — script, style, and navigation elements are dropped, whitespace is collapsed. A site that sends no CORS header cannot be read directly; that URL is read through the public reader named in config.js instead, and the substitution is stated on screen and in the wire log.">?</button>
+        <button class="info" type="button" data-tip-h="Fetched by your browser" data-tip="Stripped to plain text here — scripts, styles and navigation dropped. A site that blocks cross-origin reads goes through the public reader named in config.js instead, and the page says so when that happens.">?</button>
       </label>
       <div class="row url-row">
         <input id="url" type="url" inputmode="url" autocomplete="off"
@@ -198,7 +192,7 @@
       <div>
         <label class="field-label" for="budget">
           Working budget
-          <button class="info" type="button" data-tip="The meter fills against this budget, not the model's full window. Real windows are large enough that a demo would never fill them; a smaller budget makes the fold observable. Auto-compaction triggers at 70% of the budget.">?</button>
+          <button class="info" type="button" data-tip-h="A demo device, on purpose" data-tip="The meter fills against this budget, not the model's window — real windows are too big to fill while you watch. Auto-compaction fires at 70% of it.">?</button>
         </label>
         <select id="budget"></select>
         <p class="hint" id="budget-hint"></p>
@@ -259,14 +253,14 @@
       <div class="chip-group">
         <span class="chip-label chip-label-needle">
           needle
-          <button class="info" type="button" data-tip="A needle question has one answer sitting in one place — a line, a scene, a number. Retrieval is made for this: search the book, return the passage that holds it, spend a few hundred tokens. Ask it here and the model answers from the folded record, reopening the section it needs if the digest dropped the detail.">?</button>
+          <button class="info" type="button" data-tip-h="One answer, in one place" data-tip="A line, a scene, a number. Search is built for this: fetch the passage, spend a few hundred tokens. Here, the model answers from the folded record — reopening a section if the digest dropped the detail.">?</button>
         </span>
         <div class="chip-row" id="chips-needle"></div>
       </div>
       <div class="chip-group">
         <span class="chip-label chip-label-arc">
           arc
-          <button class="info" type="button" data-tip="An arc question is about the shape of the whole book — a tone that shifts, sympathy that moves, a purpose that turns. No single passage holds the answer, so there is nothing for a search to retrieve: the model has to have carried the thing end to end. That is what the fold is for, and it is why this demo exists.">?</button>
+          <button class="info" type="button" data-tip-h="The shape of the whole book" data-tip="A tone that shifts, sympathy that moves. No single passage holds the answer, so search has nothing to fetch — the model must carry the book end to end. That is the fold's job.">?</button>
         </span>
         <div class="chip-row" id="chips-arc"></div>
       </div>
@@ -279,7 +273,7 @@
       <div class="chip-group" id="chips-next-group" hidden>
         <span class="chip-label chip-label-next">
           next
-          <button class="info" type="button" data-tip="Follow-ups the agent wrote, not a list stored in this page. Agent Studio runs a suggestions node after the answer and streams the result back as a data-suggestions frame, so these move with the conversation — the difference between a demo that converses and one that replays. They cost one small extra generation on the agent's provider.">?</button>
+          <button class="info" type="button" data-tip-h="Written by the agent" data-tip="Not a list stored in this page. A suggestions node runs after each answer and streams follow-ups back, so they move with the conversation. Cost: one small extra generation.">?</button>
         </span>
         <div class="chip-row" id="chips-next"></div>
       </div>

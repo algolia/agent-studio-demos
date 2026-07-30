@@ -257,12 +257,10 @@ function logCall(path, stats, error, note, verb = "POST", cost = null) {
     chip.className = `wire-cost${cost === 0 ? " is-free" : ""}`;
     chip.textContent = cost === 0 ? "$0 · no LLM" : `~${usd(cost)}`;
     tip(chip, cost === 0
-      ? "context/trim is deterministic — it counts and drops messages without calling a model, " +
-        "so this call costs nothing on either side of the meter. It is why the meter can be " +
-        "honest about tokens without guessing at a tokenizer in the browser."
-      : () => `Charged to the real side of the meter at ${priceLine()} Estimated: the API does ` +
-        `not expose the summarizer's own usage yet, so the call's tokensBeforeEstimate is read ` +
-        `as its input.`);
+      ? "context/trim counts without calling a model, so it is free on both sides of the " +
+        "meter — and it is why the meter can be honest without shipping a tokenizer."
+      : () => `Charged to the real side at ${priceLine()} Estimated — the API does not ` +
+        `expose summarizer usage yet, so the call's before/after token counts stand in.`);
     li.appendChild(chip);
   }
   el.wireList.appendChild(li);
@@ -367,13 +365,15 @@ function initCostbar() {
 
   // bound once, read live: each asks the kit for the wording that matches the
   // mode the meter is in at the moment it is opened
-  tip(el.meterInfo, () => M.tileCopy.eyebrow);
-  tip(el.naiveBadge, () => M.tileCopy.badge(meterView()));
-  tip(el.tileNaive, () => M.tileCopy.naive(meterView()), M.tileCopy.naiveFormula);
-  tip(el.tileReal, () => M.tileCopy.real(meterView()), M.tileCopy.realFormula);
+  tip(el.meterInfo, () => M.tileCopy.eyebrow, null, { heading: "Two prices" });
+  tip(el.naiveBadge, () => M.tileCopy.badge(meterView()), null, { heading: "Refused, not billed" });
+  tip(el.tileNaive, () => M.tileCopy.naive(meterView()), M.tileCopy.naiveFormula,
+    { heading: "The naive run" });
+  tip(el.tileReal, () => M.tileCopy.real(meterView()), M.tileCopy.realFormula,
+    { heading: "Actually spent" });
   tip(el.tileSaved, () => M.tileCopy.saved(meterView()),
-    () => M.tileCopy.savedFormula(meterView()));
-  tip(el.unlockedInfo, () => M.tileCopy.unlocked(meterView()));
+    () => M.tileCopy.savedFormula(meterView()), { heading: "The difference" });
+  tip(el.unlockedInfo, () => M.tileCopy.unlocked(meterView()), null, { heading: "Unlocked" });
 
   renderCost();
 }
@@ -541,9 +541,12 @@ function showTip(node, text, code, opts) {
   const heading = opts && opts.heading;
   const asMd = !!(opts && opts.markdown) && !!window.renderMarkdown;
   el.tooltip.classList.toggle("is-rich", rich);
+  // plain tips allow exactly one marker, **bold**, applied after escaping: the
+  // lead figure or term should stand out of the panel without a Markdown pass
+  const plain = escapeHtml(body).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   el.tooltip.innerHTML =
     (heading ? `<span class="tip-h">${escapeHtml(heading)}</span>` : "") +
-    `<span class="tip-body${asMd ? " md" : ""}">${asMd ? window.renderMarkdown(body) : escapeHtml(body)}</span>` +
+    `<span class="tip-body${asMd ? " md" : ""}">${asMd ? window.renderMarkdown(body) : plain}</span>` +
     (snippet ? `<code>${escapeHtml(snippet)}</code>` : "");
   el.tooltip.classList.add("on");
   el.tooltip.setAttribute("aria-hidden", "false");
@@ -642,9 +645,8 @@ function addAnswerBubble(msg) {
   const who = document.createElement("span");
   who.className = "who";
   who.textContent = "assistant";
-  tip(who, "The model answers in Markdown. This page escapes its output, then renders the " +
-    "Markdown on top of the escaped text — locally, in md.js, with no third-party script and " +
-    "no HTML from the model ever inserted as HTML.");
+  tip(who, "Answers arrive as Markdown. The page escapes the text first, then renders " +
+    "structure on top — locally, in md.js. Model HTML is never inserted as HTML.");
   wrap.appendChild(who);
   const bubble = document.createElement("div");
   bubble.className = "bubble";
@@ -695,20 +697,18 @@ function setBacklogCard() {
   card.querySelector(".bk-title").textContent =
     `${fmt(hidden)} earlier messages, still carried in full`;
   card.querySelector(".bk-note").innerHTML =
-    `This thread arrived with ${fmt(a.messageCount)} messages — ${fmt(a.exchanges)} exchanges — ` +
-    `and every one of them is in the history being sent to the model. The ${TUNE.visibleMessages} ` +
-    `below are the ones you can read; the rest are in the ledger on the left. ` +
-    `<strong>${fmt(a.tokens)} tokens</strong>, counted by <code>context/trim</code> rather than ` +
-    `estimated here. That is ${a.tokens > currentWindow()
-      ? `past the ${fmt(currentWindow())}-token working budget, which is why nothing can go out yet`
+    `${fmt(a.messageCount)} messages — ${fmt(a.exchanges)} exchanges — all still in the ` +
+    `history sent to the model. You can read the last ${TUNE.visibleMessages}; the ledger ` +
+    `holds the rest. <strong>${fmt(a.tokens)} tokens</strong>, counted by ` +
+    `<code>context/trim</code>. That is ${a.tokens > currentWindow()
+      ? `past the ${fmt(currentWindow())}-token budget — nothing can go out yet`
       : `already over the fold threshold`}.`;
   tip(card.querySelector(".event-h"),
-    `The file that ships with this page holds ${fmt(a.messageCount)} messages and ` +
-    `${fmt(a.chars)} characters, and quotes ${fmt(a.claimed)} tokens as a deliberate floor. The ` +
-    `figure above is not that one: it is ${fmt(a.tokens)}, what the trim endpoint answered when ` +
-    `this page handed it the exact array it is carrying. Where the two differ, the measurement ` +
-    `wins and the card on the left was being cautious.`,
-    "POST /1/unstable/context/trim\n{ messages }  →  stats.tokensBeforeEstimate");
+    `The committed file quotes ${fmt(a.claimed)} tokens — a deliberate floor. The figure ` +
+    `above is ${fmt(a.tokens)}: what context/trim answered for the exact array being ` +
+    `carried. Where they differ, the measurement wins.`,
+    "POST /1/unstable/context/trim\n{ messages }  →  stats.tokensBeforeEstimate",
+    { heading: "Counted, not claimed" });
   el.thread.prepend(card);
   state.foldRecord = card;
 }
@@ -726,9 +726,9 @@ function setFoldRecord(summary, meta) {
     `the thread so far, folded ${state.folds} time${state.folds === 1 ? "" : "s"}`;
   card.querySelector(".rc-note").innerHTML =
     `Everything above the last ${TUNE.keepLast} messages is now this one summary — ` +
-    `${fmt(estTokens(text.length))} tokens standing in for ${fmt(a.tokens)}. It is a real ` +
-    `message in the history, not a note on the side: every turn from here carries it and ` +
-    `nothing else of what came before.`;
+    `<strong>${fmt(estTokens(text.length))} tokens standing in for ${fmt(a.tokens)}</strong>. ` +
+    `A real message in the history: every turn from here carries it, and nothing else of ` +
+    `what came before.`;
   const peek = document.createElement("button");
   peek.type = "button";
   peek.className = "sum-peek";
@@ -737,10 +737,9 @@ function setFoldRecord(summary, meta) {
     { rich: true, markdown: true, heading: `The summary · ${fmt(estTokens(text.length))} tokens` });
   card.appendChild(peek);
   tip(card.querySelector(".event-h"),
-    `Written by ${state.model.label} through context/compact, on your own provider credentials. ` +
-    `The fold is not a shredder in principle — the original messages simply are not carried any ` +
-    `more, which is the entire saving. ${meta ? `The last pass reclaimed ` +
-      `${fmt(meta.reclaimed)} tokens.` : ""}`,
+    `Written by ${state.model.label} through context/compact, on your own credentials. The ` +
+    `originals simply are not carried any more — that is the entire saving. ` +
+    `${meta ? `The last pass reclaimed ${fmt(meta.reclaimed)} tokens.` : ""}`,
     "POST /1/unstable/context/compact\n{ messages, keepLastMessages: 0 }");
 
   if (state.foldRecord) state.foldRecord.replaceWith(card);
@@ -770,15 +769,14 @@ function addFoldCard({ auto }) {
     ? `The last answer took the history past ${fmt(currentWindow() * CFG.compactAtRatio)} tokens, ` +
       `which is ${Math.round(CFG.compactAtRatio * 100)}% of the working budget. From here this ` +
       `happens on its own, every time, for as long as you keep going.`
-    : `${fmt(state.tokens)} tokens is more than one <code>context/compact</code> call can carry: ` +
-      `its payload has to fit the summarizer's window too. So the oldest end goes first, in ` +
-      `about ${passes} pass${passes === 1 ? "" : "es"} of at most ` +
-      `${fmt(Math.round(modelWindow() * TUNE.maxPayloadRatio))} tokens, and each pass folds the ` +
+    : `${fmt(state.tokens)} tokens is more than one <code>context/compact</code> call can ` +
+      `carry — the payload must fit the summarizer's window too. So the oldest end goes ` +
+      `first: ~${passes} pass${passes === 1 ? "" : "es"} of at most ` +
+      `${fmt(Math.round(modelWindow() * TUNE.maxPayloadRatio))} tokens, each folding the ` +
       `previous summary in with the next stretch.`;
   tip(card.querySelector(".event-h"),
-    "The decision to fold, and how much to take, is shared/compactor.js — a driver that owns " +
-    "none of this page's history and calls back into it. What you are watching is that loop, " +
-    "one row per API call.",
+    "The fold decision lives in shared/compactor.js — a driver that owns none of this " +
+    "page's history and calls back into it. Each row below is one API call.",
     "createCompactor({ probe, compact, budget, ratio, onHistory, onCharge })");
 
   const steps = card.querySelector(".fd-steps");
@@ -806,9 +804,9 @@ function addFoldCard({ auto }) {
         const warn = document.createElement("span");
         warn.className = "wire-fix";
         warn.textContent = "single oversize message";
-        tip(warn, "One message on its own is larger than a pass is allowed to be. It is sent " +
-          "anyway, because a plan that refuses to take it would leave the conversation stuck — " +
-          "and the endpoint, not this page, is the authority on what it will accept.");
+        tip(warn, "This one message is bigger than a pass should be. Sent anyway: refusing " +
+          "it would leave the conversation stuck, and the endpoint is the authority on what " +
+          "it accepts.");
         row.appendChild(warn);
       }
     },
@@ -829,11 +827,9 @@ function addFoldCard({ auto }) {
       // the threshold, which is what the automatic loop then works through as
       // those long arriving turns age out of it.
       live.textContent = run.stalled || run.stillOver
-        ? `${head} · ${fmt(state.tokens)} tokens left, which is what the last ` +
-          `${TUNE.keepLast} messages weigh on their own — more than the threshold. Another pass ` +
-          `here would fold a summary back into itself and buy no room, so it stopped. ` +
-          `Auto-compaction carries on from here: each turn ages one of the long messages you ` +
-          `arrived on out of the tail, and each fold gets it lower.`
+        ? `${head} · still ${fmt(state.tokens)} tokens: the protected last ${TUNE.keepLast} ` +
+          `messages weigh that much on their own. Another pass would buy no room, so it ` +
+          `stopped — auto-compaction keeps working it down as those long turns age out.`
         : `${head} · back under the threshold, with the last ${TUNE.keepLast} messages untouched.`;
     },
     failed(message) {
@@ -938,12 +934,15 @@ async function streamAnswer(messages, { note, into }) {
  * rather than the history — the chips are not worth a second full payload.
  */
 async function generateSuggestions(answer) {
+  // this text goes to the model, not the reader — the copy gate exempts it
+  /* check-copy: off */
   const ask = userMsg(
     `Here is the last thing you said to me:\n\n"""\n${String(answer).slice(0, 1500)}\n"""\n\n` +
     `Write exactly three replies I might plausibly send next, in my voice, as the person you ` +
     `are talking to. One per line, each under 70 characters, each a real question or a real ` +
     `answer to what you just said. No numbering, no bullets, no quotation marks, no commentary ` +
     `— three lines and nothing else.`);
+  /* check-copy: on */
   const path = `/1/agents/${state.model.agentId}/completions?compatibilityMode=ai-sdk-5&stream=true`;
   const res = await api(path, { messages: [ask] }, { stream: true });
 
@@ -989,11 +988,9 @@ const SOURCE_TIP = {
   stream: "The agent emitted these itself, as data-suggestions frames inside the same SSE " +
     "stream that carried the answer. No extra call, no extra tokens — the chips are free when " +
     "the agent is configured to offer them.",
-  generated: "None of the agents configured for this demo emit data-suggestions, so these were " +
-    "generated: one more completion, carrying only the last answer rather than the whole " +
-    "history, and charged to the real side of the meter like everything else. The page rides " +
-    "the native frames whenever they arrive and falls back to this when they do not — the wire " +
-    "log says which happened each turn.",
+  generated: "No agent in this demo emits data-suggestions, so these cost one extra " +
+    "completion — carrying only the last answer, charged to the real side like everything " +
+    "else. Native frames are used whenever they arrive; the wire log says which happened.",
 };
 
 function renderChips() {
@@ -1265,19 +1262,16 @@ function sagaCard(entry) {
     `<span>${known ? "" : "≥"}${fmt(tokens)} tok${known ? " counted" : ""}</span>` +
     (oversize ? '<span class="saga-flag">past the window</span>' : "");
   tip(b, () =>
-    `${fmt(entry.messageCount)} messages, ${fmt(entry.exchanges)} exchanges, ` +
-    `${fmt(entry.chars)} characters — all counted from the committed file. ` +
+    `Every figure is counted from the committed file. ` +
     (known
-      ? `The token figure is ${fmt(known)}, which is what context/trim answered when this page ` +
-        `handed it this exact thread. The file itself only claims ${fmt(entry.tokens)}, ` +
-        `deliberately low.`
-      : `The token figure is a floor rather than a measurement: ${fmt(entry.tokens)} at the ratio ` +
-        `the generator assumed, and text like this usually tokenizes higher. The real number ` +
-        `arrives from context/trim the moment you load it, and that is the one the meter uses.`) +
+      ? `Tokens: ${fmt(known)}, measured by context/trim on this exact thread — the file ` +
+        `itself claims only ${fmt(entry.tokens)}, deliberately low.`
+      : `Tokens: a floor, not a measurement — text like this usually tokenizes higher. ` +
+        `context/trim measures it the moment you load the thread.`) +
     (oversize
-      ? ` It is past ${state.model.label}'s ${fmt(modelWindow())}-token window, so a naive run of ` +
-        `this conversation would be refused rather than billed.`
-      : ""));
+      ? ` Past ${state.model.label}'s ${fmt(modelWindow())}-token window: a naive run would ` +
+        `be refused, not billed.`
+      : ""), null, { heading: "Counted, not claimed" });
   b.addEventListener("click", () => { if (!state.busy) loadSaga(entry.slug); });
   return b;
 }
@@ -1296,16 +1290,14 @@ function renderProvenance() {
   if (!manifest) return;
   const methods = [...new Set(manifest.scenarios.map((s) => s.method).filter(Boolean))];
   el.provenance.innerHTML =
-    `<p>These are not transcripts of anything real, and they are not padding either. Each one ` +
-    `was built by <code>tools/generate-conversations.js</code>, which ships in the repository: ` +
-    `an authored arc, cut into chapters, with the prose written from it.</p>` +
+    `<p>Not transcripts of anything real, and not padding either. Each was built by ` +
+    `<code>tools/generate-conversations.js</code>, in the repository: an authored arc, cut ` +
+    `into chapters, with the prose written from it.</p>` +
     `<p class="prov-method">${escapeHtml(methods.join(" · ") || "see the scenario files")}</p>` +
-    `<p>The generator's first choice is self-play against this same API — two personas, one ` +
-    `playing the person and one playing the agent, talking to each other for a few hundred ` +
-    `turns. When these files were built the demo credential had stopped authenticating, so its ` +
-    `offline path composed them from authored templates instead. Every file records which path ` +
-    `produced it, and the number of turns and characters on each card is counted from the file ` +
-    `rather than claimed.</p>`;
+    `<p>The generator prefers self-play against this same API — two personas talking for a ` +
+    `few hundred turns. These files came from its offline path instead (the demo credential ` +
+    `had expired), and each file records which path produced it. Every figure on a card is ` +
+    `counted from the file, not claimed.</p>`;
 }
 
 async function loadSaga(slug) {
@@ -1479,9 +1471,8 @@ function initTheme() {
     closeTip();
   });
   tip(el.themeToggle, () =>
-    `Currently ${currentTheme()}. This overrides your system preference and remembers the ` +
-    `choice in this browser only. Both themes come from one set of light-dark() custom ` +
-    `properties, so there is no second palette to fall out of sync.`);
+    `Currently ${currentTheme()}. Overrides your system preference; remembered in this ` +
+    `browser only. One set of light-dark() properties drives both themes.`);
 }
 
 /* ── Boot ───────────────────────────────────────────────────────── */
@@ -1539,27 +1530,27 @@ async function init() {
     send(text);
   });
 
-  document.querySelectorAll("[data-tip]").forEach((n) => tip(n, n.dataset.tip));
+  document.querySelectorAll("[data-tip]").forEach((n) =>
+    tip(n, n.dataset.tip, null, n.dataset.tipH ? { heading: n.dataset.tipH } : undefined));
   tip(el.chipsInfo, () => SOURCE_TIP[state.suggestionSource] || SOURCE_TIP.generated);
   tip(el.meter, () =>
-    `Filled against the working budget on a 0→max scale, never a truncated axis. The number is ` +
-    `what context/trim answered after the last turn, not an estimate made here. Two ceilings ` +
-    `apply and they are different things: the working budget — ${fmt(currentWindow())} tokens, a ` +
-    `demo device you chose above — is what auto-compaction watches, and it fires at ` +
-    `${Math.round(CFG.compactAtRatio * 100)}%. ${state.model.label}'s real window, ` +
-    `${fmt(modelWindow())} tokens, is what the provider enforces, and it is what decides whether ` +
-    `a naive run of this conversation is expensive or impossible.`,
-    "POST /1/unstable/context/trim\n{ messages }  →  stats.tokensBeforeEstimate");
+    `Filled 0→max, never a truncated axis; the number is context/trim's, not a guess. ` +
+    `**Budget** — ${fmt(currentWindow())} tokens, a demo device — is what auto-compaction ` +
+    `watches (fires at ${Math.round(CFG.compactAtRatio * 100)}%). **Real window** — ` +
+    `${state.model.label}'s ${fmt(modelWindow())} — is what the provider enforces, and ` +
+    `decides expensive versus impossible.`,
+    "POST /1/unstable/context/trim\n{ messages }  →  stats.tokensBeforeEstimate",
+    { heading: "Two ceilings" });
   tip(el.ledger, () =>
     `One band per message in the live history — ${fmt(state.messages.length)} of them right now. ` +
     `Height is that message's share of the probe's token total. The creased band at the top is ` +
     `the fold: one summary standing in for everything it replaced.`);
   tip(el.modelHint, () =>
-    `This is the model's real window — the ceiling the provider enforces on both the chat call ` +
-    `and the summarizer behind context/compact. A single fold pass is sized at ` +
-    `${Math.round(TUNE.maxPayloadRatio * 100)}% of it, ` +
-    `${fmt(Math.round(modelWindow() * TUNE.maxPayloadRatio))} tokens, because that payload has ` +
-    `to fit the summarizer too.`);
+    `The provider enforces it on the chat call and the summarizer alike. A fold pass is ` +
+    `sized at ${Math.round(TUNE.maxPayloadRatio * 100)}% of it — ` +
+    `${fmt(Math.round(modelWindow() * TUNE.maxPayloadRatio))} tokens — because the payload ` +
+    `must fit the summarizer too.`,
+    null, { heading: "The model's real window" });
 
   // the manifest, then the thread: every figure on a card comes from it
   try {

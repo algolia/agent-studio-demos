@@ -100,13 +100,12 @@
     <p class="eyebrow">Algolia Agent Studio · context APIs <span class="tag">unstable</span></p>
     <h1 aria-label="Infinite conversation">Infinite<span class="fold-mark" aria-hidden="true"></span>conversation</h1>
     <p class="lede">
-      You are arriving late. The thread you join has hundreds of turns behind it
-      and more tokens than the working budget can hold, and it is still going.
-      First <code>context/trim</code> counts what is really there, then
-      <code>context/compact</code> folds the backlog into a summary — once, in
-      front of you, so the cost of it is visible. After that it happens by
-      itself whenever the budget fills, turn after turn, without asking. Click a
-      suggested reply and keep going as long as you like.
+      You are arriving late. This thread has hundreds of turns behind it, more
+      tokens than the budget can hold — and it is still going.
+      <code>context/trim</code> counts what is really there.
+      <code>context/compact</code> folds the backlog: once, in front of you.
+      After that it folds itself, turn after turn. Click a suggested reply and
+      keep going as long as you like.
     </p>
     <div class="masthead-meters">
       <div class="hero-stat">
@@ -154,7 +153,7 @@
       <div>
         <label class="field-label" for="budget">
           Working budget
-          <button class="info" type="button" data-tip="The meter fills against this budget, not the model's full window. Real windows are large enough that a demo would never fill one turn by turn, so a smaller budget is what makes auto-compaction happen while you are watching. The model's real window still governs everything, and it is what decides whether a naive run of this conversation would merely be expensive or would be refused outright.">?</button>
+          <button class="info" type="button" data-tip-h="A demo device, on purpose" data-tip="The meter fills against this budget, not the model's window — real windows are too big to fill while you watch. The real window still decides what the provider would refuse outright.">?</button>
         </label>
         <select id="budget"></select>
         <p class="hint" id="budget-hint"></p>

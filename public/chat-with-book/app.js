@@ -309,9 +309,8 @@ function docsLink(path, label = "docs ↗") {
   a.target = "_blank";
   a.rel = "noopener noreferrer";
   a.textContent = label;
-  tip(a, `Opens this endpoint's entry in the service's own OpenAPI reference — the ` +
-    `schema the API generates, not a copy of it. Request and response shapes, and every ` +
-    `field this page does not use.`, url);
+  tip(a, `The endpoint's entry in the live OpenAPI reference — the schema the API ` +
+    `generates, not a copy of it. Request and response shapes, every field.`, url);
   return a;
 }
 
@@ -334,10 +333,9 @@ function logCall(path, stats, error, note, verb = "POST", normalized = false, co
     const chip = document.createElement("span");
     chip.className = "wire-fix";
     chip.textContent = "normalized ✂";
-    tip(chip, "This response arrived with its summary wrapped in a Python repr of content " +
-      "blocks — a backend bug with a fix already in flight. The page unwrapped it before " +
-      "storing or showing it, which also keeps the repr out of every later request. The " +
-      "stats above are the API's own, untouched.");
+    tip(chip, "The summary arrived wrapped in a Python repr of content blocks — a backend " +
+      "bug, fix in flight. The page unwrapped it before storing it, so the repr never rides " +
+      "a later request. The stats are the API's own.");
     li.appendChild(chip);
   }
   // what this one call added to the strip at the top, on the same rates
@@ -346,12 +344,10 @@ function logCall(path, stats, error, note, verb = "POST", normalized = false, co
     chip.className = `wire-cost${cost === 0 ? " is-free" : ""}`;
     chip.textContent = cost === 0 ? "$0 · no LLM" : `~${usd(cost)}`;
     tip(chip, cost === 0
-      ? "context/trim is deterministic — it counts and drops messages without calling a model, " +
-        "so this call costs nothing on either side of the meter. It is the reason the meter can " +
-        "be honest about tokens without guessing at a tokenizer in the browser."
-      : () => `Charged to the real side of the meter at ${priceLine()} Estimated: the API does ` +
-        `not expose the summarizer's own usage yet, so the call's tokensBeforeEstimate is read ` +
-        `as its input and tokensAfterEstimate as its output.`);
+      ? "context/trim counts without calling a model, so it is free on both sides of the " +
+        "meter — and it is why the meter can be honest without shipping a tokenizer."
+      : () => `Charged to the real side at ${priceLine()} Estimated — the API does not ` +
+        `expose summarizer usage yet, so the call's before/after token counts stand in.`);
     li.appendChild(chip);
   }
   el.wireList.appendChild(li);
@@ -505,14 +501,16 @@ function initCostbar() {
 
   // bound once, read live: every one of these asks the kit for the wording that
   // matches the mode the meter is in at the moment it is opened
-  tip(el.meterInfo, () => M.tileCopy.eyebrow);
+  tip(el.meterInfo, () => M.tileCopy.eyebrow, null, { heading: "Two prices" });
   // the badge shrinks to a bare ✗ on a phone, so it carries its own explanation
-  tip(el.naiveBadge, () => M.tileCopy.badge(meterView()));
-  tip(el.tileNaive, () => M.tileCopy.naive(meterView()), M.tileCopy.naiveFormula);
-  tip(el.tileReal, () => M.tileCopy.real(meterView()), M.tileCopy.realFormula);
+  tip(el.naiveBadge, () => M.tileCopy.badge(meterView()), null, { heading: "Refused, not billed" });
+  tip(el.tileNaive, () => M.tileCopy.naive(meterView()), M.tileCopy.naiveFormula,
+    { heading: "The naive run" });
+  tip(el.tileReal, () => M.tileCopy.real(meterView()), M.tileCopy.realFormula,
+    { heading: "Actually spent" });
   tip(el.tileSaved, () => M.tileCopy.saved(meterView()),
-    () => M.tileCopy.savedFormula(meterView()));
-  tip(el.unlockedInfo, () => M.tileCopy.unlocked(meterView()));
+    () => M.tileCopy.savedFormula(meterView()), { heading: "The difference" });
+  tip(el.unlockedInfo, () => M.tileCopy.unlocked(meterView()), null, { heading: "Unlocked" });
 
   renderCost();
 }
@@ -811,9 +809,9 @@ function addEventCard(stats, foldNo, keep) {
       <div class="ba-row"><span>before</span><span class="ba-bar"><span style="width:100%"></span></span><span class="ba-val">${fmt(before)}</span></div>
       <div class="ba-row after"><span>after</span><span class="ba-bar"><span style="width:${before ? (after / before) * 100 : 0}%"></span></span><span class="ba-val">${fmt(after)}</span></div>
     </div>
-    <p class="event-note">Everything older than the last ${keep} message${keep === 1 ? "" : "s"} is now one summary message,
-    written by <code>${escapeHtml(state.model.model)}</code> on your own provider credentials. The assistant keeps
-    answering from the summary; ask it for a detail it lost and it will tell you.</p>`;
+    <p class="event-note">Everything older than the last ${keep} message${keep === 1 ? "" : "s"} is now one summary,
+    written by <code>${escapeHtml(state.model.model)}</code> on your credentials. Ask for a detail it
+    dropped — the assistant will say so.</p>`;
   // anchor the tooltip to the heading, not the whole card: a card-wide
   // trigger pops the panel over its own figures
   tip(card.querySelector(".event-h"), `POST /1/unstable/context/compact — bars share one 0→${fmt(before)} token scale`,
@@ -858,17 +856,15 @@ function addFoldCard({ before, sectionTokens }) {
   const levels = card.querySelector(".fold-levels");
   const live = card.querySelector(".fold-live");
   why.innerHTML =
-    `<strong>${fmt(before)} tokens</strong> is past ${escapeHtml(state.model.label)}'s ` +
-    `${fmt(modelWindow())}-token window, so nothing can be sent — and one ` +
-    `<code>context/compact</code> call would fail the same way, because it forwards ` +
-    `its whole payload to the summarizer. Folding it in sections of ~${fmt(sectionTokens)} ` +
-    `tokens instead, ${foldLanesLabel()}, each comfortably inside the window.`;
+    `<strong>${fmt(before)} tokens</strong> — past ${escapeHtml(state.model.label)}'s ` +
+    `${fmt(modelWindow())}-token window. Nothing that size can be sent, and one ` +
+    `<code>context/compact</code> call would fail the same way. So: sections of ` +
+    `~${fmt(sectionTokens)} tokens, ${foldLanesLabel()}.`;
   tip(card.querySelector(".event-h"), () =>
-    `Map, then reduce: every section is summarized by its own POST /1/unstable/context/compact ` +
-    `call, ${foldLanesLabel()} (the map), and then one final call over ` +
-    `those summaries joins them into a single digest that dedups repeated names and smooths the ` +
-    `seams between sections (the reduce).`,
-    `{ providerID, model: "${state.model.model}", keepLastMessages: 0, messages: [section] }`);
+    `Each section gets its own compact call, ${foldLanesLabel()} — **the map**. ` +
+    `One final call joins the summaries into a single digest — **the reduce**.`,
+    `{ providerID, model: "${state.model.model}", keepLastMessages: 0, messages: [section] }`,
+    { heading: "Map, then reduce" });
 
   el.thread.appendChild(card);
   el.thread.scrollTop = el.thread.scrollHeight;
@@ -1114,25 +1110,22 @@ function addFoldCard({ before, sectionTokens }) {
         `${(ms / 1000).toFixed(1)}s wall, ${(serialMs / 1000).toFixed(1)}s of summarizer work ` +
         `across ${calls} call${calls === 1 ? "" : "s"} — ${speedLabel} parallel speedup.`;
       tip(timing, () =>
-        `Wall time is the clock on the whole fold. Summarizer time is those same calls added up, ` +
-        `which is what a strictly sequential fold would have cost. The ratio is bounded by ` +
-        `foldConcurrency (${foldLanesLabel()}) and by the reduce, which cannot start until every ` +
-        `section has landed.`);
+        `**Wall time**: the whole fold, on one clock. **Summarizer time**: every call added ` +
+        `up — the cost of folding one section at a time. The gap between them is the ` +
+        `parallelism (${foldLanesLabel()}).`,
+        "speedup = summarizer time ÷ wall time", { heading: "Two clocks" });
 
       const note = document.createElement("p");
       note.className = "event-note";
       note.innerHTML =
-        `Folded ${sections} section${sections === 1 ? "" : "s"} → 1 digest, ` +
-        `${fmt(before)} → ${fmt(after)} tokens. The digest keeps section order, so the ` +
-        `shape of the document survives; individual sentences do not. ` +
         (carriesSections
-          ? `The window has room for more than the digest, so <strong>every section summary ` +
-            `travels with it</strong> — the detail is kept because it was free to keep. `
-          : `Only the digest travels: the section summaries together would not fit ` +
-            `comfortably in this window. `) +
-        `Nothing is lost, though — the sections are still here, in the page. Hover a row to ` +
-        `read its summary, <strong>dive in</strong> to ask a question against its full original ` +
-        `text, or <strong>refold</strong> it with an instruction about what to keep.`;
+          ? `<strong>Every section summary travels with the digest</strong> — the window has ` +
+            `room, so the detail was free to keep. `
+          : `Only the digest travels — the section summaries together would not fit this ` +
+            `window. `) +
+        `The sections themselves are still here: hover a row to read its summary, ` +
+        `<strong>dive in</strong> to question its full original text, or ` +
+        `<strong>refold</strong> it around what you care about.`;
       card.append(figures, timing, ba, note);
       card.querySelector(".event-h").textContent =
         `Fold ${state.folds} — oversized document folded in ${passes} pass${passes === 1 ? "" : "es"}`;
@@ -1163,10 +1156,9 @@ function addFoldCard({ before, sectionTokens }) {
         li.dataset.dig = "1";
 
         digButton(li, "dive in ↓",
-          `Ask a question against the whole of part ${i + 1} — all ${fmt(section.chars)} ` +
-          `characters of the original text, not the summary of it. The part is loaned to the ` +
-          `model for that one answer and folded away again afterwards: it does not join the ` +
-          `history, so the next question costs no more than this one did.`,
+          `Ask about part ${i + 1} in full — all ${fmt(section.chars)} characters of original ` +
+          `text, not its summary. Loaned to the model for one answer, then folded away again; ` +
+          `it never joins the history.`,
           (row) => inlineForm(row, {
             placeholder: `ask about part ${i + 1}…`,
             submitLabel: "Ask",
@@ -1176,9 +1168,9 @@ function addFoldCard({ before, sectionTokens }) {
           }));
 
         digButton(li, "refold with focus ✎",
-          `Summarize part ${i + 1} again with an instruction — “keep every quote and character ` +
-          `name”, say. One /context/compact call. The new summary replaces this one in the ` +
-          `history for good, which is the difference between this and diving in.`,
+          `Summarize part ${i + 1} again with an instruction — “keep every quote”, say. One ` +
+          `compact call, and the new summary replaces this one for good. Diving in borrows; ` +
+          `refolding rewrites.`,
           (row) => inlineForm(row, {
             placeholder: "keep every quote and character name…",
             submitLabel: "Refold",
@@ -1191,9 +1183,8 @@ function addFoldCard({ before, sectionTokens }) {
       if (reduceRow && fold.digest) {
         reduceRow.dataset.dig = "1";
         digButton(reduceRow, "dive in ↓",
-          "Ask a question against every part summary at once — the material the digest was " +
-          "written from, before it was smoothed into one record. Loaned for one answer, " +
-          "like a part is.",
+          "Ask about the whole document, answered from every part summary at once — the " +
+          "digest's raw material. Loaned for one answer, like a part is.",
           (row) => inlineForm(row, {
             placeholder: "ask about the document as a whole…",
             submitLabel: "Ask",
@@ -1201,9 +1192,8 @@ function addFoldCard({ before, sectionTokens }) {
             onSubmit: (q) => askSection(fold, -1, q),
           }));
         digButton(reduceRow, "rebuild digest ↻",
-          "Run the reduce pass again over the current part summaries, refolded ones included. " +
-          "This is not automatic: a refold is one call, a rebuild is another, and spending it " +
-          "should be your decision.",
+          "Run the reduce again over the current summaries, refolds included. Not automatic — " +
+          "a rebuild is one more paid call, and spending it is your decision.",
           (row) => inlineForm(row, {
             noInput: true,
             submitLabel: "Rebuild the digest",
@@ -1228,9 +1218,9 @@ function addFoldCard({ before, sectionTokens }) {
         li.querySelector(".lbl").after(chip);
       }
       chip.textContent = "refocused ✎";
-      tip(chip, () => `This part was folded again, keeping: “${focus}”. The new summary is what ` +
-        `the history carries now — the first one is gone. The digest was written from the old ` +
-        `one, which is why it is marked stale until you rebuild it.`);
+      tip(chip, () => `Folded again, keeping: “${focus}”. The history now carries the new ` +
+        `summary; the old one is gone. The digest was written from the old one — stale ` +
+        `until you rebuild it.`);
     },
 
     /** the subtle stale hint on the digest row, and its removal */
@@ -1241,9 +1231,9 @@ function addFoldCard({ before, sectionTokens }) {
       staleHint = document.createElement("span");
       staleHint.className = "stale-hint";
       staleHint.textContent = "digest is stale";
-      tip(staleHint, "One of the parts was folded again after this digest was written, so the " +
-        "digest still reflects the older summary. Nothing is broken — the part summaries in the " +
-        "history are current. Press “rebuild digest” to spend one call bringing this line up to date.");
+      tip(staleHint, "A part was refolded after this digest was written. Nothing is broken — " +
+        "the part summaries are current; this line is not. “Rebuild digest” spends one call " +
+        "to catch it up.");
       reduceRow.querySelector(".lbl").after(staleHint);
     },
 
@@ -1922,8 +1912,8 @@ function markDocFolded() {
   const chip = document.createElement("span");
   chip.className = "doc-folded";
   chip.textContent = "folded";
-  tip(chip, "This text is no longer in the history sent to the model — a digest of it is. " +
-    "The card stays as a record of what was ingested.");
+  tip(chip, "The model no longer carries this text — it carries a digest of it. The card " +
+    "stays as a record of what was ingested.");
   meta.insertBefore(chip, meta.querySelector(".doc-toggle"));
 }
 
@@ -1965,9 +1955,12 @@ function showTip(node, text, code, opts) {
   // rendered — escaped first, then structured — rather than showing the syntax
   const asMd = !!(opts && opts.markdown) && !!window.renderMarkdown;
   el.tooltip.classList.toggle("is-rich", rich);
+  // plain tips allow exactly one marker, **bold**, applied after escaping: the
+  // lead figure or term should stand out of the panel without a Markdown pass
+  const plain = escapeHtml(body).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   el.tooltip.innerHTML =
     (heading ? `<span class="tip-h">${escapeHtml(heading)}</span>` : "") +
-    `<span class="tip-body${asMd ? " md" : ""}">${asMd ? window.renderMarkdown(body) : escapeHtml(body)}</span>` +
+    `<span class="tip-body${asMd ? " md" : ""}">${asMd ? window.renderMarkdown(body) : plain}</span>` +
     (snippet ? `<code>${escapeHtml(snippet)}</code>` : "");
   el.tooltip.classList.add("on");
   el.tooltip.setAttribute("aria-hidden", "false");
@@ -2157,19 +2150,13 @@ function bookTile(book, est) {
   tip(tile, () => {
     const live = estimateFor(book);
     const bill = live.usd === null
-      ? `No rate is configured for this model, so no bill is quoted — the call count above is ` +
-        `still real.`
-      : `The estimate is ${usd(live.usd)}: ${fmt(live.tokens)} tokens read once by the ` +
-        `summarizer at ${M.priceLine(live.rate)} It is an estimate and not an invoice — the API ` +
-        `does not report the summarizer's own token usage, so this is computed from the size of ` +
-        `the text and the rate, and the real figure will differ.`;
-    return `${book.title} — ${fmt(book.chars)} characters of plain text, served from this ` +
-      `origin as a static file. Project Gutenberg ebook #${book.gutenbergId}, licence header ` +
-      `and footer removed and nothing else edited. Clicking it loads the file and ingests it ` +
-      `as the first user message. ${live.what[0].toUpperCase()}${live.what.slice(1)}: anything ` +
-      `past ${fmt(live.oversizeAt)} tokens cannot be sent at all, and auto-compaction fires at ` +
-      `${fmt(live.autoCompactAt)}. Token figure ${ratioNote()}. ${bill}`;
-  });
+      ? `No rate is configured for this model, so no bill is quoted — the call count is still real.`
+      : `**~${usd(live.usd)}**: ${fmt(live.tokens)} tokens read once by the summarizer at ` +
+        `${M.priceLine(live.rate)} An estimate, not an invoice.`;
+    return `Gutenberg ebook #${book.gutenbergId}, licence header removed, nothing else ` +
+      `edited. Clicking makes it the first user message. ` +
+      `${live.what[0].toUpperCase()}${live.what.slice(1)}. ${bill} Token figure ${ratioNote()}.`;
+  }, null, { heading: `${book.title} · ${fmt(book.chars)} characters` });
   tile.addEventListener("click", () => pickBook(book));
   return tile;
 }
@@ -2254,20 +2241,17 @@ function showCostGate(book, est) {
   const body = document.createElement("p");
   body.className = "gate-body";
   body.textContent =
-    `${est.what[0].toUpperCase()}${est.what.slice(1)}, which is about ` +
-    `${est.compactCalls} summarizer ${est.compactCalls === 1 ? "call" : "calls"} over ` +
-    `${fmt(est.tokens)} tokens, billed to your own provider credentials. ` +
-    `That figure is an estimate, not a quote: it is the size of the text at ` +
-    `${est.rate ? est.rate.label : "this model"}'s input rate, and the API does not report what ` +
-    `the summarizer actually used. Nothing has been sent yet.`;
+    `${est.what[0].toUpperCase()}${est.what.slice(1)} — about ${est.compactCalls} summarizer ` +
+    `${est.compactCalls === 1 ? "call" : "calls"} over ${fmt(est.tokens)} tokens, on your own ` +
+    `credentials. An estimate, not a quote. Nothing has been sent yet.`;
 
   const why = document.createElement("button");
   why.type = "button";
   why.className = "info";
   why.textContent = "?";
-  tip(why, () => `The threshold is ${usd(costConfirmUsd())}, and it is compared against the ` +
-    `estimate at the model you have selected — not against a fixed list of books. ` +
-    `${M.priceLine(est.rate)} Set costConfirmUsd in config.js to move the line.`);
+  tip(why, () => `The line is ${usd(costConfirmUsd())}, compared against the estimate at the ` +
+    `model you picked — no fixed list of books. ${M.priceLine(est.rate)} Move it with ` +
+    `costConfirmUsd in config.js.`);
   h.appendChild(why);
 
   const row = document.createElement("div");
@@ -2386,8 +2370,8 @@ function renderChips(book) {
     btn.textContent = chip.short;
     btn.setAttribute("aria-label", spent ? `${chip.text} (already asked)` : chip.text);
     tip(btn, spent
-      ? `Already asked: “${chip.text}” — the answer is in the thread above. Asking it again ` +
-        `would send the same question and cost the same tokens for the same answer.`
+      ? `Already asked — the answer is in the thread above. Asking again would spend the ` +
+        `same tokens for the same answer.`
       : `Sends: “${chip.text}”` + (chip.kind === "needle"
         ? " — one answer, in one place. A search index would find this."
         : " — a property of the whole book. There is no single passage to retrieve."));
@@ -2433,10 +2417,8 @@ function renderSuggestionChips() {
     const note = document.createElement("span");
     note.className = "chip-note";
     note.textContent = "after your first question";
-    tip(note, "These are written by the agent, from the conversation. The suggestions node " +
-      "runs as part of a completion, so there is nothing to write yet — with no question " +
-      "asked there is no conversation to suggest from. Pick one of the openings above and " +
-      "this row fills with follow-ups that move as the conversation does.");
+    tip(note, "Written by the agent, from the conversation — and there is no conversation " +
+      "yet. Ask one of the openings above and this row starts moving with the answers.");
     row.appendChild(note);
     return;
   }
@@ -3855,26 +3837,25 @@ function init() {
     send(text);
   });
 
-  document.querySelectorAll("[data-tip]").forEach((n) => tip(n, n.dataset.tip));
+  document.querySelectorAll("[data-tip]").forEach((n) =>
+    tip(n, n.dataset.tip, null, n.dataset.tipH ? { heading: n.dataset.tipH } : undefined));
   // two ceilings, two different remedies — the meter shows one and enforces both
   tip(el.meter, () =>
-    `Filled against the working budget on a 0→max scale, never a truncated axis. The number ` +
-    `comes from the trim probe after every turn. Two ceilings apply, and they are not the same ` +
-    `thing. The working budget — ${fmt(currentWindow())} tokens, a demo device you chose above — ` +
-    `triggers an ordinary compact at ${Math.round(CFG.compactAtRatio * 100)}%, which keeps the ` +
-    `last ${CFG.keepLastMessages} messages verbatim and summarizes the rest. ` +
-    `${state.model.label}'s real window — ${fmt(modelWindow())} tokens, which the ` +
-    `provider enforces — triggers the hierarchical fold past ${fmt(oversizeLimit())}, because at ` +
-    `that size a single compact call would overflow the summarizer too.`,
-    "POST /1/unstable/context/trim\n{ messages }  →  stats.tokensBeforeEstimate");
+    `Filled 0→max, never a truncated axis; the number is the trim probe's, not a guess. ` +
+    `**Budget** — ${fmt(currentWindow())} tokens, your pick above — fires a plain compact at ` +
+    `${Math.round(CFG.compactAtRatio * 100)}%. **Real window** — ${state.model.label}'s ` +
+    `${fmt(modelWindow())} — forces the sectioned fold past ${fmt(oversizeLimit())}: one ` +
+    `compact call would overflow the summarizer too.`,
+    "POST /1/unstable/context/trim\n{ messages }  →  stats.tokensBeforeEstimate",
+    { heading: "Two ceilings" });
   tip(el.ledger,
     "Each band is one message; its height is that message's share of the probe's token total. A creased band is folded history.");
   // bound once, read live: the numbers change with the model selection
   tip(el.modelHint, () =>
-    `This is the model's real window — the ceiling the provider enforces on both the chat call and ` +
-    `the summarizer behind context/compact. The working budget beside it is a demo device; this ` +
-    `number is not. Past ${fmt(oversizeLimit())} tokens the page folds the document section by ` +
-    `section instead of sending it, because at that size a single compact call fails too.`);
+    `The provider enforces it on the chat call and the summarizer alike — the budget beside ` +
+    `it is a demo device, this number is not. Past ${fmt(oversizeLimit())} tokens the page ` +
+    `folds in sections: one compact call would fail too.`,
+    null, { heading: "The model's real window" });
 }
 
 init();

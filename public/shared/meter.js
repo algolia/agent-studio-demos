@@ -240,49 +240,35 @@
    * sentence; the page's own tooltip engine decides how to display it.
    */
   const tileCopy = {
-    eyebrow: "Two prices for the same conversation. Naive is what it would have cost re-sending " +
-      "the full original document and the whole unsummarized history on every turn. Real is what " +
-      "was actually spent — every completion, plus every summarizer call the folds, refolds and " +
-      "unfolds needed. While both runs are possible the difference is the saving, and it is only " +
-      "worth quoting because the summarizer's own bill is on the real side of it. Once the naive " +
-      "run no longer fits the model's window there is nothing to subtract, and the third tile " +
-      "changes to say so.",
+    eyebrow: "Two prices for the same conversation. **Naive** re-sends the full document and " +
+      "history every turn. **Real** is what was actually spent — the summarizer's own bill " +
+      "included. The third tile is the difference, while a naive run is still possible at all.",
 
     naive(v) {
-      const base = `What this conversation would have cost with no context APIs in it: the full ` +
-        `original document plus the entire unsummarized history re-sent on every turn, with the ` +
-        `answer charged at the size it actually came back. No summarizer appears on this side — ` +
-        `in that world there is nothing to summarize with. ` +
-        `${fmt(v.naive.tokens)} billed tokens over ${v.counts.turns} ` +
-        `turn${v.counts.turns === 1 ? "" : "s"}.`;
+      const base = `**${fmt(v.naive.tokens)} tokens over ${v.counts.turns} ` +
+        `turn${v.counts.turns === 1 ? "" : "s"}**: the whole document plus the whole history, ` +
+        `re-sent every turn. No summarizer on this side — nothing to summarize with.`;
       const fit = v.naive.overWindow
-        ? ` Its largest single payload is ${fmt(v.naive.peak)} tokens against ${v.modelLabel}'s ` +
-          `${fmt(v.naive.window)}-token window, so a naive run of this conversation would not ` +
-          `just cost more — the provider would refuse it outright. It is priced here anyway, ` +
-          `because "you cannot buy this at any price" is the stronger claim.`
+        ? ` Its largest payload, ${fmt(v.naive.peak)} tokens, is past ${v.modelLabel}'s ` +
+          `${fmt(v.naive.window)}-token window — the provider would refuse it outright.`
         : "";
       return `${base}${fit} ${v.price.line}`;
     },
     naiveFormula: () => "naive = Σ (original document + full history) × $in  +  answer × $out",
 
     badge(v) {
-      return `The largest single payload on the naive side is ${fmt(v.naive.peak)} tokens, and ` +
-        `${v.modelLabel}'s window is ${fmt(v.naive.window)}. A naive run of this conversation ` +
-        `would be refused by the provider, not merely billed — the price beside this badge is ` +
-        `what it would have cost if it had been possible at all.`;
+      return `**${fmt(v.naive.peak)} tokens in one payload, against a ${fmt(v.naive.window)} ` +
+        `window.** A naive run would be refused, not billed — the price beside this badge is ` +
+        `what it would have cost, had it been possible at all.`;
     },
 
     real(v) {
       const k = v.counts;
-      return `What was actually spent, with nothing left off the bill: ${k.chatCalls} ` +
-        `/completions call${k.chatCalls === 1 ? "" : "s"} plus ${k.summCalls} ` +
-        `/context/compact call${k.summCalls === 1 ? "" : "s"} — the folds, refolds, rebuilt ` +
-        `digests and agent-driven unfolds — which come to ${usd(k.summUsd)} of the total, ` +
-        `${fmt(k.summTokens)} tokens. Charging the summarizer to ourselves is the whole point: a ` +
-        `fold whose own bill is hidden saves money it never saved. Summarizer usage is ` +
-        `estimated — the API does not yet expose the summarizer's own token counts, so input is ` +
-        `read as the call's tokensBeforeEstimate and output as its tokensAfterEstimate; a ` +
-        `pending PR closes that gap. ${v.price.line}`;
+      return `**${k.chatCalls} chat call${k.chatCalls === 1 ? "" : "s"} + ${k.summCalls} ` +
+        `summarizer call${k.summCalls === 1 ? "" : "s"}** (${usd(k.summUsd)} · ` +
+        `${fmt(k.summTokens)} tokens of summarizing). The fold bills itself here — a saving ` +
+        `that hides its own cost never saved anything. Summarizer usage is estimated; the API ` +
+        `does not expose it yet. ${v.price.line}`;
     },
     realFormula: () => "real = Σ every /completions payload  +  Σ every /context/compact call",
 
@@ -291,19 +277,16 @@
       if (v.mode === "impossible") return tileCopy.unlocked(v);
       const s = v.saved;
       if (v.naive.usd <= 0) {
-        return `Naive minus real. Nothing has been asked yet, so there is nothing to compare — ` +
-          `ingest a document and ask a question and both sides start moving. ${v.price.line}`;
+        return `Naive minus real. Nothing asked yet, so nothing to compare — load a document, ` +
+          `ask a question, and both sides start moving. ${v.price.line}`;
       }
-      const head = `Naive minus real: ${v.naive.usdText} − ${v.real.usdText} = ${s.usdText}, ` +
-        `${Math.abs(Math.round(s.pct))}% of what the naive run would have cost. Both sides use ` +
-        `the same per-model rates and the real side carries the summarizer's bill, so this is ` +
-        `the honest difference rather than the flattering one.`;
+      const head = `**${v.naive.usdText} − ${v.real.usdText} = ${s.usdText}** — ` +
+        `${Math.abs(Math.round(s.pct))}% of the naive bill. Same rates on both sides, and the ` +
+        `real side carries the summarizer, so this is the honest difference.`;
       const tail = s.behind
-        ? ` It is negative right now, and that is not a bug: the fold has been paid for and the ` +
-          `turns that benefit from it have not happened yet. Every question from here costs the ` +
-          `folded price instead of the whole document, so it crosses over shortly.`
-        : ` The saving compounds: the fold is paid once, and every turn afterwards carries the ` +
-          `digest instead of the document.`;
+        ? ` Negative for now, and that is not a bug: the fold is paid, and the turns it pays ` +
+          `for have not happened yet.`
+        : ` Paid once; every later turn carries the digest instead of the document.`;
       return `${head}${tail} ${v.price.line}`;
     },
     savedFormula(v) {
@@ -313,13 +296,11 @@
     },
 
     unlocked(v) {
-      return `${v.unlocked.headline} So this tile has stopped subtracting. A dollar delta is a ` +
-        `comparison between two runs, and there is only one run here: the largest naive payload ` +
+      return `${v.unlocked.headline} There is nothing to subtract: the largest naive payload ` +
         `(${fmt(v.naive.peak)} tokens) is past ${v.modelLabel}'s ${fmt(v.naive.window)}-token ` +
-        `window, where the provider answers 400 rather than an invoice. Quoting a saving against ` +
-        `a request that cannot be made would be the flattering reading and the weaker one — what ` +
-        `the fold bought here is not a discount, it is the conversation. Real spend is still on ` +
-        `the tile beside this one, in full and including every summarizer call. ${v.price.line}`;
+        `window, where the provider answers 400, not an invoice. **The fold did not buy a ` +
+        `discount here — it bought the conversation.** Real spend stays on the tile beside ` +
+        `this one, summarizer included. ${v.price.line}`;
     },
   };
 

@@ -90,13 +90,13 @@ test("a fold billed before it has paid off shows a negative saving, not a zero",
   assert.equal(v.saved.behind, true);
   assert.equal(v.saved.chipText, "paying itself back");
   assert.equal(v.saved.fillPct, 0, "the track floors at zero; the number carries the sign");
-  assert.match(M.tileCopy.saved(v), /negative right now, and that is not a bug/);
+  assert.match(M.tileCopy.saved(v), /Negative for now, and that is not a bug/);
 });
 
 test("before the first turn there is no ratio to quote, and it says so", () => {
   const empty = view({});
   assert.equal(empty.saved.chipText, "—");
-  assert.match(M.tileCopy.saved(empty), /Nothing has been asked yet/);
+  assert.match(M.tileCopy.saved(empty), /Nothing asked yet/);
 
   const foldedOnly = view({ realUsd: 0.004, summCalls: 2, summUsd: 0.004, naivePeak: 90000 });
   assert.equal(foldedOnly.saved.chipText, "no turn yet");
@@ -126,7 +126,7 @@ test("the badge and the unlocked copy quote the same two numbers", () => {
   assert.match(v.unlocked.headline, /363,000 tokens/);
   assert.match(v.unlocked.headline, /200,000-token window/);
   assert.match(M.tileCopy.badge(v), /363,000 tokens/);
-  assert.match(M.tileCopy.badge(v), /window is 200,000/);
+  assert.match(M.tileCopy.badge(v), /against a 200,000 window/);
   assert.match(M.tileCopy.saved(v), /no subtraction|not expensive, it is impossible/);
   assert.match(M.tileCopy.savedFormula(v), /no subtraction is defined/);
 });

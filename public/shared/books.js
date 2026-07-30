@@ -383,34 +383,30 @@
     "fits-budget": {
       label: "fits the budget",
       heading: "Small enough that nothing happens",
-      note: "Under the auto-compaction threshold, so the whole text rides along " +
-        "untouched and no summarizer call is made. At the default 8,000-token budget " +
-        "nothing on this shelf lands here — raise the budget and books start arriving.",
+      note: "Under the auto-compaction threshold: the whole text rides along untouched, " +
+        "no summarizer call. At the default 8,000-token budget nothing lands here — " +
+        "raise the budget and books start arriving.",
     },
     "budget-compact": {
       label: "compacts on your first question",
       heading: "Sent whole, then compacted on your first question",
-      note: "These fit the model's real window in one piece, so nothing is folded on " +
-        "arrival. They are all far over the working budget, though, so the first " +
-        "question triggers one summarizer call over the whole text. That floor is " +
-        "always on, which is the point of it.",
+      note: "These fit the model's real window in one piece, so nothing folds on " +
+        "arrival. They are far over the working budget, though — the first question " +
+        "triggers one summarizer call over the whole text.",
     },
     "oversize-fold": {
       label: "folds on arrival",
       heading: "Too large to send at all — folded on arrival",
-      note: "Past 0.8 × the model's real window nothing can be sent, and one compact " +
-        "call would overflow the summarizer the same way. So the text is summarized in " +
-        "sections as it arrives, the section summaries are joined into one digest, and " +
-        "the conversation starts from there. Every section stays reopenable.",
+      note: "Past 0.8 × the real window nothing can be sent — one compact call would " +
+        "overflow the summarizer too. So: summarized in sections on arrival, joined " +
+        "into one digest. Every section stays reopenable.",
     },
     "cost-gated": {
       label: "asks before it spends",
       heading: "Worth reading the price before you click",
-      note: "Same mechanisms as above — each tile states its own — with a bill big " +
-        "enough to be worth a decision. The summarizer reads every word once, on your " +
-        "provider credentials, so these ask first and say what they think it will cost. " +
-        "Whether a book lands here depends on the model you picked: change it and this " +
-        "group changes.",
+      note: "Same mechanics as above, with a bill worth a decision: the summarizer " +
+        "reads every word once, on your credentials, so these ask first. Which books " +
+        "land here depends on the model — change it and this group changes.",
     },
   };
 

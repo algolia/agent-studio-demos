@@ -84,8 +84,13 @@ node scripts/check-copy.js            # report and gate
 node scripts/check-copy.js --verbose  # every long sentence and tooltip
 ```
 
-It is deliberately **not** wired into CI yet, because the copy does not pass it
-today: the landing page reads at grade 13.5, and several tooltips are two or three
-times the length they should be. The gate exists first so the work has a target and
-a way to know when it is done. Wire it into CI once it passes — a gate that has
-always been red teaches nobody anything.
+It checks the HTML pages *and* every string-literal run in the JS under
+`public/` — most of this site's copy is written from JS at render time, and the
+worst tooltips always lived there. Text addressed to the model rather than the
+reader is conversation, and code marks it exempt between
+`/* check-copy: off */` and `/* check-copy: on */`.
+
+The gate runs in CI (the `copy` job in `ci.yml`). It was wired in only after the
+copy passed it: it landed red-by-design one commit earlier, so the rewrite had a
+target and a way to know when it was done — a gate that has always been red
+teaches nobody anything, but so does one that was born green by exemption.

@@ -1,8 +1,9 @@
-# Two gates, both runnable verbatim on a laptop — that is the point of keeping
+# Three gates, all runnable verbatim on a laptop — that is the point of keeping
 # them dependency-free:
 #
 #   npx eslint .
 #   node --test tests/*.test.js
+#   node scripts/check-copy.js
 #
 # No package.json, no lockfile, no install step. eslint arrives through npx and
 # the tests run on node:test, so a clean checkout can reproduce a red CI in one
@@ -55,3 +56,17 @@ jobs:
         # Shell-expanded rather than node's own glob: explicit paths work on every
         # Node that has node:test, pattern support does not.
         run: node --test tests/*.test.js
+
+  copy:
+    name: copy gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Readability and length budgets
+        # Under two minutes a page, ninth grade as a ceiling, forty words a
+        # tooltip, fifty a JS string run. The conversation is exempt; the page's
+        # own voice is not. Rules and rationale: docs/_DESIGN.md.
+        run: node scripts/check-copy.js
