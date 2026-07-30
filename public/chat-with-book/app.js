@@ -1660,21 +1660,25 @@ async function summarizeSection(text, i, count, pass) {
   // thousand tokens per section: on the reference book that is 31 s a section
   // instead of 7 s, because output tokens dominate the latency. Capped, the same
   // 62k-token section comes back in 6.5 s and still carries every chapter title.
-  // The reminder after the text is not redundant. With the cap stated only up
-  // front, 60k tokens away from where the answer starts, sections that are mostly
-  // verse numbers come back quoted rather than outlined — measured at 3,050 tokens
-  // against a 250-word instruction, which then makes the reduce four times slower.
-  const framed =
-    `Section ${i + 1} of ${count} of a long document. Write a compact outline of at most ` +
-    `${CFG.foldSectionWords} words: list the chapter or section titles you find, in order, each ` +
-    `with one short clause of what happens. Keep names and places. Do not quote the source. ` +
-    `No preamble, no closing remarks.\n\n${text}\n\n` +
-    `End of section ${i + 1} of ${count}. Now write that outline: at most ` +
-    `${CFG.foldSectionWords} words, titles in order, one clause each, no quoted passages.`;
+  // Stating the cap late matters too: with it only up front, 60k tokens away from
+  // where the answer starts, sections that are mostly verse numbers come back
+  // quoted rather than outlined — measured at 3,050 tokens against a 250-word
+  // instruction, which then makes the reduce four times slower.
+  // Hence the shape: compact summarizes every message it is given, so the steering
+  // cannot sit where content sits. The section goes in bracketed, alone; the
+  // instruction follows as its own short message, in the imperative, so the only
+  // natural completion is the outline and not an acknowledgement of the request.
+  /* check-copy: off */
+  const bracketed = `── Section ${i + 1} of ${count} ──\n${text}\n── End of section ${i + 1} of ${count} ──`;
+  const ask =
+    `Condense the text above into an outline of at most ${CFG.foldSectionWords} words. ` +
+    `List the chapter or section titles in order, one short clause each. ` +
+    `Keep names and places. Do not quote. Output only the outline.`;
+  /* check-copy: on */
   const out = await compactOnce({
     providerID: state.model.providerId,
     model: state.model.model,
-    messages: [userMsg(framed)],
+    messages: [userMsg(bracketed), userMsg(ask)],
     keepLastMessages: 0,
   }, `pass ${pass} · map · section ${i + 1}/${count} · keepLastMessages: 0 · via ${state.model.model}`);
   return { text: summaryTextOf(out), stats: out.stats };
@@ -1692,14 +1696,15 @@ async function reduceSummaries(summaries, pass) {
   // comes back the same size as the concatenation it replaced — 8,182 → 8,484
   // tokens in 123 s, measured: pure latency, no compression. Capped, the join
   // still dedups and smooths, and it does it in a fraction of the time.
-  const brief =
-    `The messages that follow are ${summaries.length} section summaries of one long document, in ` +
-    `order. Merge them into a single continuous record of the whole document, at most ` +
-    `${CFG.foldDigestWords} words: keep the order, keep the chapter or section titles, mention ` +
-    `each name or place once rather than once per section, and drop the section headers ` +
-    `themselves. No preamble, no closing remarks.`;
-  const messages = [userMsg(brief)].concat(
-    summaries.map((s, i) => userMsg(`── Section ${i + 1} of ${summaries.length} ──\n${s}`)));
+  /* check-copy: off */
+  const ask =
+    `Merge the sections above into one continuous record of at most ` +
+    `${CFG.foldDigestWords} words. Preserve their order and their chapter or section titles. ` +
+    `Name each person and place once, not once per section. Output only the record.`;
+  const messages = summaries
+    .map((s, i) => userMsg(`── Section ${i + 1} of ${summaries.length} ──\n${s}`))
+    .concat(userMsg(ask));
+  /* check-copy: on */
   const out = await compactOnce({
     providerID: state.model.providerId,
     model: state.model.model,
