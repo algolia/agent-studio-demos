@@ -123,6 +123,16 @@ function extractJsRuns(src) {
   let s = src.replace(/\/\*\s*check-copy:\s*off\s*\*\/[\s\S]*?\/\*\s*check-copy:\s*on\s*\*\//g, " ");
   s = s.replace(/\/\*[\s\S]*?\*\//g, " ");
   s = s.replace(/^\s*\/\/.*$/gm, " ");
+  // A backtick or quote inside a regex literal is not a delimiter, but a scanner
+  // with no parser cannot tell — and one of them inverts every literal boundary
+  // after it, silently, to the end of the file. That is not the harmless kind of
+  // approximation: one such backtick, in the Markdown-stripping regex of peekOf,
+  // left this gate reading 597 of chat-with-book/app.js's 3,613 words — 16% of the
+  // file it was hired to measure. So regex bodies are blanked first, where
+  // an operand cannot appear (after `( , = ! & | [ ; {` or at the start of a
+  // line), keeping their length so the run-joining offsets still line up.
+  s = s.replace(/([(,=!&|[;{]\s*)\/(?![*/])(?:\[[^\]\n]*\]|\\.|[^/\n\\[])+\/[gimsuy]*/g,
+    (m, pre) => pre + " ".repeat(m.length - pre.length));
   // Single-quoted literals are skipped on purpose: this codebase writes prose in
   // double quotes and backticks, while apostrophes in trailing comments ("don't")
   // would open phantom single-quote literals that swallow whole stretches of code.
