@@ -81,6 +81,11 @@ code, .mono { font-family: var(--mono); font-size: 0.86em; }
 p, li { text-wrap: pretty; }
 h1, h2, h3 { text-wrap: balance; }
 p code, li code { white-space: nowrap; }
+/* a rhetorical unit the browser must not split ("Two calls fix that:") —
+   `pretty` optimizes typography, but it cannot know a phrase is one thought.
+   Authored, sparingly, on short phrases only: a long .nb overflows instead
+   of wrapping, which is worse than any break it prevents. */
+.nb { white-space: nowrap; }
 a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 
 :focus-visible {

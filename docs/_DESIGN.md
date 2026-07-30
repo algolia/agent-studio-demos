@@ -91,7 +91,9 @@ one of them. The wraps are not proofread; they are instructed:
   open a line with "—" or strand "window" from its "200k": `&nbsp;` in HTML,
   a `\u00a0` escape in JS strings. Nobody writes those by hand — see `--fix`.
 - A break that carries meaning is not a wrap, it is a line: author it. Two
-  sentences that must separate are two `<p>`s.
+  sentences that must separate are two `<p>`s; a short phrase that is one
+  thought holds together with `<span class="nb">` ("Two calls fix that:").
+  No CSS hint can learn rhetoric — `pretty` tidies typography and nothing more.
 
 ## Running the check
 

@@ -31,6 +31,8 @@ understood without a caption; a caption without the state change is homework.
 - Wraps are instructed, not proofread: `text-wrap` rules live in
   shared/tokens.css; em-dashes and number–unit pairs are glued by
   `check-copy.js --fix` (`&nbsp;` in HTML, `\u00a0` in JS — run it, never hand-write them).
+  A short phrase that must hold together gets `<span class="nb">` — authored,
+  sparingly; CSS cannot know a phrase is one thought.
 - When the gate goes red, reread the sentence — don't delete commas, don't
   widen the budget, don't exempt.
 
