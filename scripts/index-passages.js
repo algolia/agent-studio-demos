@@ -30,6 +30,20 @@
    The payload lives in scripts/index-settings.json so it is reviewable as data.
    Every value there differs from an Algolia default on purpose:
 
+     attributesForFaceting      EMPTY, on purpose, and it did not start that way.
+                                The Algolia MCP server introspects this list and
+                                generates one `facet_<attribute>` tool parameter
+                                per faceted attribute. With ["book","author",
+                                "chapter"] declared, the model reached for
+                                `facet_book: "Moby-Dick; or, The Whale"` and every
+                                call died with "'Moby-Dick; or, The Whale' is not
+                                valid under any of the given schemas" — seven
+                                times in one turn, after which the agent told the
+                                reader it could not find the passage. Since
+                                `book,author` is a searchable attribute, the title
+                                belongs in the query text, where it works. No
+                                faceted attributes, no facet parameters, no
+                                schema for the model to fail.
      unordered(text)            The default ranks matches near the start of an
                                 attribute higher. On a 200-word prose passage
                                 that is an arbitrary penalty on the second half
@@ -192,10 +206,11 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
  * nothing to compare against it is the payload, which is the honest version of
  * "diff" when there is no left-hand side.
  */
-function printSettingsPlan(settings, current) {
+function printSettingsPlan(settings, current, reason) {
   console.log(`PUT /1/indexes/${INDEX_NAME}/settings`);
   if (!current) {
-    console.log("  no current settings read (that needs credentials), so this is the whole payload:");
+    console.log(`  no current settings to diff against (${reason || "none were read"}), ` +
+      "so this is the whole payload:");
     for (const [k, v] of Object.entries(settings)) {
       console.log(`    ${k}: ${JSON.stringify(v)}`);
     }
@@ -242,16 +257,20 @@ async function main() {
     const creds = credentials();
     console.log(`Dry run — nothing is sent. Index: ${INDEX_NAME}\n`);
     let current = null;
+    let reason = "no credentials in the environment, and reading them is the only way to diff";
     if (creds) {
       console.log("credentials found in the environment; reading the index's current settings\n");
       try {
         current = await call(creds, "GET", `/1/indexes/${INDEX_NAME}/settings`);
       } catch (e) {
-        console.log(`  could not read current settings (${e.message.split(":")[0]}), ` +
-          "showing the payload instead\n");
+        // A 404 here is the ordinary first-run case — the index does not exist yet —
+        // and saying so beats blaming the credentials that were plainly just used.
+        const head = e.message.split(":")[0];
+        reason = /404/.test(head) ? `the index does not exist yet — ${head}` : head;
+        console.log(`  could not read current settings (${head}), showing the payload instead\n`);
       }
     }
-    if (!RECORDS_ONLY) printSettingsPlan(settings, current);
+    if (!RECORDS_ONLY) printSettingsPlan(settings, current, reason);
     if (!SETTINGS_ONLY) printRecordsPlan(records, chunks);
     console.log("\nNothing was written. Re-run with --push, and with ALGOLIA_APP_ID and " +
       "ALGOLIA_WRITE_API_KEY set, to apply this.");

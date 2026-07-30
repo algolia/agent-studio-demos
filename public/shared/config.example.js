@@ -27,6 +27,14 @@ window.DEMO_CONFIG = {
       // openai_compatible provider. Verified: /context/compact works through it.
       badge: "Algolia open-source",
       agentId: "b3fb1cf2-81e0-4721-9142-c860518784bb",
+      // The chat-with-a-book demo talks to its own agent: same model, but carrying
+      // the shelf search tool and book-specific instructions. Two sets of agents
+      // rather than one, because a tool schema is sent — and billed — on every
+      // request, and the infinite-conversation demo argues from the numbers on its
+      // own meter. Create these with `node scripts/create-book-agents.js --push`,
+      // which prints the ids to paste here. Omit the field and the book page falls
+      // back to `agentId`, working exactly as before but without shelf search.
+      bookAgentId: "YOUR_BOOK_AGENT_ID",
       providerId: "c39b45b0-ff20-401f-a9ef-2c4c2fd016f8",
       model: "small",
       // The provider publishes no window: neither GET /1/providers/{id} nor

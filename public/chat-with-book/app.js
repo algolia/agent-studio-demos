@@ -56,6 +56,13 @@ const state = {
   cost: M.freshCost(),
   // the book taken off the shelf, if any: carries this book's suggestion chips
   book: null,
+  // Questions already sent from a chip. A chip is an opening, not a button to
+  // press twice: re-sending one produced the same answer again, which read as the
+  // demo holding a conversation with itself.
+  askedChips: new Set(),
+  // Follow-ups the agent wrote, from the most recent `data-suggestions` frame.
+  // Replaced wholesale each turn — they describe the conversation as it is now.
+  suggestions: [],
 };
 
 /**
@@ -87,6 +94,7 @@ const el = {
   url: $("url"), urlBtn: $("url-btn"), urlStatus: $("url-status"),
   shelf: $("shelf"), shelfStatus: $("shelf-status"), byo: $("byo"),
   chips: $("chips"), chipsNeedle: $("chips-needle"), chipsArc: $("chips-arc"),
+  chipsNext: $("chips-next"),
   sample: $("sample-btn"), model: $("model"), modelHint: $("model-hint"),
   budget: $("budget"), budgetHint: $("budget-hint"),
   meter: $("meter"), fill: $("meter-fill"), threshold: $("meter-threshold"),
@@ -401,6 +409,25 @@ function chargeNaiveTurn(inTok, outTok) {
   c.turns += 1;
   c.naivePeak = Math.max(c.naivePeak, inTok);
   const value = charge("naive", inTok, outTok);
+  renderCost();
+  return value;
+}
+
+/**
+ * The extra model step a tool call costs.
+ *
+ * One /completions request that searches is billed as two passes over the
+ * conversation: the first ends in a tool call, the second answers with the hits
+ * appended. `chargeChat` already accounts for the answering pass, so this adds the
+ * deciding one — and deliberately does NOT touch `chatCalls`, which counts HTTP
+ * calls and would be a lie at two.
+ *
+ * This is why the agent is told not to search for something already in front of
+ * it: the cheapest search is the one that does not happen, and the expensive part
+ * is not the passages, it is sending the whole conversation a second time.
+ */
+function chargeToolStep(inTok, outTok) {
+  const value = charge("real", inTok, outTok);
   renderCost();
   return value;
 }
@@ -2312,31 +2339,82 @@ function renderChips(book) {
   rows.needle.textContent = "";
   rows.arc.textContent = "";
   if (!book) {
-    el.chips.hidden = true;
+    // No book, but the agent may still have written follow-ups — a reader can ask
+    // about the shelf without taking anything off it, and the search tool answers
+    // from the index. So the rail survives an empty shelf.
+    renderSuggestionChips();
     return;
   }
   book.chips.forEach((chip) => {
     const row = rows[chip.kind];
     if (!row) return;
+    const spent = state.askedChips.has(chip.text);
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = `chip chip-${chip.kind}`;
-    btn.disabled = state.busy;
+    btn.className = `chip chip-${chip.kind}${spent ? " is-spent" : ""}`;
+    // A spent chip stays visible but unclickable. Clicking one twice used to send
+    // the identical question again and get the identical answer back, which reads
+    // as the demo talking to itself — the one thing a conversation demo must not do.
+    btn.disabled = state.busy || spent;
     // the pill wears a handle; the question itself is the accessible name and the
     // tooltip, because a truncated question is a question nobody can check
     btn.textContent = chip.short;
-    btn.setAttribute("aria-label", chip.text);
-    tip(btn, `Sends: “${chip.text}”` + (chip.kind === "needle"
-      ? " — one answer, in one place. A search index would find this."
-      : " — a property of the whole book. There is no single passage to retrieve."));
+    btn.setAttribute("aria-label", spent ? `${chip.text} (already asked)` : chip.text);
+    tip(btn, spent
+      ? `Already asked: “${chip.text}” — the answer is in the thread above. Asking it again ` +
+        `would send the same question and cost the same tokens for the same answer.`
+      : `Sends: “${chip.text}”` + (chip.kind === "needle"
+        ? " — one answer, in one place. A search index would find this."
+        : " — a property of the whole book. There is no single passage to retrieve."));
     btn.addEventListener("click", () => {
-      if (state.busy) return;
+      if (state.busy || state.askedChips.has(chip.text)) return;
+      state.askedChips.add(chip.text);
       el.prompt.value = "";
+      renderChips(book);
       send(chip.text);
     });
     row.appendChild(btn);
   });
-  el.chips.hidden = false;
+  renderSuggestionChips();
+}
+
+/**
+ * Follow-up chips the model wrote, from the `data-suggestions` frame.
+ *
+ * The per-book chips are a fixed pair of openings — one needle, one arc — and they
+ * are meant to be spent. What comes after them has to come from the conversation,
+ * so it comes from the agent's own suggestions node rather than from a list this
+ * page could never keep interesting. Absent suggestions, this row simply is not
+ * there: an empty "what next" rail is worse than none.
+ */
+function renderSuggestionChips() {
+  const row = el.chipsNext;
+  if (!row) return;
+  row.textContent = "";
+  const fresh = (state.suggestions || []).filter((s) => !state.askedChips.has(s));
+  row.parentElement.hidden = fresh.length === 0;
+  // The whole rail is hidden only when there is nothing at all in it — a book's
+  // openings, or the agent's follow-ups, or both.
+  const bookChips = el.chipsNeedle.childElementCount + el.chipsArc.childElementCount;
+  el.chips.hidden = bookChips === 0 && fresh.length === 0;
+  fresh.forEach((text) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip chip-next";
+    btn.disabled = state.busy;
+    btn.textContent = text;
+    btn.setAttribute("aria-label", text);
+    tip(btn, `Sends: “${text}” — written by the agent from this conversation, not from a ` +
+      `list in this page. Agent Studio's suggestions node runs after the answer and ` +
+      `streams these back as a data-suggestions frame.`);
+    btn.addEventListener("click", () => {
+      if (state.busy) return;
+      state.askedChips.add(text);
+      el.prompt.value = "";
+      send(text);
+    });
+    row.appendChild(btn);
+  });
 }
 
 /* ── Core flows ───────────────────────────────────────────────── */
@@ -2580,7 +2658,12 @@ function maybeSentinel(partial) {
  * perceptible is delayed.
  */
 async function streamAnswer(messages, { note, watchSentinel, into }) {
-  const path = `/1/agents/${state.model.agentId}/completions?compatibilityMode=ai-sdk-5&stream=true`;
+  // The book demo has its own agents — same models, but carrying the shelf search
+  // tool and book-specific instructions. `agentId` stays as the fallback so the
+  // page keeps working against a config written before those agents existed; it
+  // simply has no shelf search, which the header says out loud.
+  const agentId = state.model.bookAgentId || state.model.agentId;
+  const path = `/1/agents/${agentId}/completions?compatibilityMode=ai-sdk-5&stream=true`;
   const res = await api(path, { messages }, { stream: true });
   logCall(path.split("?")[0], null, null, note);
 
@@ -2592,6 +2675,11 @@ async function streamAnswer(messages, { note, watchSentinel, into }) {
   const holdCap = Math.max(400, TUNE.sentinelBufferChars * 3);
   let buf = "", answer = "", held = "", open = !watchSentinel, sentinel = null;
   const streamErrors = [];
+  // Searches the model made during this stream. Shown as they happen and charged
+  // afterwards: a tool call is one HTTP call but two model steps, and the demo
+  // would be lying if the second one were free.
+  const searches = [];
+  let toolChars = 0;
 
   outer:
   for (;;) {
@@ -2619,6 +2707,47 @@ async function streamAnswer(messages, { note, watchSentinel, into }) {
           answer = held;
           into.set(answer);
         }
+      } else if (evt.type === "tool-input-available") {
+        // the model has decided to search, and the arguments are settled
+        const search = { id: evt.toolCallId, name: evt.toolName, input: evt.input || {} };
+        search.card = addSearchCard({ search, before: into.wrap });
+        searches.push(search);
+      } else if (evt.type === "tool-output-available") {
+        const search = searches.find((s) => s.id === evt.toolCallId);
+        // what the model is about to read, measured as it arrives rather than
+        // guessed from the hit count: record size is what costs, not hits
+        const chars = JSON.stringify(evt.output === undefined ? "" : evt.output).length;
+        toolChars += chars;
+        if (search) { search.chars = chars; search.output = evt.output; }
+        if (search && search.card) search.card.done(evt.output, chars);
+      } else if (evt.type === "data-suggestions") {
+        // Follow-ups the agent's suggestions node wrote from this conversation.
+        // The frame has carried the list under `data` and under `suggestions`
+        // across versions, so accept either and ignore anything that is not a
+        // list of strings rather than rendering `[object Object]` at a reader.
+        const raw = evt.data && evt.data.suggestions ? evt.data.suggestions
+          : (evt.suggestions || evt.data);
+        if (Array.isArray(raw)) {
+          state.suggestions = raw.filter((s) => typeof s === "string" && s.trim())
+            .map((s) => s.trim());
+          // not gated on a book: the shelf is searchable with nothing loaded
+          renderChips(state.book);
+        }
+      } else if (evt.type === "tool-output-error" || evt.type === "tool-input-error") {
+        // A rejected call never emits tool-input-available — the server emits
+        // tool-input-error INSTEAD of it — so there may be no card yet. Open one
+        // here rather than swallowing the failure: seven silent rejections in one
+        // turn is exactly how this demo shipped an agent that apologised for not
+        // finding a passage that was sitting in the index.
+        const why = evt.errorText || evt.error || "the search failed";
+        let search = searches.find((s) => s.id === evt.toolCallId);
+        if (!search) {
+          search = { id: evt.toolCallId, name: evt.toolName, input: evt.input || {} };
+          search.card = addSearchCard({ search, before: into.wrap });
+          searches.push(search);
+        }
+        if (search.card) search.card.fail(why);
+        streamErrors.push(`${evt.type}: ${why}`);
       } else if (evt.type === "error") {
         // an SSE error frame is still a raw provider string: hold it back for
         // the wire log and the error card, out of the bubble
@@ -2647,11 +2776,159 @@ async function streamAnswer(messages, { note, watchSentinel, into }) {
       (sentinel.focus ? ` · focus: “${sentinel.focus}”` : ""));
     // a sentinel is still generated output and still billed: `chars` is what the
     // model actually wrote, not what was shown
-    return { answer: "", sentinel, streamErrors, chars: held.length };
+    return { answer: "", sentinel, streamErrors, chars: held.length, searches, toolChars };
   }
   if (!open && held) answer = held;
   into.end();
-  return { answer, sentinel: null, streamErrors, chars: answer.length };
+  return { answer, sentinel: null, streamErrors, chars: answer.length, searches, toolChars };
+}
+
+/* ── The shelf-search event card ──────────────────────────────────
+   The other half of the argument this demo makes. The unfold card shows the model
+   asking for context back; this one shows it reaching for the index instead. Both
+   get a card rather than a spinner, because in a demo about where tokens go, a
+   retrieval that happens invisibly is a retrieval the reader cannot reason about.
+   ────────────────────────────────────────────────────────────── */
+
+/**
+ * Pull the hits out of a tool result without assuming its envelope. The result
+ * arrives as whatever the tool serialized — a bare search response, a `results`
+ * array, or a JSON string of either — so every shape is tried and `null` means
+ * "say nothing about the hits" rather than "there were none".
+ */
+function hitsOf(output) {
+  let o = output;
+  if (typeof o === "string") {
+    try { o = JSON.parse(o); } catch (_) { return null; }
+  }
+  if (!o || typeof o !== "object") return null;
+
+  // A passage is recognisable by its own fields, so look for those rather than
+  // for a particular envelope. The server hands the tool's value through
+  // untouched, and the tool is free to wrap it in `hits`, in `results[0].hits`,
+  // in an object keyed by index name, or not at all — so walk until something
+  // looks like our records. Breadth-first, and capped, because this runs on a
+  // payload the page did not author.
+  const looksLikeHits = (v) => Array.isArray(v) && v.length > 0 &&
+    v.every((h) => h && typeof h === "object" &&
+      ("text" in h || "book" in h || "objectID" in h));
+
+  const queue = [o];
+  for (let seen = 0; queue.length && seen < 200; seen++) {
+    const node = queue.shift();
+    if (looksLikeHits(node)) return node;
+    if (!node || typeof node !== "object") continue;
+    for (const v of Object.values(node)) {
+      if (v && typeof v === "object") queue.push(v);
+    }
+  }
+  return null;
+}
+
+function addSearchCard({ search, before }) {
+  el.thread.querySelector(".empty")?.remove();
+  const card = document.createElement("div");
+  card.className = "msg event search";
+  card.innerHTML =
+    '<h3 class="event-h">🔎 <span class="se-title"></span></h3>' +
+    '<p class="event-note se-why"></p>' +
+    '<ol class="fold-steps se-steps"></ol>' +
+    '<p class="fold-live se-live" role="status" aria-live="polite"></p>';
+
+  // The tool's own argument names are the model's words, not ours, and they vary
+  // by provider. Show the query if one is recognisable, and the raw arguments in
+  // the tooltip either way.
+  // Two shapes, because two transports. The internal tool takes a single `query`;
+  // the Algolia MCP server takes `queries: [{query, ...}]` and adds `userIntent`.
+  // MCP is the platform default, so the nested form is the common case.
+  const input = search.input || {};
+  const nested = Array.isArray(input.queries)
+    ? input.queries.map((q) => q && q.query).filter(Boolean)
+    : [];
+  const query = nested.length ? nested.join("” + “")
+    : (input.query || input.q || input.search_query || "");
+  card.querySelector(".se-title").textContent = query
+    ? `assistant searched the shelf · “${query}”`
+    : "assistant searched the shelf";
+  card.querySelector(".se-why").innerHTML =
+    `The model judged that this needed something it could not see, so it called ` +
+    `<code>search_the_shelf</code> instead of answering from memory. The passages that come ` +
+    `back are added to this turn and go up to the model with your question — which is why ` +
+    `the meter moves. A tool call is one HTTP request but <em>two</em> model steps: one to ` +
+    `decide to search, one to answer with the hits in hand.`;
+  tip(card.querySelector(".event-h"),
+    "A real Agent Studio tool call, not a mock: the tool is configured on the agent with " +
+    "mode=static, so it can only ever search this one index — a per-request index override " +
+    "is refused with a 422. Five passages come back, flat, with no snippet or highlight " +
+    "metadata, because a nested match object costs tokens and cannot be quoted.",
+    `${search.name || "search_the_shelf"}(${JSON.stringify(input)})\n` +
+    "  → POST /1/indexes/public_domain_books/query");
+
+  const steps = card.querySelector(".se-steps");
+  const live = card.querySelector(".se-live");
+  const row = document.createElement("li");
+  row.dataset.state = "working";
+  row.innerHTML = '<span class="mark" aria-hidden="true"></span>' +
+    '<span class="lbl">searching 16 books, 11,115 passages</span>' +
+    '<span class="val">…</span>';
+  steps.appendChild(row);
+  // above the answer bubble, because it happened before the answer did
+  if (before && before.parentNode === el.thread) el.thread.insertBefore(card, before);
+  else el.thread.appendChild(card);
+  el.thread.scrollTop = el.thread.scrollHeight;
+
+  const t0 = performance.now();
+  const ticker = setInterval(() => {
+    live.textContent = `${((performance.now() - t0) / 1000).toFixed(1)}s elapsed`;
+  }, 200);
+
+  return {
+    done(output, chars) {
+      clearInterval(ticker);
+      const ms = performance.now() - t0;
+      const hits = hitsOf(output);
+      row.dataset.state = "done";
+      // An index answering in 40ms should not read as "0.0s", which looks like a
+      // broken timer rather than the fastest thing on the page.
+      const took = ms < 950 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
+      row.querySelector(".val").textContent =
+        (hits ? `${hits.length} passage${hits.length === 1 ? "" : "s"} · ` : "") +
+        `≈${fmt(estTokens(chars))} tok · ${took}`;
+
+      if (hits && hits.length) {
+        // one line per hit, so a reader can see WHICH passages grounded the answer
+        // and go check them — provenance, not a hit count
+        const cited = hits.map((h) => {
+          const where = h.chapterTitle
+            ? `${h.chapterTitle}`
+            : (h.chapter === null || h.chapter === undefined ? "no chapter" : `chapter ${h.chapter}`);
+          return `**${h.book || "unknown book"}** · ${where}${h.position ? ` · passage ${h.position}` : ""}\n\n` +
+            `${(h.text || "").slice(0, 700)}${(h.text || "").length > 700 ? "…" : ""}`;
+        }).join("\n\n---\n\n");
+        const peek = document.createElement("button");
+        peek.type = "button";
+        peek.className = "sum-peek";
+        const books = [...new Set(hits.map((h) => h.book).filter(Boolean))];
+        peek.textContent = books.length === 1
+          ? `${hits.length} from ${books[0]}`
+          : `${hits.length} across ${books.length} books`;
+        tip(peek, cited, null,
+          { rich: true, markdown: true, heading: `What came back · ${fmt(estTokens(chars))} tokens` });
+        row.appendChild(peek);
+      }
+      live.textContent = hits && hits.length === 0
+        ? "nothing matched — the model was told so, rather than left to invent"
+        : `${fmt(estTokens(chars))} tokens of passages went up with your question.`;
+    },
+    fail(why) {
+      clearInterval(ticker);
+      row.dataset.state = "failed";
+      row.querySelector(".val").textContent = "failed";
+      card.classList.add("is-capped");
+      live.textContent = `The search failed, so the answer is coming from what was already ` +
+        `in context: ${why}`;
+    },
+  };
 }
 
 /* ── The unfold event card ────────────────────────────────────────
@@ -2887,8 +3164,13 @@ async function send(text) {
         watchSentinel: !!state.fold && state.fold.sections.length > 1,
         into,
       });
+      // A search means the model was run twice over this conversation. Charge the
+      // deciding pass separately, then let the ordinary charge below cover the
+      // answering pass with the passages added to its input.
+      const searched = (out.searches || []).length > 0;
+      if (searched) chargeToolStep(realIn, estTokens(JSON.stringify(out.searches.map((s) => s.input)).length));
       // every attempt is a real call the provider will invoice, sentinel included
-      chargeChat(realIn, estTokens(out.chars));
+      chargeChat(realIn + estTokens(out.toolChars || 0), estTokens(out.chars));
       outChars = out.chars;
 
       if (out.sentinel) {
@@ -3276,6 +3558,10 @@ function resetAll() {
   state.foldProgress = null;
   state.fold = null;
   state.unfoldSettle = null;
+  // a cleared thread has asked nothing, and last turn's follow-ups describe a
+  // conversation that no longer exists
+  state.askedChips = new Set();
+  state.suggestions = [];
   resetCost();
   // the chips go with the document they belong to: a Moby-Dick question sent
   // against an empty history reads as the demo failing to answer

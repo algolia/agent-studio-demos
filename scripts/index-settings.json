@@ -1,6 +1,6 @@
 {
   "searchableAttributes": ["unordered(text)", "chapterTitle", "book,author"],
-  "attributesForFaceting": ["book", "author", "chapter"],
+  "attributesForFaceting": [],
   "attributesToRetrieve": ["*"],
   "attributesToHighlight": ["text", "chapterTitle"],
   "attributesToSnippet": ["text:40"],

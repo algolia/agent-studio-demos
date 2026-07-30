@@ -270,6 +270,19 @@
         </span>
         <div class="chip-row" id="chips-arc"></div>
       </div>
+      <!-- ── What the agent suggests next ──────────────────────────────
+           The two rows above are fixed openings, and they are meant to be spent.
+           This one is written by the agent's own suggestions node from the
+           conversation so far and arrives on the stream as a data-suggestions
+           frame — so it is empty until the first answer lands, and hidden
+           whenever there is nothing to show. ──────────────────────── -->
+      <div class="chip-group" id="chips-next-group" hidden>
+        <span class="chip-label chip-label-next">
+          next
+          <button class="info" type="button" data-tip="Follow-ups the agent wrote, not a list stored in this page. Agent Studio runs a suggestions node after the answer and streams the result back as a data-suggestions frame, so these move with the conversation — the difference between a demo that converses and one that replays. They cost one small extra generation on the agent's provider.">?</button>
+        </span>
+        <div class="chip-row" id="chips-next"></div>
+      </div>
     </div>
 
     <form class="composer" id="composer">

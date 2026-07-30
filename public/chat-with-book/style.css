@@ -898,6 +898,18 @@ p.ingest-status { margin: 12px 0 0; }
 }
 .uf-steps { margin-top: 10px; }
 
+/* the model reaching for the index: accent too, because the model drove this one
+   as well — the icon and the copy carry the difference, not a second hue */
+.msg.event.search {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 7%, var(--surface));
+}
+.msg.event.search.is-capped {
+  border-color: var(--over);
+  background: color-mix(in oklab, var(--over) 7%, var(--surface));
+}
+.se-steps { margin-top: 10px; }
+
 /* an answer big enough to sit in the protected tail: a caution, not a failure */
 .msg.event.large-answer {
   border-color: var(--warn);
@@ -971,6 +983,7 @@ p.ingest-status { margin: 12px 0 0; }
 }
 .chip-label-needle { color: var(--accent); }
 .chip-label-arc { color: var(--crease); }
+.chip-label-next { color: var(--ink-3); }
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .chip {
@@ -988,7 +1001,18 @@ p.ingest-status { margin: 12px 0 0; }
 .chip:hover:not(:disabled) { color: var(--ink); }
 .chip-needle:hover:not(:disabled) { border-color: var(--accent); }
 .chip-arc:hover:not(:disabled) { border-color: var(--crease); }
+.chip-next:hover:not(:disabled) { border-color: var(--ink-3); }
 .chip:disabled { opacity: 0.45; cursor: not-allowed; }
+/* A spent chip stays legible rather than fading out with the busy-state chips:
+   it is a record of what was asked, not a control that happens to be off. */
+.chip.is-spent {
+  opacity: 1;
+  border-style: dashed;
+  color: var(--ink-3);
+  background: transparent;
+  text-decoration: line-through;
+  text-decoration-color: var(--line-strong);
+}
 
 .composer { display: flex; gap: 10px; margin-top: 14px; }
 .composer input { flex: 1; }
