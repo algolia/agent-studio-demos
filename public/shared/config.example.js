@@ -150,6 +150,16 @@ window.DEMO_CONFIG = {
   // the shelf's cost-gated group rearranges. Omit it and the demo uses 0.5.
   costConfirmUsd: 0.5,
 
+  // The same gate's second line, in tokens, and it exists because the first one
+  // is a rate away from silence: 紅樓夢 is 3,020,297 tokens and 51 summarizer
+  // calls, which at the default $0.10 per million comes to $0.30 — under the
+  // money line, so the largest fold on the shelf would start without asking.
+  // 500,000 is 2.5 default windows, above Moby-Dick's 329,443 and Ulysses'
+  // 444,359 so the demo's own hero flows stay one click. Unlike the money line
+  // this one holds with no rate configured at all. Omit it and the demo uses
+  // 500000.
+  costConfirmTokens: 500000,
+
   // Most sites do not send Access-Control-Allow-Origin, so a browser cannot
   // read them directly. When the direct fetch is refused, the URL is read
   // through this public reader instead — always named in the UI and wire log,

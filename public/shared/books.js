@@ -618,6 +618,24 @@
      * the confirm appear on the largest books by itself.
      */
     costConfirmUsd: 0.5,
+    /**
+     * The other line, and the reason there are two: money alone lets a cheap
+     * model make a big thing look free. 紅樓夢 is 3,020,297 tokens and 51
+     * summarizer calls; at the default $0.10/MTok that is $0.30, under the money
+     * line, and it would start without a word — the largest fold on the shelf,
+     * unannounced.
+     *
+     * 500,000 tokens is 2.5 times the default window: past it a fold is a
+     * deliberate act rather than a big book. Deliberately NOT low enough to catch
+     * Moby-Dick (329,443) or Ulysses (444,359) — those are the demo's own hero
+     * flows and a confirm in front of them would be the theatre the money line
+     * was careful to avoid. Three books reach it: Don Quijote (811,818), War and
+     * Peace (940,843) and 紅樓夢.
+     *
+     * Unlike the money line this one holds with no rate configured at all. A
+     * price nobody set cannot be compared; three million tokens can.
+     */
+    costConfirmTokens: 500000,
     /** mirrors meter.js's `usd`, so a tile and the cost strip agree to the digit */
     formatUsd: defaultFormatUsd,
   };
@@ -655,8 +673,10 @@
       label: "asks before it spends",
       heading: "Worth reading the price before you click",
       note: "Same mechanics as above, with a bill worth a decision: the summarizer " +
-        "reads every word once, on your credentials, so these ask first. Which books " +
-        "land here depends on the model\u00a0— change it and this group changes.",
+        "reads every word once, on your credentials, so these ask first. Two lines put a " +
+        "book here: the money at the model you picked, or half a million tokens whatever " +
+        "the rate. Change the model and the money line moves this group; the token line " +
+        "does not move.",
     },
   };
 
@@ -671,18 +691,48 @@
    *     line, charsPerToken, price object echoed as `rate` }
    */
   /**
-   * Precedence, and the order is the whole point: an explicit `opts` beats the
-   * book's own measurement, which beats the shelf default. Every book on both
-   * shelves carries its own `charsPerToken` — 2.98 to 4.02 inside English, and
-   * around 0.3 in Japanese — so a book that knows its ratio uses it, and the
-   * default is left for text that arrived from nowhere. But a live conversation
-   * re-measures on every probe and passes the result in, and that measurement is
-   * newer than anything written down here, so it still wins.
+   * Precedence, highest first, and the middle rule is the one that was wrong:
+   *
+   *   opts.charsPerToken         an explicit override. A caller who says a number
+   *                              outright means it — pasted text, a fetched page,
+   *                              a test fixture.
+   *   book.charsPerToken         THIS book's own measurement, and it beats the
+   *                              live probe. See below.
+   *   opts.probedCharsPerToken   what the live conversation measured through
+   *                              /context/trim on the document it ingested.
+   *   SHELF_DEFAULTS             text that arrived from nowhere.
+   *
+   * A live probe is a calibration for the language it was taken in, not a fact
+   * about the shelf. It used to be passed as `charsPerToken` and it outranked
+   * every book, which meant reading one English book rewrote every other tile:
+   * 紅樓夢 read 3,020,297 tokens before an ingest and 230,620 after one, because
+   * 3.0 chars per token is right for Melville and wrong by a factor of ten for
+   * Chinese. The comment three hundred lines above already said what that costs —
+   * "a wrong ratio moves a book into the wrong regime" — and it moved 紅樓夢 out
+   * of the group that asks before it spends, which is the one place on this page
+   * where being wrong costs somebody money.
+   *
+   * So the probe now refines only text that has no measurement of its own. Every
+   * book on both shelves has one, measured through the same endpoint by
+   * scripts/measure-tokens.js — for a given book that is a better number than a
+   * probe of a different book anyway, even in the same language: Ulysses is 2.98
+   * and Moby-Dick 3.62, both English, twenty per cent apart.
    */
   function configFor(book, opts) {
     const cfg = Object.assign({}, SHELF_DEFAULTS);
-    if (book && typeof book.charsPerToken === "number") cfg.charsPerToken = book.charsPerToken;
-    return Object.assign(cfg, opts || {});
+    const o = opts || {};
+    cfg.charsPerTokenSource = "default";
+    if (typeof o.probedCharsPerToken === "number" && o.probedCharsPerToken > 0) {
+      cfg.charsPerToken = o.probedCharsPerToken;
+      cfg.charsPerTokenSource = "probe";
+    }
+    if (book && typeof book.charsPerToken === "number") {
+      cfg.charsPerToken = book.charsPerToken;
+      cfg.charsPerTokenSource = "book";
+    }
+    Object.assign(cfg, o);
+    if (typeof o.charsPerToken === "number") cfg.charsPerTokenSource = "explicit";
+    return cfg;
   }
 
   function estimate(book, opts) {
@@ -712,11 +762,20 @@
     const rate = cfg.price || null;
     const usd = rate ? (tokens * rate.inPerMTok) / 1e6 : null;
     /**
-     * Money only. A cheap book that folds is one click; an expensive book is a
-     * decision whether or not it folds, because it is the visitor's provider
-     * account either way.
+     * Two lines, whichever trips first. A cheap book that folds is one click; an
+     * expensive book is a decision whether or not it folds, because it is the
+     * visitor's provider account either way — that is the money line. And a
+     * three-million-token fold is a decision at any rate, which is the token
+     * line: cheap models are exactly what make a big thing look free.
+     *
+     * `costGatedBy` names what tripped, so the copy can lead with the figure that
+     * is the reason. Money wins when both trip: it is the older claim and the one
+     * the reader's own account answers for.
      */
-    const costGated = usd !== null && usd > cfg.costConfirmUsd;
+    const overMoney = usd !== null && usd > cfg.costConfirmUsd;
+    const overTokens = tokens > cfg.costConfirmTokens;
+    const costGated = overMoney || overTokens;
+    const costGatedBy = overMoney ? "money" : (overTokens ? "tokens" : null);
 
     const regime = costGated ? "cost-gated"
       : foldsOnArrival ? "oversize-fold"
@@ -743,6 +802,8 @@
       regime,
       tokens,
       charsPerToken: cfg.charsPerToken,
+      /** "book" | "probe" | "explicit" | "default" — the tile says which */
+      charsPerTokenSource: cfg.charsPerTokenSource,
       oversizeAt,
       autoCompactAt,
       foldsOnArrival,
@@ -753,7 +814,9 @@
       usd,
       usdLabel: usd === null ? "cost depends on the model" : cfg.formatUsd(usd),
       costGated,
+      costGatedBy,
       costConfirmUsd: cfg.costConfirmUsd,
+      costConfirmTokens: cfg.costConfirmTokens,
       what,
       price,
       line: `${what} · ${price}`,

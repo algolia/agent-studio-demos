@@ -457,7 +457,9 @@ test("the shelf's measured regimes, book by book", () => {
     "jane-eyre": ["oversize-fold", 281647, 5, 6],
     "moby-dick": ["oversize-fold", 329443, 6, 7],
     "ulysses": ["oversize-fold", 444359, 8, 9],
-    "war-and-peace": ["oversize-fold", 940843, 16, 17],
+    // over the token line (500,000) at any rate, which is why it reads cost-gated
+    // here with no price configured at all
+    "war-and-peace": ["cost-gated", 940843, 16, 17],
   };
   for (const b of SHELF.books) {
     const want = EXPECTED[b.slug];
@@ -522,7 +524,13 @@ test("with no rate configured, no dollar figure is invented", () => {
   assert.equal(est.rateNote, null);
   assert.equal(est.usdLabel, "cost depends on the model");
   assert.equal(est.price, "~17 summarizer calls · cost depends on the model");
-  assert.equal(est.costGated, false, "an unknown bill is never gated — there is nothing to gate on");
+  // An unknown bill cannot gate on money — there is nothing to compare. It can
+  // still gate on size: 940,843 tokens is 940,843 tokens at every rate, including
+  // no rate, and that is the whole reason the second line exists.
+  assert.equal(est.costGated, true);
+  assert.equal(est.costGatedBy, "tokens");
+  assert.equal(estimate(SHELF.findBook("moby-dick")).costGated, false,
+    "and a book under the token line with no price is not gated at all");
 });
 
 test("the bill follows the model the visitor picked", () => {
@@ -536,8 +544,17 @@ test("the bill follows the model the visitor picked", () => {
   // the mechanism does not depend on the price, only the decision does
   assert.equal(cheap.foldSections, dear.foldSections);
   assert.equal(cheap.what, dear.what);
-  assert.equal(cheap.costGated, false);
-  assert.equal(dear.costGated, true);
+  // This book is over BOTH lines at the dear rate and over only the token one at
+  // the cheap rate, so what moves with the model is not whether it asks but which
+  // number it asks with. Money wins when both trip: it is the older claim.
+  assert.equal(cheap.costGatedBy, "tokens");
+  assert.equal(dear.costGatedBy, "money");
+
+  // and on a book under the token line the price is the whole decision, which is
+  // the original claim of this test: Jane Eyre is 281,647 tokens either way
+  const je = SHELF.findBook("jane-eyre");
+  assert.equal(estimate(je, { price: PLACEHOLDER_RATE }).costGated, false);
+  assert.equal(estimate(je, { price: LIST_RATE, costConfirmUsd: 0.1 }).costGatedBy, "money");
 });
 
 test("a placeholder rate is labelled as one, on the tile itself", () => {
@@ -548,12 +565,20 @@ test("a placeholder rate is labelled as one, on the tile itself", () => {
   assert.equal(estimate(wp, { price: LIST_RATE }).rateNote, "a list price");
 });
 
-test("nothing on the shelf asks for a confirm at the default model's rate", () => {
+test("at the default model's rate nothing asks about money — one book asks about size", () => {
   // the honest consequence of a $0.10/MTok rate: the most expensive book here is
   // ~11 cents, and putting a confirm in front of 11 cents is theatre
   for (const b of SHELF.books) {
-    assert.equal(estimate(b, { price: PLACEHOLDER_RATE }).costGated, false, b.slug);
+    assert.notEqual(estimate(b, { price: PLACEHOLDER_RATE }).costGatedBy, "money", b.slug);
   }
+  // which is exactly what makes a cheap rate able to hide a big fold, so the token
+  // line answers for the size on its own
+  const gated = SHELF.books
+    .filter((b) => estimate(b, { price: PLACEHOLDER_RATE }).costGated)
+    .map((b) => b.slug);
+  assert.deepEqual(gated, ["war-and-peace"]);
+  assert.equal(estimate(SHELF.findBook("war-and-peace"), { price: PLACEHOLDER_RATE }).costGatedBy,
+    "tokens");
 });
 
 test("switching to a pricier model raises the confirm by itself", () => {
@@ -570,12 +595,56 @@ test("switching to a pricier model raises the confirm by itself", () => {
   }
 });
 
-test("the gate is a boundary, not a range", () => {
-  // 5,000,000 tokens at $0.10 / MTok is exactly $0.50, the default threshold
-  const at = estimate(bookOf(5000000), { price: PLACEHOLDER_RATE });
+test("the money gate is a boundary, not a range", () => {
+  // 5,000,000 tokens at $0.10 / MTok is exactly $0.50, the default threshold. The
+  // token line is lifted out of the way so this reads one line at a time — at the
+  // shipped 500,000 a five-million-token book is over both.
+  const only = { price: PLACEHOLDER_RATE, costConfirmTokens: Infinity };
+  const at = estimate(bookOf(5000000), only);
   assert.equal(at.usd, 0.5);
   assert.equal(at.costGated, false, "exactly at the threshold is not over it");
-  assert.equal(estimate(bookOf(5000001), { price: PLACEHOLDER_RATE }).costGated, true);
+  assert.equal(estimate(bookOf(5000001), only).costGated, true);
+  assert.equal(estimate(bookOf(5000001), only).costGatedBy, "money");
+});
+
+test("the token gate is a boundary too, and it holds with no rate at all", () => {
+  // 500,000 tokens: 2.5 default windows, chosen to sit above Moby-Dick and Ulysses
+  assert.equal(SHELF_DEFAULTS.costConfirmTokens, 500000);
+  assert.equal(estimate(bookOf(500000)).costGated, false, "exactly at the line is not over it");
+  assert.equal(estimate(bookOf(500001)).costGated, true);
+  assert.equal(estimate(bookOf(500001)).costGatedBy, "tokens");
+  // no price object anywhere in this test, and the gate still holds
+  assert.equal(estimate(bookOf(500001)).usd, null);
+  assert.equal(estimate(bookOf(500001)).costConfirmTokens, 500000);
+  // and it is a knob, like the money line
+  assert.equal(estimate(bookOf(500001), { costConfirmTokens: 1000000 }).costGated, false);
+});
+
+test("the token line catches three books, and none of the demo's hero flows", () => {
+  // The list is the claim. A cheap model prices 紅樓夢's 51-part fold at $0.30 —
+  // under the money line — so without this line the largest fold on the shelf
+  // would start on one click.
+  const gated = SHELF.books.concat(SHELF.booksI18n)
+    .filter((b) => estimate(b).costGated)
+    .map((b) => [b.slug, estimate(b).tokens, estimate(b).costGatedBy])
+    // smallest first, so the list reads as a scale and does not depend on the
+    // order two manifests happen to be concatenated in
+    .sort((a, b) => a[1] - b[1]);
+  assert.deepEqual(gated, [
+    ["don-quijote", 811818, "tokens"],
+    ["war-and-peace", 940843, "tokens"],
+    ["honglou-meng", estimate(SHELF.booksI18n.find((b) => b.slug === "honglou-meng")).tokens,
+      "tokens"],
+  ]);
+  assert.ok(gated[2][1] > 3000000, "紅樓夢 is over three million tokens");
+
+  // the two the demo actually demonstrates itself with stay one click, and the
+  // margin is not tight: 55,000 tokens of room under the line
+  for (const slug of ["moby-dick", "ulysses"]) {
+    const est = estimate(SHELF.findBook(slug), { price: PLACEHOLDER_RATE });
+    assert.equal(est.costGated, false, slug);
+    assert.ok(est.tokens < SHELF_DEFAULTS.costConfirmTokens - 50000, slug);
+  }
 });
 
 test("the gate is about money, not about mechanism", () => {
@@ -678,6 +747,45 @@ test("an explicit ratio beats the book's own", () => {
   assert.equal(estimate(zh, { charsPerToken: 3, workingBudget: 5000000 }).regime, "oversize-fold");
 });
 
+test("a live probe never overrides a book's own measurement", () => {
+  /* The bug this rule exists for, as numbers: ingesting an English book measures
+     ~3.0 characters per token through /context/trim, and that ratio used to be
+     passed as `charsPerToken` — outranking every book on the shelf. One English
+     read rewrote 紅樓夢 from three million tokens to 230,620 and quietly moved it
+     out of the group that asks before it spends. The gate could be defused by
+     browsing. */
+  const zh = SHELF.booksI18n.find((b) => b.slug === "honglou-meng");
+  const before = estimate(zh, { price: PLACEHOLDER_RATE });
+  const after = estimate(zh, { price: PLACEHOLDER_RATE, probedCharsPerToken: 3.0 });
+
+  assert.equal(after.tokens, before.tokens, "an English probe does not touch a Chinese book");
+  assert.equal(after.charsPerToken, 0.3);
+  assert.equal(after.charsPerTokenSource, "book");
+  assert.equal(after.costGated, true, "and the gate cannot be defused by reading something else");
+  assert.equal(after.regime, "cost-gated");
+  assert.ok(before.tokens > 3000000);
+
+  // every book on both shelves is protected, not just the Chinese one
+  for (const b of SHELF.books.concat(SHELF.booksI18n)) {
+    const est = estimate(b, { probedCharsPerToken: 1.0 });
+    assert.equal(est.charsPerToken, b.charsPerToken, b.slug);
+    assert.equal(est.charsPerTokenSource, "book", b.slug);
+  }
+
+  // what the probe IS for: text that arrived with no measurement of its own
+  const byo = { slug: "pasted", chars: 300000 };
+  assert.equal(estimate(byo).charsPerTokenSource, "default");
+  assert.equal(estimate(byo).charsPerToken, SHELF_DEFAULTS.charsPerToken);
+  const probed = estimate(byo, { probedCharsPerToken: 2.5 });
+  assert.equal(probed.charsPerToken, 2.5);
+  assert.equal(probed.charsPerTokenSource, "probe");
+  assert.equal(probed.tokens, 120000);
+
+  // and an explicit ratio still beats everything, including the book
+  assert.equal(estimate(zh, { charsPerToken: 3, probedCharsPerToken: 1 }).charsPerToken, 3);
+  assert.equal(estimate(zh, { charsPerToken: 3 }).charsPerTokenSource, "explicit");
+});
+
 test("the multilingual shelf's measured regimes, book by book", () => {
   // Measured on 2026-07-30 with scripts/measure-tokens.js, one 50,000-character
   // sample per book through /1/unstable/context/trim. The table is here for the
@@ -691,8 +799,8 @@ test("the multilingual shelf's measured regimes, book by book", () => {
     "divina-commedia": ["oversize-fold", 239323, 4, 5],
     "belye-nochi": ["oversize-fold", 261631, 5, 6],
     "madame-bovary": ["oversize-fold", 293443, 5, 6],
-    "don-quijote": ["oversize-fold", 811818, 14, 15],
-    "honglou-meng": ["oversize-fold", 3020297, 51, 52],
+    "don-quijote": ["cost-gated", 811818, 14, 15],
+    "honglou-meng": ["cost-gated", 3020297, 51, 52],
   };
   for (const b of SHELF.booksI18n) {
     const want = EXPECTED[b.slug];
@@ -721,11 +829,15 @@ test("the measured ratio is what puts three books in the right regime", () => {
   assert.equal(asEnglish(ru).foldsOnArrival, false, "the wrong ratio says this fits the window");
   assert.equal(estimate(ru).foldsOnArrival, true);
 
-  // and one where it makes no difference, so the claim stays honest: 紅樓夢 is far
-  // over the ceiling at either ratio, it only folds into fifty-one parts instead
-  // of six
+  // and the one that costs money rather than a label: 紅樓夢 is over the ceiling at
+  // either ratio, but at English's 3.0 it reads 302,030 tokens instead of three
+  // million — under the token line, so the wrong ratio moves the largest fold on
+  // the shelf OUT of the group that asks before it spends. That is the regression
+  // this pair of assertions exists to hold.
   const zh = SHELF.booksI18n.find((b) => b.slug === "honglou-meng");
-  assert.equal(estimate(zh).regime, asEnglish(zh).regime);
+  assert.equal(estimate(zh).regime, "cost-gated");
+  assert.equal(asEnglish(zh).regime, "oversize-fold");
+  assert.equal(asEnglish(zh).costGated, false, "the wrong ratio defuses the gate");
   assert.ok(estimate(zh).foldSections > asEnglish(zh).foldSections * 5);
 });
 
@@ -741,8 +853,10 @@ test("grouping still covers only the English shelf", () => {
 
 test("grouping covers the shelf exactly once, cheapest regime first", () => {
   const groups = groupByRegime();
-  assert.deepEqual(groups.map((g) => g.regime), ["budget-compact", "oversize-fold"],
-    "an empty regime prints no heading");
+  // three groups with no price configured at all: War and Peace crosses the token
+  // line, which does not need a rate to be true
+  assert.deepEqual(groups.map((g) => g.regime),
+    ["budget-compact", "oversize-fold", "cost-gated"], "an empty regime prints no heading");
   const seen = groups.flatMap((g) => g.entries.map((e) => e.book.slug));
   assert.equal(seen.length, SHELF.books.length);
   assert.equal(new Set(seen).size, SHELF.books.length, "no book appears in two groups");
@@ -754,7 +868,10 @@ test("grouping covers the shelf exactly once, cheapest regime first", () => {
   assert.deepEqual(Object.keys(REGIMES).sort(), REGIME_ORDER.slice().sort(),
     "every regime the helper can return has copy, and vice versa");
 
-  // the gate opens a third group without touching the manifest
+  // and lifting both lines closes it again, without touching the manifest
+  assert.deepEqual(
+    groupByRegime({ costConfirmTokens: Infinity }).map((g) => g.regime),
+    ["budget-compact", "oversize-fold"]);
   assert.deepEqual(groupByRegime({ price: LIST_RATE }).map((g) => g.regime),
     ["budget-compact", "oversize-fold", "cost-gated"]);
 });

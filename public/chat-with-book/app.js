@@ -158,6 +158,20 @@ const TUNE = {
   // they fit inside this share of the model's real window. More detail retained
   // for free; the digest alone is the fallback when they do not fit.
   keepSectionsAtRatio: CFG.keepSectionsAtRatio ?? 0.25,
+  /**
+   * The fold's second confirm line, in tokens — the sibling of
+   * GREED_CONFIRM_TOKENS above and there for the same reason: a cheap model makes
+   * a big thing look free. The shelf's money gate compares an estimate against
+   * costConfirmUsd, and at $0.10 per million tokens 紅樓夢's three million tokens
+   * and 51 summarizer calls come to $0.30 — under the line, so the largest fold on
+   * the shelf would start without asking.
+   *
+   * 500,000 is 2.5 default windows: past it a fold is a deliberate act rather than
+   * a big book. Deliberately above Moby-Dick (329,443) and Ulysses (444,359),
+   * which are this demo's hero flows. books.js holds the same default, so a
+   * config that says nothing still gets this behaviour.
+   */
+  costConfirmTokens: CFG.costConfirmTokens ?? BOOKS.SHELF_DEFAULTS.costConfirmTokens,
 };
 
 
@@ -2209,6 +2223,7 @@ function shelfOpts() {
     foldSectionTokens: CFG.foldChunkTokens,
     workingBudget: state.model ? currentWindow() : CFG.defaultBudget,
     costConfirmUsd: costConfirmUsd(),
+    costConfirmTokens: TUNE.costConfirmTokens,
     // the kit's own money formatter, so a tile and the cost strip cannot disagree
     formatUsd: usd,
   };
@@ -2216,9 +2231,14 @@ function shelfOpts() {
     opts.contextWindow = modelWindow();
     opts.price = currentPrice();
   }
-  // the probe's ratio beats the shelf's default: it was measured on this
-  // conversation, through this model's tokenizer
-  if (state.charsPerToken) opts.charsPerToken = state.charsPerToken;
+  /* The probe's ratio, offered as a probe and not as the truth. It was measured on
+     THIS conversation — one document, in one language — so books.js applies it
+     only to text that has no measurement of its own. Passed as `charsPerToken` it
+     used to outrank every book on the shelf, and reading one English novel
+     rewrote 紅樓夢's tile from 3,020,297 tokens to 230,620: same characters, a
+     ratio ten times wrong, and a book that asks before it spends quietly moved
+     into the group that does not. */
+  if (state.charsPerToken) opts.probedCharsPerToken = state.charsPerToken;
   return opts;
 }
 
@@ -2228,14 +2248,18 @@ function bookSizeLine(book, est) {
   return `${fmt(book.words)} words · ≈${fmt(est.tokens)} tokens`;
 }
 
-/** where the token figure came from, and either answer is a measurement */
+/**
+ * Where this tile's token figure came from — and it is a different answer per
+ * tile, which is the point. A book carries its own measured ratio and keeps it;
+ * only text that arrived with none takes this conversation's probe.
+ */
 function ratioNote(est) {
-  return state.charsPerToken
-    ? `converted at the ${charsPerToken().toFixed(1)} characters per token this conversation ` +
-      `measured through the trim endpoint`
-    : `converted at the ${est.charsPerToken} characters per token measured for this book ` +
-      `against the same endpoint — the first probe of this conversation replaces it with ` +
-      `its own ratio`;
+  return est.charsPerTokenSource === "book"
+    ? `converted at the ${est.charsPerToken} characters per token measured for this book ` +
+      `against the trim endpoint — its own ratio, not this conversation's: 3.0 is right for ` +
+      `English and wrong by ten times for 紅樓夢`
+    : `converted at the ${est.charsPerToken.toFixed(1)} characters per token this conversation ` +
+      `measured through the trim endpoint`;
 }
 
 /* ── The plan line, in the reader's language ──────────────────────
@@ -2323,8 +2347,13 @@ function bookTile(book, est) {
   if (est.costGated) {
     const flag = document.createElement("span");
     flag.className = "sb-gate-flag";
-    flag.textContent = t("gate.flag", `asks first · over ${usd(est.costConfirmUsd)}`,
-      { usd: usd(est.costConfirmUsd) });
+    // the flag names the line this book crossed, not both lines: a chip that
+    // recites the whole rule is a chip nobody reads
+    flag.textContent = est.costGatedBy === "tokens"
+      ? t("gate.flagTokens", `asks first · over ${fmt(est.costConfirmTokens)} tok`,
+        { tok: fmt(est.costConfirmTokens) })
+      : t("gate.flag", `asks first · over ${usd(est.costConfirmUsd)}`,
+        { usd: usd(est.costConfirmUsd) });
     tile.appendChild(flag);
   }
   tile.appendChild(hook);
@@ -2465,10 +2494,19 @@ function showCostGate(book, est) {
   panel.setAttribute("aria-label", `Confirm ingesting ${book.title}`);
   panel.dataset.slug = book.slug;
 
+  // The figure that tripped the line leads. On a cheap model 紅樓夢's bill is
+  // $0.30 and its size is three million tokens: quoting the money first would
+  // answer a question nobody asked and hide the one that made this panel appear.
+  const money = est.usd === null ? est.usdLabel : usd(est.usd);
+  const byTokens = est.costGatedBy === "tokens";
+
   const h = document.createElement("p");
   h.className = "gate-h";
-  h.textContent = t("gate.title", `${book.title} costs about ${usd(est.usd)} to ingest`,
-    { title: book.title, usd: usd(est.usd) });
+  h.textContent = byTokens
+    ? t("gate.titleTokens", `${book.title}: ≈${fmt(est.tokens)} tokens to fold · ~${money}`,
+      { title: book.title, tok: fmt(est.tokens), usd: money })
+    : t("gate.title", `${book.title} costs about ${money} to ingest`,
+      { title: book.title, usd: money });
 
   const body = document.createElement("p");
   body.className = "gate-body";
@@ -2481,9 +2519,12 @@ function showCostGate(book, est) {
   why.type = "button";
   why.className = "info";
   why.textContent = "?";
-  tip(why, () => `The line is ${usd(costConfirmUsd())}, compared against the estimate at the ` +
-    `model you picked — no fixed list of books. ${M.priceLine(est.rate)} Move it with ` +
-    `costConfirmUsd in config.js.`);
+  tip(why, () => `**${usd(costConfirmUsd())} or ${fmt(TUNE.costConfirmTokens)} tokens**, ` +
+    `whichever trips first — no fixed list of books. The money moves with the model you ` +
+    `picked; the tokens do not, because a cheap rate is what makes a three-million-token ` +
+    `fold look free. ${M.priceLine(est.rate)}`,
+  `${fmt(est.tokens)} tok > ${fmt(TUNE.costConfirmTokens)}  ·  ${money} > ${usd(costConfirmUsd())}`,
+  { heading: byTokens ? "Over the token line" : "Over the money line" });
   h.appendChild(why);
 
   const row = document.createElement("div");
@@ -2491,7 +2532,9 @@ function showCostGate(book, est) {
   const go = document.createElement("button");
   go.type = "button";
   go.className = "btn primary gate-go";
-  go.textContent = t("gate.go", `Ingest anyway · ~${usd(est.usd)}`, { usd: usd(est.usd) });
+  go.textContent = byTokens
+    ? t("gate.goTokens", `Ingest anyway · ≈${fmt(est.tokens)} tok`, { tok: fmt(est.tokens) })
+    : t("gate.go", `Ingest anyway · ~${money}`, { usd: money });
   go.addEventListener("click", () => {
     closeCostGate();
     pickBook(book, { confirmed: true });
