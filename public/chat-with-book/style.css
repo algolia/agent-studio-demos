@@ -1002,6 +1002,16 @@ p.ingest-status { margin: 12px 0 0; }
 .chip-needle:hover:not(:disabled) { border-color: var(--accent); }
 .chip-arc:hover:not(:disabled) { border-color: var(--crease); }
 .chip-next:hover:not(:disabled) { border-color: var(--ink-3); }
+/* the cold-start line: not a chip, so it must not look pressable */
+.chip-note {
+  align-self: center;
+  font-family: var(--body);
+  font-size: 11.4px;
+  font-style: italic;
+  color: var(--ink-3);
+  border-bottom: 1px dashed var(--line-strong);
+  cursor: help;
+}
 .chip:disabled { opacity: 0.45; cursor: not-allowed; }
 /* A spent chip stays legible rather than fading out with the busy-state chips:
    it is a record of what was asked, not a control that happens to be off. */
