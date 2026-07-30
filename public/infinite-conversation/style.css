@@ -424,7 +424,7 @@ select {
   letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3);
   margin-bottom: 6px;
 }
-.tooltip .tip-body { display: block; white-space: pre-line; }
+.tooltip .tip-body { display: block; white-space: pre-line; text-wrap: pretty; }
 .tooltip .tip-body.md { white-space: normal; }
 .tooltip .tip-body.md p { margin: 0 0 7px; }
 .tooltip code {

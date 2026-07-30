@@ -148,7 +148,7 @@ async function api(path, body, { stream = false } = {}) {
       if (typeof detail === "object") detail = JSON.stringify(detail);
     } catch (_) { /* keep statusText */ }
     logCall(path, null, `${res.status} ${detail}`);
-    const err = new Error(`${res.status} — ${detail}`);
+    const err = new Error(`${res.status}\u00a0— ${detail}`);
     err.status = res.status;
     err.detail = String(detail);
     throw err;
@@ -309,7 +309,7 @@ function docsLink(path, label = "docs ↗") {
   a.target = "_blank";
   a.rel = "noopener noreferrer";
   a.textContent = label;
-  tip(a, `The endpoint's entry in the live OpenAPI reference — the schema the API ` +
+  tip(a, `The endpoint's entry in the live OpenAPI reference\u00a0— the schema the API ` +
     `generates, not a copy of it. Request and response shapes, every field.`, url);
   return a;
 }
@@ -318,7 +318,7 @@ function docsLink(path, label = "docs ↗") {
 
 function logCall(path, stats, error, note, verb = "POST", normalized = false, cost = null) {
   state.calls += 1;
-  el.wireCount.textContent = `${state.calls} call${state.calls === 1 ? "" : "s"}`;
+  el.wireCount.textContent = `${state.calls}\u00a0call${state.calls === 1 ? "" : "s"}`;
   const li = document.createElement("li");
   const bits = [`<span class="wire-path"><span class="verb">${escapeHtml(verb)}</span> ${escapeHtml(path)}</span>`];
   if (note) bits.push(`<span class="stat">${note}</span>`);
@@ -333,7 +333,7 @@ function logCall(path, stats, error, note, verb = "POST", normalized = false, co
     const chip = document.createElement("span");
     chip.className = "wire-fix";
     chip.textContent = "normalized ✂";
-    tip(chip, "The summary arrived wrapped in a Python repr of content blocks — a backend " +
+    tip(chip, "The summary arrived wrapped in a Python repr of content blocks\u00a0— a backend " +
       "bug, fix in flight. The page unwrapped it before storing it, so the repr never rides " +
       "a later request. The stats are the API's own.");
     li.appendChild(chip);
@@ -345,8 +345,8 @@ function logCall(path, stats, error, note, verb = "POST", normalized = false, co
     chip.textContent = cost === 0 ? "$0 · no LLM" : `~${usd(cost)}`;
     tip(chip, cost === 0
       ? "context/trim counts without calling a model, so it is free on both sides of the " +
-        "meter — and it is why the meter can be honest without shipping a tokenizer."
-      : () => `Charged to the real side at ${priceLine()} Estimated — the API does not ` +
+        "meter\u00a0— and it is why the meter can be honest without shipping a tokenizer."
+      : () => `Charged to the real side at ${priceLine()} Estimated\u00a0— the API does not ` +
         `expose summarizer usage yet, so the call's before/after token counts stand in.`);
     li.appendChild(chip);
   }
@@ -590,7 +590,7 @@ async function fetchUrlText(url) {
     if (!res.ok) throw new Error(`the site answered ${res.status} ${res.statusText}`);
     const type = res.headers.get("content-type") || "";
     const body = await res.text();
-    logCall(url, null, null, `direct · ${fmt(body.length)} chars · ${type.split(";")[0] || "unknown type"}`, "GET");
+    logCall(url, null, null, `direct · ${fmt(body.length)}\u00a0chars · ${type.split(";")[0] || "unknown type"}`, "GET");
     return {
       text: /html|xml/i.test(type) || /^\s*<(!doctype|html)/i.test(body) ? htmlToText(body) : collapse(body),
       via: "direct browser fetch",
@@ -616,7 +616,7 @@ async function fetchUrlText(url) {
       throw err;
     }
     const body = await res.text();
-    logCall(reader.url + "…", null, null, `via ${reader.label} · ${fmt(body.length)} chars`, "GET");
+    logCall(reader.url + "…", null, null, `via ${reader.label} · ${fmt(body.length)}\u00a0chars`, "GET");
     return {
       text: collapse(readerToText(body)),
       via: reader.label,
@@ -655,14 +655,14 @@ function renderMeter() {
   const over = state.tokens > max;
   el.fill.classList.toggle("is-clamped", over);
   el.read.textContent = over
-    ? `${fmt(state.tokens)} tokens · ${Math.round((state.tokens / max) * 100)}% of ${fmt(max)}`
-    : `${fmt(state.tokens)} / ${fmt(max)} tokens`;
+    ? `${fmt(state.tokens)}\u00a0tokens · ${Math.round((state.tokens / max) * 100)}% of ${fmt(max)}`
+    : `${fmt(state.tokens)} / ${fmt(max)}\u00a0tokens`;
   el.axisMax.textContent = over ? `${fmt(max)} ▸` : fmt(max);
   el.axisThreshold.textContent = `${Math.round(thresholdRatio * 100)}% · ${fmt(max * thresholdRatio)}`;
   el.meter.setAttribute("aria-valuenow", Math.round(Math.min(state.tokens, max)));
   el.meter.setAttribute("aria-valuemax", Math.round(max));
   el.meter.setAttribute("aria-valuetext",
-    `${fmt(state.tokens)} tokens of a ${fmt(max)} token budget${over ? ", over budget" : ""}`);
+    `${fmt(state.tokens)}\u00a0tokens of a ${fmt(max)}\u00a0token budget${over ? ", over budget" : ""}`);
 
   renderMeterState();
 
@@ -689,12 +689,12 @@ function renderMeterState() {
   if (p) {
     dot = "state-working";
     label = p.phase === "reduce"
-      ? `${over ? "Over budget" : "Folding"} — joining ${p.total} summaries into one digest…`
-      : `${over ? "Over budget" : "Folding"} — folding now (section ${Math.min(p.done + 1, p.total)}/${p.total})…`;
+      ? `${over ? "Over budget" : "Folding"}\u00a0— joining ${p.total} summaries into one digest…`
+      : `${over ? "Over budget" : "Folding"}\u00a0— folding now (section ${Math.min(p.done + 1, p.total)}/${p.total})…`;
   } else if (over) {
     dot = "state-over";
-    label = `Over budget by ${fmt(state.tokens - max)} tokens — fold to continue`;
-  } else if (state.tokens >= max) { dot = "state-over"; label = "At the budget — fold to continue"; }
+    label = `Over budget by ${fmt(state.tokens - max)}\u00a0tokens\u00a0— fold to continue`;
+  } else if (state.tokens >= max) { dot = "state-over"; label = "At the budget\u00a0— fold to continue"; }
   else if (state.tokens >= max * CFG.compactAtRatio) { dot = "state-warn"; label = "Approaching the fold"; }
   el.meterState.innerHTML = `<span class="dot ${dot}" aria-hidden="true"></span> ${escapeHtml(label)}`;
 }
@@ -718,8 +718,8 @@ function renderLedger() {
     // 18px floor: below that the band label collides with its neighbour
     band.style.height = `${18 + Math.round((w / max) * 44)}px`;
     const head = textOf(m).replace(/\s+/g, " ").slice(0, 70);
-    band.textContent = `${fmt(w)} tok · ${head}`;
-    tip(band, `${kind === "summary" ? "Folded summary" : kind === "doc" ? "Ingested document" : m.role} · ~${fmt(w)} tokens (estimated share of the trim probe's total)`);
+    band.textContent = `${fmt(w)}\u00a0tok · ${head}`;
+    tip(band, `${kind === "summary" ? "Folded summary" : kind === "doc" ? "Ingested document" : m.role} · ~${fmt(w)}\u00a0tokens (estimated share of the trim probe's total)`);
     el.ledger.appendChild(band);
   });
 }
@@ -771,9 +771,9 @@ function addDocBubble(text, tokens) {
     body.dataset.mode = mode;
     body.textContent = mode === "full" ? text : excerpt + (truncated ? " …" : "");
     count.textContent =
-      `Showing ${fmt(showing)} of ${fmt(total)} characters` +
-      (tokens ? ` · ~${fmt(tokens)} tokens sent to the model` : "");
-    toggle.textContent = mode === "full" ? "Show excerpt" : `Show all ${fmt(total)} characters`;
+      `Showing ${fmt(showing)} of ${fmt(total)}\u00a0characters` +
+      (tokens ? ` · ~${fmt(tokens)}\u00a0tokens sent to the model` : "");
+    toggle.textContent = mode === "full" ? "Show excerpt" : `Show all ${fmt(total)}\u00a0characters`;
     toggle.setAttribute("aria-expanded", String(mode === "full"));
   };
 
@@ -798,7 +798,7 @@ function addEventCard(stats, foldNo, keep) {
   const card = document.createElement("div");
   card.className = "msg event";
   card.innerHTML = `
-    <h3 class="event-h">Fold ${foldNo} — history compacted, conversation intact</h3>
+    <h3 class="event-h">Fold ${foldNo}\u00a0— history compacted, conversation intact</h3>
     <div class="event-figures">
       <div><span class="k">tokens</span><span>${fmt(before)} → ${fmt(after)}</span></div>
       <div><span class="k">freed</span><span>${fmt(freed)} (${pct}%)</span></div>
@@ -809,12 +809,12 @@ function addEventCard(stats, foldNo, keep) {
       <div class="ba-row"><span>before</span><span class="ba-bar"><span style="width:100%"></span></span><span class="ba-val">${fmt(before)}</span></div>
       <div class="ba-row after"><span>after</span><span class="ba-bar"><span style="width:${before ? (after / before) * 100 : 0}%"></span></span><span class="ba-val">${fmt(after)}</span></div>
     </div>
-    <p class="event-note">Everything older than the last ${keep} message${keep === 1 ? "" : "s"} is now one summary,
+    <p class="event-note">Everything older than the last ${keep}\u00a0message${keep === 1 ? "" : "s"} is now one summary,
     written by <code>${escapeHtml(state.model.model)}</code> on your credentials. Ask for a detail it
-    dropped — the assistant will say so.</p>`;
+    dropped\u00a0— the assistant will say so.</p>`;
   // anchor the tooltip to the heading, not the whole card: a card-wide
   // trigger pops the panel over its own figures
-  tip(card.querySelector(".event-h"), `POST /1/unstable/context/compact — bars share one 0→${fmt(before)} token scale`,
+  tip(card.querySelector(".event-h"), `POST /1/unstable/context/compact\u00a0— bars share one 0→${fmt(before)}\u00a0token scale`,
     `{ providerID, model: "${state.model.model}", keepLastMessages: ${keep}, messages }`);
   el.thread.appendChild(card);
   el.thread.scrollTop = el.thread.scrollHeight;

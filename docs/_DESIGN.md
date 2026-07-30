@@ -77,11 +77,28 @@ And keep them honest: percentages run against a 0–100% axis, an estimate says
 "≈", and a figure counted from a file that ships with the page says so. A number
 nobody can check is decoration.
 
+## Where lines break
+
+There is no correct render to proofread a line break against — the same
+paragraph wraps differently at every width, so a screenshot only ever checks
+one of them. The wraps are not proofread; they are instructed:
+
+- `text-wrap: pretty` on prose and `balance` on headings (shared/tokens.css)
+  let the browser plan breaks over the whole block instead of line by line.
+- An inline code span never breaks inside prose — `context/trim` cut at the
+  slash is not two smaller words, it is noise.
+- Em-dashes and number–unit pairs are glued in the copy itself, so no width can
+  open a line with "—" or strand "window" from its "200k": `&nbsp;` in HTML,
+  a `\u00a0` escape in JS strings. Nobody writes those by hand — see `--fix`.
+- A break that carries meaning is not a wrap, it is a line: author it. Two
+  sentences that must separate are two `<p>`s.
+
 ## Running the check
 
 ```bash
 node scripts/check-copy.js            # report and gate
 node scripts/check-copy.js --verbose  # every long sentence and tooltip
+node scripts/check-copy.js --fix      # write the wrap glue in place
 ```
 
 It checks the HTML pages *and* every string-literal run in the JS under

@@ -160,7 +160,7 @@ async function api(path, body, { stream = false } = {}) {
       if (typeof detail === "object") detail = JSON.stringify(detail);
     } catch (_) { /* keep statusText */ }
     logCall(path, null, `${res.status} ${detail}`);
-    const err = new Error(`${res.status} — ${detail}`);
+    const err = new Error(`${res.status}\u00a0— ${detail}`);
     err.status = res.status;
     err.detail = String(detail);
     throw err;
@@ -231,7 +231,7 @@ function docsLink(path, label = "docs ↗") {
   a.target = "_blank";
   a.rel = "noopener noreferrer";
   a.textContent = label;
-  tip(a, "Opens this endpoint's entry in the service's own OpenAPI reference — the schema the " +
+  tip(a, "Opens this endpoint's entry in the service's own OpenAPI reference\u00a0— the schema the " +
     "API generates, not a copy of it.", url);
   return a;
 }
@@ -240,7 +240,7 @@ function docsLink(path, label = "docs ↗") {
 
 function logCall(path, stats, error, note, verb = "POST", cost = null) {
   state.calls += 1;
-  el.wireCount.textContent = `${state.calls} call${state.calls === 1 ? "" : "s"}`;
+  el.wireCount.textContent = `${state.calls}\u00a0call${state.calls === 1 ? "" : "s"}`;
   const li = document.createElement("li");
   const bits = [`<span class="wire-path"><span class="verb">${escapeHtml(verb)}</span> ${escapeHtml(path)}</span>`];
   if (note) bits.push(`<span class="stat">${escapeHtml(note)}</span>`);
@@ -258,8 +258,8 @@ function logCall(path, stats, error, note, verb = "POST", cost = null) {
     chip.textContent = cost === 0 ? "$0 · no LLM" : `~${usd(cost)}`;
     tip(chip, cost === 0
       ? "context/trim counts without calling a model, so it is free on both sides of the " +
-        "meter — and it is why the meter can be honest without shipping a tokenizer."
-      : () => `Charged to the real side at ${priceLine()} Estimated — the API does not ` +
+        "meter\u00a0— and it is why the meter can be honest without shipping a tokenizer."
+      : () => `Charged to the real side at ${priceLine()} Estimated\u00a0— the API does not ` +
         `expose summarizer usage yet, so the call's before/after token counts stand in.`);
     li.appendChild(chip);
   }
@@ -387,7 +387,7 @@ function renderMeter() {
   el.fill.classList.toggle("is-over", state.tokens > max);
   const ratio = CFG.compactAtRatio;
   el.threshold.style.left = `${ratio * 100}%`;
-  el.read.textContent = `${fmt(state.tokens)} / ${fmt(max)} tokens`;
+  el.read.textContent = `${fmt(state.tokens)} / ${fmt(max)}\u00a0tokens`;
   el.axisMax.textContent = fmt(max);
   el.axisThreshold.textContent = `${Math.round(ratio * 100)}% · ${fmt(max * ratio)}`;
   el.meter.setAttribute("aria-valuenow", String(Math.round(state.tokens)));
@@ -407,7 +407,7 @@ function renderMeterState() {
   else if (state.tokens > max) { dot = "state-over"; label = "Over the working budget"; }
   else if (state.tokens >= max * CFG.compactAtRatio) {
     dot = "state-warn";
-    label = "At the threshold — the next answer folds it";
+    label = "At the threshold\u00a0— the next answer folds it";
   }
   el.meterState.innerHTML = `<span class="dot ${dot}" aria-hidden="true"></span> ${escapeHtml(label)}`;
 }
@@ -421,7 +421,7 @@ function renderCompactHint() {
   }
   const passes = Math.max(1, Math.ceil(state.tokens / Math.max(1, plan.tokens)));
   el.compactHint.textContent = state.folds === 0
-    ? `${fmt(plan.cut)} of ${fmt(state.messages.length)} messages fit in one call — about ` +
+    ? `${fmt(plan.cut)} of ${fmt(state.messages.length)}\u00a0messages fit in one call\u00a0— about ` +
       `${passes} pass${passes === 1 ? "" : "es"} to get under the threshold.`
     : `Auto-compaction is on. It fires by itself at ${fmt(currentWindow() * CFG.compactAtRatio)} ` +
       `tokens; this button only makes it happen sooner.`;
@@ -436,7 +436,7 @@ function renderLedger() {
     band.className = `band band-${kind}`;
     band.style.flexGrow = String(Math.max(state.weights[i] / total, 0.0008));
     const head = textOf(m).replace(/\s+/g, " ").slice(0, 70);
-    tip(band, `${kind} · ~${fmt(state.weights[i])} tokens\n\n${head}…`);
+    tip(band, `${kind} · ~${fmt(state.weights[i])}\u00a0tokens\n\n${head}…`);
     el.ledger.appendChild(band);
   });
 }
@@ -646,7 +646,7 @@ function addAnswerBubble(msg) {
   who.className = "who";
   who.textContent = "assistant";
   tip(who, "Answers arrive as Markdown. The page escapes the text first, then renders " +
-    "structure on top — locally, in md.js. Model HTML is never inserted as HTML.");
+    "structure on top\u00a0— locally, in md.js. Model HTML is never inserted as HTML.");
   wrap.appendChild(who);
   const bubble = document.createElement("div");
   bubble.className = "bubble";
@@ -697,14 +697,14 @@ function setBacklogCard() {
   card.querySelector(".bk-title").textContent =
     `${fmt(hidden)} earlier messages, still carried in full`;
   card.querySelector(".bk-note").innerHTML =
-    `${fmt(a.messageCount)} messages — ${fmt(a.exchanges)} exchanges — all still in the ` +
+    `${fmt(a.messageCount)}\u00a0messages\u00a0— ${fmt(a.exchanges)}\u00a0exchanges\u00a0— all still in the ` +
     `history sent to the model. You can read the last ${TUNE.visibleMessages}; the ledger ` +
-    `holds the rest. <strong>${fmt(a.tokens)} tokens</strong>, counted by ` +
+    `holds the rest. <strong>${fmt(a.tokens)}\u00a0tokens</strong>, counted by ` +
     `<code>context/trim</code>. That is ${a.tokens > currentWindow()
       ? `past the ${fmt(currentWindow())}-token budget — nothing can go out yet`
       : `already over the fold threshold`}.`;
   tip(card.querySelector(".event-h"),
-    `The committed file quotes ${fmt(a.claimed)} tokens — a deliberate floor. The figure ` +
+    `The committed file quotes ${fmt(a.claimed)}\u00a0tokens\u00a0— a deliberate floor. The figure ` +
     `above is ${fmt(a.tokens)}: what context/trim answered for the exact array being ` +
     `carried. Where they differ, the measurement wins.`,
     "POST /1/unstable/context/trim\n{ messages }  →  stats.tokensBeforeEstimate",
@@ -725,8 +725,8 @@ function setFoldRecord(summary, meta) {
   card.querySelector(".rc-title").textContent =
     `the thread so far, folded ${state.folds} time${state.folds === 1 ? "" : "s"}`;
   card.querySelector(".rc-note").innerHTML =
-    `Everything above the last ${TUNE.keepLast} messages is now this one summary — ` +
-    `<strong>${fmt(estTokens(text.length))} tokens standing in for ${fmt(a.tokens)}</strong>. ` +
+    `Everything above the last ${TUNE.keepLast}\u00a0messages is now this one summary\u00a0— ` +
+    `<strong>${fmt(estTokens(text.length))}\u00a0tokens standing in for ${fmt(a.tokens)}</strong>. ` +
     `A real message in the history: every turn from here carries it, and nothing else of ` +
     `what came before.`;
   const peek = document.createElement("button");
@@ -734,11 +734,11 @@ function setFoldRecord(summary, meta) {
   peek.className = "sum-peek";
   peek.textContent = peekOf(text);
   tip(peek, text, null,
-    { rich: true, markdown: true, heading: `The summary · ${fmt(estTokens(text.length))} tokens` });
+    { rich: true, markdown: true, heading: `The summary · ${fmt(estTokens(text.length))}\u00a0tokens` });
   card.appendChild(peek);
   tip(card.querySelector(".event-h"),
     `Written by ${state.model.label} through context/compact, on your own credentials. The ` +
-    `originals simply are not carried any more — that is the entire saving. ` +
+    `originals simply are not carried any more\u00a0— that is the entire saving. ` +
     `${meta ? `The last pass reclaimed ${fmt(meta.reclaimed)} tokens.` : ""}`,
     "POST /1/unstable/context/compact\n{ messages, keepLastMessages: 0 }");
 
@@ -763,19 +763,19 @@ function addFoldCard({ auto }) {
   const plan = compactor.plan();
   const passes = plan ? Math.max(1, Math.ceil(state.tokens / Math.max(1, plan.tokens))) : 1;
   card.querySelector(".fd-title").textContent = auto
-    ? "the budget filled, so it folded — nobody asked"
+    ? "the budget filled, so it folded\u00a0— nobody asked"
     : "folding the backlog";
   card.querySelector(".fd-why").innerHTML = auto
-    ? `The last answer took the history past ${fmt(currentWindow() * CFG.compactAtRatio)} tokens, ` +
+    ? `The last answer took the history past ${fmt(currentWindow() * CFG.compactAtRatio)}\u00a0tokens, ` +
       `which is ${Math.round(CFG.compactAtRatio * 100)}% of the working budget. From here this ` +
       `happens on its own, every time, for as long as you keep going.`
-    : `${fmt(state.tokens)} tokens is more than one <code>context/compact</code> call can ` +
-      `carry — the payload must fit the summarizer's window too. So the oldest end goes ` +
+    : `${fmt(state.tokens)}\u00a0tokens is more than one <code>context/compact</code> call can ` +
+      `carry\u00a0— the payload must fit the summarizer's window too. So the oldest end goes ` +
       `first: ~${passes} pass${passes === 1 ? "" : "es"} of at most ` +
-      `${fmt(Math.round(modelWindow() * TUNE.maxPayloadRatio))} tokens, each folding the ` +
+      `${fmt(Math.round(modelWindow() * TUNE.maxPayloadRatio))}\u00a0tokens, each folding the ` +
       `previous summary in with the next stretch.`;
   tip(card.querySelector(".event-h"),
-    "The fold decision lives in shared/compactor.js — a driver that owns none of this " +
+    "The fold decision lives in shared/compactor.js\u00a0— a driver that owns none of this " +
     "page's history and calls back into it. Each row below is one API call.",
     "createCompactor({ probe, compact, budget, ratio, onHistory, onCharge })");
 
@@ -796,7 +796,7 @@ function addFoldCard({ auto }) {
       row.dataset.state = "working";
       row.innerHTML = '<span class="mark" aria-hidden="true"></span>' +
         `<span class="lbl">pass ${meta.pass} · folding ${fmt(meta.folding)} ` +
-        `message${meta.folding === 1 ? "" : "s"} (~${fmt(meta.payloadTokens)} tok)</span>` +
+        `message${meta.folding === 1 ? "" : "s"} (~${fmt(meta.payloadTokens)}\u00a0tok)</span>` +
         '<span class="val">…</span>';
       steps.appendChild(row);
       el.thread.scrollTop = el.thread.scrollHeight;
@@ -814,28 +814,28 @@ function addFoldCard({ auto }) {
       if (!row) return;
       row.dataset.state = "done";
       row.querySelector(".val").textContent =
-        `${fmt(meta.tokensBefore)} → ${fmt(meta.tokensAfter)} tok`;
+        `${fmt(meta.tokensBefore)} → ${fmt(meta.tokensAfter)}\u00a0tok`;
       row = null;
     },
     done(run) {
       clearInterval(ticker);
       const secs = ((performance.now() - t0) / 1000).toFixed(1);
-      const head = `${secs}s · ${run.passes} call${run.passes === 1 ? "" : "s"} · ` +
-        `${fmt(run.reclaimed)} tokens reclaimed`;
+      const head = `${secs}s · ${run.passes}\u00a0call${run.passes === 1 ? "" : "s"} · ` +
+        `${fmt(run.reclaimed)}\u00a0tokens reclaimed`;
       // A fold that stops still over the line is not a failure, and the copy
       // should not read like one: the protected tail can simply weigh more than
       // the threshold, which is what the automatic loop then works through as
       // those long arriving turns age out of it.
       live.textContent = run.stalled || run.stillOver
-        ? `${head} · still ${fmt(state.tokens)} tokens: the protected last ${TUNE.keepLast} ` +
+        ? `${head} · still ${fmt(state.tokens)}\u00a0tokens: the protected last ${TUNE.keepLast} ` +
           `messages weigh that much on their own. Another pass would buy no room, so it ` +
-          `stopped — auto-compaction keeps working it down as those long turns age out.`
-        : `${head} · back under the threshold, with the last ${TUNE.keepLast} messages untouched.`;
+          `stopped\u00a0— auto-compaction keeps working it down as those long turns age out.`
+        : `${head} · back under the threshold, with the last ${TUNE.keepLast}\u00a0messages untouched.`;
     },
     failed(message) {
       clearInterval(ticker);
       if (row) { row.dataset.state = "failed"; row.querySelector(".val").textContent = message; }
-      live.textContent = "the history is unchanged — nothing was folded.";
+      live.textContent = "the history is unchanged\u00a0— nothing was folded.";
     },
   };
 }
@@ -986,10 +986,10 @@ const SOURCE_TIP = {
   shipped: "These three came with the conversation file, so the very first click costs nothing " +
     "extra. From the next answer onwards they are the agent's own, or generated from it.",
   stream: "The agent emitted these itself, as data-suggestions frames inside the same SSE " +
-    "stream that carried the answer. No extra call, no extra tokens — the chips are free when " +
+    "stream that carried the answer. No extra call, no extra tokens\u00a0— the chips are free when " +
     "the agent is configured to offer them.",
   generated: "No agent in this demo emits data-suggestions, so these cost one extra " +
-    "completion — carrying only the last answer, charged to the real side like everything " +
+    "completion\u00a0— carrying only the last answer, charged to the real side like everything " +
     "else. Native frames are used whenever they arrive; the wire log says which happened.",
 };
 
@@ -1030,7 +1030,7 @@ async function refreshSuggestions(out) {
     // chips are a convenience: losing them is not worth an error card, and the
     // composer is still there
     logCall("/1/agents/{id}/completions", null, e.detail || e.message,
-      "suggestions could not be generated — type instead");
+      "suggestions could not be generated\u00a0— type instead");
   }
 }
 
@@ -1040,7 +1040,7 @@ function renderRide() {
   el.rideStop.hidden = !riding;
   el.rideCount.textContent = riding
     ? `${state.ride.left} to go`
-    : (state.turns ? `${state.turns} turn${state.turns === 1 ? "" : "s"} since you arrived` : "");
+    : (state.turns ? `${state.turns}\u00a0turn${state.turns === 1 ? "" : "s"} since you arrived` : "");
   el.ride.textContent = `Keep going ×${TUNE.rideTurns}`;
 }
 
@@ -1075,8 +1075,8 @@ function renderTurnline() {
   if (!a) { el.turnline.textContent = ""; return; }
   const total = a.exchanges + state.turns;
   el.turnline.textContent =
-    `${fmt(a.exchanges)} exchanges were here before you, and ${fmt(state.turns)} since — ` +
-    `${fmt(total)} in this thread, carried in ${fmt(state.messages.length)} messages after ` +
+    `${fmt(a.exchanges)}\u00a0exchanges were here before you, and ${fmt(state.turns)} since\u00a0— ` +
+    `${fmt(total)} in this thread, carried in ${fmt(state.messages.length)}\u00a0messages after ` +
     `${fmt(state.folds)} fold${state.folds === 1 ? "" : "s"}` +
     `${state.reclaimed ? ` that reclaimed ${fmt(state.reclaimed)} tokens` : ""}.`;
   el.heroBehind.textContent = fmt(a.exchanges);
@@ -1135,7 +1135,7 @@ async function send(text) {
   try {
     const realIn = Math.round(state.tokens + naiveQuestion);
     out = await streamAnswer(state.messages, {
-      note: `stream=true · ${state.model.model} · ${fmt(state.messages.length)} messages`,
+      note: `stream=true · ${state.model.model} · ${fmt(state.messages.length)}\u00a0messages`,
       into,
     });
     chargeChat(realIn, estTokens(out.chars));
@@ -1146,7 +1146,7 @@ async function send(text) {
       if (!out.answer) {
         rollback();
         addErrorCard("The model stopped before answering", humanize({ detail }),
-          "Your message is back in the box — nothing was left half-recorded in the history.");
+          "Your message is back in the box\u00a0— nothing was left half-recorded in the history.");
         busy(false);
         return;
       }
@@ -1165,7 +1165,7 @@ async function send(text) {
   } catch (e) {
     rollback();
     addErrorCard("The model did not answer", humanize(e),
-      "Your message is back in the box — nothing was left half-recorded in the history.");
+      "Your message is back in the box\u00a0— nothing was left half-recorded in the history.");
     busy(false);
     return;
   }
@@ -1195,7 +1195,7 @@ async function autoFold() {
     const run = await compactor.afterTurn();
     card.done(run);
   } catch (e) {
-    card.failed(`failed — ${e.status || "network"}`);
+    card.failed(`failed\u00a0— ${e.status || "network"}`);
     addErrorCard("Auto-compaction failed", humanize(e),
       "The history is unchanged, so the next turn will try again.");
   } finally {
@@ -1219,7 +1219,7 @@ async function foldBacklog() {
     el.compact.textContent = "Compact now";
     if (!state.suggestions.length) renderChips();
   } catch (e) {
-    card.failed(`failed — ${e.status || "network"}`);
+    card.failed(`failed\u00a0— ${e.status || "network"}`);
     addErrorCard("Could not fold the backlog", humanize(e),
       "Nothing was changed. The whole thread is still in the history, exactly as it arrived.");
   } finally {
@@ -1257,16 +1257,16 @@ function sagaCard(entry) {
   b.querySelector(".saga-register").textContent = entry.register;
   b.querySelector(".saga-blurb").textContent = entry.blurb;
   b.querySelector(".saga-meta").innerHTML =
-    `<span>${fmt(entry.exchanges)} exchanges</span>` +
-    `<span>${fmt(entry.messageCount)} messages</span>` +
-    `<span>${known ? "" : "≥"}${fmt(tokens)} tok${known ? " counted" : ""}</span>` +
+    `<span>${fmt(entry.exchanges)}\u00a0exchanges</span>` +
+    `<span>${fmt(entry.messageCount)}\u00a0messages</span>` +
+    `<span>${known ? "" : "≥"}${fmt(tokens)}\u00a0tok${known ? " counted" : ""}</span>` +
     (oversize ? '<span class="saga-flag">past the window</span>' : "");
   tip(b, () =>
     `Every figure is counted from the committed file. ` +
     (known
-      ? `Tokens: ${fmt(known)}, measured by context/trim on this exact thread — the file ` +
+      ? `Tokens: ${fmt(known)}, measured by context/trim on this exact thread\u00a0— the file ` +
         `itself claims only ${fmt(entry.tokens)}, deliberately low.`
-      : `Tokens: a floor, not a measurement — text like this usually tokenizes higher. ` +
+      : `Tokens: a floor, not a measurement\u00a0— text like this usually tokenizes higher. ` +
         `context/trim measures it the moment you load the thread.`) +
     (oversize
       ? ` Past ${state.model.label}'s ${fmt(modelWindow())}-token window: a naive run would ` +
@@ -1294,7 +1294,7 @@ function renderProvenance() {
     `<code>tools/generate-conversations.js</code>, in the repository: an authored arc, cut ` +
     `into chapters, with the prose written from it.</p>` +
     `<p class="prov-method">${escapeHtml(methods.join(" · ") || "see the scenario files")}</p>` +
-    `<p>The generator prefers self-play against this same API — two personas talking for a ` +
+    `<p>The generator prefers self-play against this same API\u00a0— two personas talking for a ` +
     `few hundred turns. These files came from its offline path instead (the demo credential ` +
     `had expired), and each file records which path produced it. Every figure on a card is ` +
     `counted from the file, not claimed.</p>`;
@@ -1311,7 +1311,7 @@ async function loadSaga(slug) {
     if (!res.ok) throw new Error(`${res.status} loading ${entry.file}`);
     const record = await res.json();
     logCall(`/assets/convs/${entry.file}`, null, null,
-      `${fmt(record.messageCount)} messages · ${fmt(record.chars)} chars · from this origin`,
+      `${fmt(record.messageCount)}\u00a0messages · ${fmt(record.chars)}\u00a0chars · from this origin`,
       "GET", 0);
 
     state.saga = entry;
@@ -1354,7 +1354,7 @@ async function loadSaga(slug) {
     renderChips();
     el.compact.textContent = "Fold the backlog";
     el.sagaStatus.innerHTML =
-      `${escapeHtml(record.opener)} <strong>${fmt(state.tokens)} tokens</strong> counted, ` +
+      `${escapeHtml(record.opener)} <strong>${fmt(state.tokens)}\u00a0tokens</strong> counted, ` +
       `against a ${fmt(currentWindow())}-token working budget.`;
     el.thread.scrollTop = el.thread.scrollHeight;
   } catch (e) {
@@ -1399,7 +1399,7 @@ function initModels() {
   CFG.models.forEach((m, i) => {
     const opt = document.createElement("option");
     opt.value = String(i);
-    opt.textContent = m.badge ? `${m.label} — ${m.badge}` : m.label;
+    opt.textContent = m.badge ? `${m.label}\u00a0— ${m.badge}` : m.label;
     el.model.appendChild(opt);
   });
   state.model = CFG.models[0];
@@ -1423,7 +1423,7 @@ function initBudgets() {
   CFG.budgets.forEach((b, i) => {
     const opt = document.createElement("option");
     opt.value = String(i);
-    opt.textContent = b.value ? `${b.label} tokens` : b.label;
+    opt.textContent = b.value ? `${b.label}\u00a0tokens` : b.label;
     if (b.value === CFG.defaultBudget) opt.selected = true;
     el.budget.appendChild(opt);
   });
@@ -1437,8 +1437,8 @@ function initBudgets() {
 
 function setBudgetHint() {
   el.budgetHint.textContent = state.budget
-    ? `Auto-compaction fires at ${fmt(state.budget * CFG.compactAtRatio)} tokens`
-    : "Full model window — a turn-by-turn demo will not reach it";
+    ? `Auto-compaction fires at ${fmt(state.budget * CFG.compactAtRatio)}\u00a0tokens`
+    : "Full model window\u00a0— a turn-by-turn demo will not reach it";
 }
 
 /* ── Theme ────────────────────────────────────────────────────────
@@ -1535,20 +1535,20 @@ async function init() {
   tip(el.chipsInfo, () => SOURCE_TIP[state.suggestionSource] || SOURCE_TIP.generated);
   tip(el.meter, () =>
     `Filled 0→max, never a truncated axis; the number is context/trim's, not a guess. ` +
-    `**Budget** — ${fmt(currentWindow())} tokens, a demo device — is what auto-compaction ` +
-    `watches (fires at ${Math.round(CFG.compactAtRatio * 100)}%). **Real window** — ` +
-    `${state.model.label}'s ${fmt(modelWindow())} — is what the provider enforces, and ` +
+    `**Budget**\u00a0— ${fmt(currentWindow())}\u00a0tokens, a demo device\u00a0— is what auto-compaction ` +
+    `watches (fires at ${Math.round(CFG.compactAtRatio * 100)}%). **Real window**\u00a0— ` +
+    `${state.model.label}'s ${fmt(modelWindow())}\u00a0— is what the provider enforces, and ` +
     `decides expensive versus impossible.`,
     "POST /1/unstable/context/trim\n{ messages }  →  stats.tokensBeforeEstimate",
     { heading: "Two ceilings" });
   tip(el.ledger, () =>
-    `One band per message in the live history — ${fmt(state.messages.length)} of them right now. ` +
+    `One band per message in the live history\u00a0— ${fmt(state.messages.length)} of them right now. ` +
     `Height is that message's share of the probe's token total. The creased band at the top is ` +
     `the fold: one summary standing in for everything it replaced.`);
   tip(el.modelHint, () =>
     `The provider enforces it on the chat call and the summarizer alike. A fold pass is ` +
-    `sized at ${Math.round(TUNE.maxPayloadRatio * 100)}% of it — ` +
-    `${fmt(Math.round(modelWindow() * TUNE.maxPayloadRatio))} tokens — because the payload ` +
+    `sized at ${Math.round(TUNE.maxPayloadRatio * 100)}% of it\u00a0— ` +
+    `${fmt(Math.round(modelWindow() * TUNE.maxPayloadRatio))}\u00a0tokens\u00a0— because the payload ` +
     `must fit the summarizer too.`,
     null, { heading: "The model's real window" });
 
@@ -1564,7 +1564,7 @@ async function init() {
   } catch (e) {
     el.sagaStatus.textContent = "";
     addErrorCard("Could not load the conversation manifest", humanize(e),
-      "The seeded threads live in public/assets/convs/ — serve the site over http rather than " +
+      "The seeded threads live in public/assets/convs/\u00a0— serve the site over http rather than " +
       "opening the file directly.");
   }
 }

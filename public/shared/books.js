@@ -47,10 +47,10 @@
       chars: 31498,
       hook: "the smallest thing on the shelf, and still too big for an 8k budget",
       chips: [
-        { kind: "needle", short: "what John prescribes", text: "John is a physician — what does he decide is wrong with his wife, and what does he prescribe for it?" },
+        { kind: "needle", short: "what John prescribes", text: "John is a physician\u00a0— what does he decide is wrong with his wife, and what does he prescribe for it?" },
         { kind: "needle", short: "the smooch on the wall", text: "There is a long smooch low down on the wall. What does the narrator work out has been making it?" },
-        { kind: "arc", short: "the diary tightening", text: "The whole story is her secret journal — how does the writing itself change from the first entry to the last?" },
-        { kind: "arc", short: "the room as diagnosis", text: "How do the descriptions of the nursery — the bars, the nailed bedstead, the torn paper — track what is happening to her?" },
+        { kind: "arc", short: "the diary tightening", text: "The whole story is her secret journal\u00a0— how does the writing itself change from the first entry to the last?" },
+        { kind: "arc", short: "the room as diagnosis", text: "How do the descriptions of the nursery\u00a0— the bars, the nailed bedstead, the torn paper\u00a0— track what is happening to her?" },
       ],
     },
     {
@@ -65,7 +65,7 @@
       chips: [
         { kind: "needle", short: "who taught him letters", text: "Who begins teaching Douglass to read in Baltimore, and what makes her stop?" },
         { kind: "needle", short: "the fight with Covey", text: "What happens when Douglass finally fights back against Covey, and what does Covey do about it afterwards?" },
-        { kind: "arc", short: "reading as the road out", text: "Douglass ties literacy to freedom again and again — trace how that argument builds across the whole narrative." },
+        { kind: "arc", short: "reading as the road out", text: "Douglass ties literacy to freedom again and again\u00a0— trace how that argument builds across the whole narrative." },
         { kind: "arc", short: "why the appendix exists", text: "How does the tone of the closing appendix on religion differ from the narrative it follows, and why does he add it?" },
       ],
     },
@@ -77,7 +77,7 @@
       gutenbergId: 21,
       words: 44877,
       chars: 243658,
-      hook: "three hundred separate fables — the one book on this shelf where search should win outright",
+      hook: "three hundred separate fables\u00a0— the one book on this shelf where search should win outright",
       chips: [
         { kind: "needle", short: "what the fox says", text: "In The Fox and the Grapes, what exactly does the fox say as she turns away?" },
         { kind: "needle", short: "the boy's false alarms", text: "In The Shepherd's Boy and the Wolf, what does the boy shout, and what happens the time the wolf is real?" },
@@ -98,7 +98,7 @@
       chips: [
         { kind: "needle", short: "the parrot's phrase", text: "What does the caged parrot in the opening scene keep repeating, and who is driven off by it?" },
         { kind: "needle", short: "the pigeon house", text: "What is the pigeon house, and why does Edna move into it?" },
-        { kind: "arc", short: "two possible futures", text: "Adèle Ratignolle and Mademoiselle Reisz are two futures on offer — how does the book set them against each other?" },
+        { kind: "arc", short: "two possible futures", text: "Adèle Ratignolle and Mademoiselle Reisz are two futures on offer\u00a0— how does the book set them against each other?" },
         { kind: "arc", short: "first swim to last", text: "How does Edna's sense of her own life change between the first swim at Grand Isle and the closing chapter?" },
       ],
     },
@@ -114,7 +114,7 @@
       chips: [
         { kind: "needle", short: "double-consciousness", text: "Where does Du Bois introduce double-consciousness, and how does he define it?" },
         { kind: "needle", short: "against Washington", text: "What is Du Bois's specific objection to Booker T. Washington's programme?" },
-        { kind: "arc", short: "the Veil, essay by essay", text: "The Veil runs through every chapter — how does what it stands for shift from the first essay to the sorrow songs?" },
+        { kind: "arc", short: "the Veil, essay by essay", text: "The Veil runs through every chapter\u00a0— how does what it stands for shift from the first essay to the sorrow songs?" },
         { kind: "arc", short: "what holds it together", text: "This book is argument, memoir, a short story and musical notation at once. What holds it together as one book?" },
       ],
     },
@@ -131,7 +131,7 @@
         { kind: "needle", short: "carrots and the slate", text: "What does Anne do when Gilbert Blythe calls her Carrots?" },
         { kind: "needle", short: "the cake for Mrs. Allan", text: "What ruins the cake Anne bakes for Mrs. Allan, and how does she find out?" },
         { kind: "arc", short: "Marilla, softening", text: "How does Marilla's feeling for Anne change over the course of the book, and which moments move it?" },
-        { kind: "arc", short: "imagination, scrape by scrape", text: "Anne's imagination causes every disaster and also rescues her — trace that pattern through the whole novel." },
+        { kind: "arc", short: "imagination, scrape by scrape", text: "Anne's imagination causes every disaster and also rescues her\u00a0— trace that pattern through the whole novel." },
       ],
     },
     {
@@ -142,7 +142,7 @@
       gutenbergId: 128,
       words: 111597,
       chars: 597836,
-      hook: "stories inside stories inside stories — the frame is the thing retrieval cannot see",
+      hook: "stories inside stories inside stories\u00a0— the frame is the thing retrieval cannot see",
       chips: [
         { kind: "needle", short: "the fisherman's net", text: "In The Story of the Fisherman, what does the fisherman bring up in his net, and how does he get the genius back into it?" },
         { kind: "needle", short: "Aladdin in the cave", text: "In Aladdin and the Wonderful Lamp, what does the magician want out of the cave, and why does Aladdin refuse to hand it over?" },
@@ -162,7 +162,7 @@
       chips: [
         { kind: "needle", short: "the first proposal", text: "How does Darcy open his first proposal at Hunsford, and what does Elizabeth say back to him?" },
         { kind: "needle", short: "Lady Catherine's visit", text: "What does Lady Catherine de Bourgh come to Longbourn to demand, and how does that visit backfire on her?" },
-        { kind: "arc", short: "who is proud, who prejudiced", text: "Both words in the title are charges that land on both leads — trace who learns which one is theirs." },
+        { kind: "arc", short: "who is proud, who prejudiced", text: "Both words in the title are charges that land on both leads\u00a0— trace who learns which one is theirs." },
         { kind: "arc", short: "Elizabeth re-reading Darcy", text: "How does Elizabeth's judgment of Darcy change across the novel, and what actually changes it?" },
       ],
     },
@@ -174,7 +174,7 @@
       gutenbergId: 345,
       words: 161321,
       chars: 845890,
-      hook: "letters, diaries, telegrams and news cuttings — a novel assembled from documents",
+      hook: "letters, diaries, telegrams and news cuttings\u00a0— a novel assembled from documents",
       chips: [
         { kind: "needle", short: "the Demeter's log", text: "What does the log found aboard the Demeter at Whitby record about the voyage?" },
         { kind: "needle", short: "Renfield's collection", text: "What does Renfield keep in his cell at the asylum, and what does he say about blood?" },
@@ -194,7 +194,7 @@
       chips: [
         { kind: "needle", short: "the red-room", text: "What lands Jane in the red-room at Gateshead, and what happens to her while she is shut in it?" },
         { kind: "needle", short: "the interrupted wedding", text: "Who interrupts Jane's wedding, on what grounds, and what is she taken upstairs to see afterwards?" },
-        { kind: "arc", short: "five houses, five Janes", text: "Gateshead, Lowood, Thornfield, Moor House, Ferndean — how does each place change what Jane wants?" },
+        { kind: "arc", short: "five houses, five Janes", text: "Gateshead, Lowood, Thornfield, Moor House, Ferndean\u00a0— how does each place change what Jane wants?" },
         { kind: "arc", short: "two refusals", text: "Jane refuses Rochester once and St. John Rivers once. What is she refusing each time, and is it the same refusal?" },
       ],
     },
@@ -206,7 +206,7 @@
       gutenbergId: 4300,
       words: 265059,
       chars: 1519708,
-      hook: "one day, eighteen episodes, a different prose style in each — and the ingest bill to match",
+      hook: "one day, eighteen episodes, a different prose style in each\u00a0— and the ingest bill to match",
       chips: [
         { kind: "needle", short: "the word Molly asks about", text: "What word does Molly ask Bloom to explain at breakfast, and how does he explain it to her?" },
         { kind: "needle", short: "the potted meat ad", text: "What does the Plumtree's potted meat advertisement say, and why does Bloom keep coming back to it?" },
@@ -238,12 +238,12 @@
       gutenbergId: 11,
       words: 26525,
       chars: 144600,
-      hook: "the warm-up — short enough to read, long enough to overflow a small budget",
+      hook: "the warm-up\u00a0— short enough to read, long enough to overflow a small budget",
       chips: [
         { kind: "needle", short: "the bottle and the cake", text: "What is written on the bottle Alice drinks from, and on the cake she finds afterwards?" },
         { kind: "needle", short: "the Hatter's riddle", text: "What riddle does the Hatter ask at the tea party, and does anyone ever answer it?" },
         { kind: "needle", short: "off with her head", text: "What does the Queen of Hearts shout whenever she is crossed, and does anyone actually lose their head?" },
-        { kind: "arc", short: "growing and shrinking", text: "Alice keeps changing size — how does the book use that as its running joke about growing up?" },
+        { kind: "arc", short: "growing and shrinking", text: "Alice keeps changing size\u00a0— how does the book use that as its running joke about growing up?" },
         { kind: "arc", short: "manners, start to trial", text: "Compare how politely Alice speaks to the creatures early on with how she speaks by the trial." },
       ],
     },
@@ -255,12 +255,12 @@
       gutenbergId: 35,
       words: 32454,
       chars: 179699,
-      hook: "one voice, one evening — a story told inside another story",
+      hook: "one voice, one evening\u00a0— a story told inside another story",
       chips: [
         { kind: "needle", short: "what year the dials read", text: "What year do the dials of the machine record when the Traveller first stops?" },
         { kind: "needle", short: "holding off the Morlocks", text: "What does the Traveller strike to hold the Morlocks back in the dark, and what happens when they run out?" },
         { kind: "needle", short: "the two peoples", text: "What are the two peoples of the far future called, and which of them lives underground?" },
-        { kind: "arc", short: "the listeners' scepticism", text: "The tale is told at a dinner table — how does the listeners' scepticism shift from the first chapter to the epilogue?" },
+        { kind: "arc", short: "the listeners' scepticism", text: "The tale is told at a dinner table\u00a0— how does the listeners' scepticism shift from the first chapter to the epilogue?" },
         { kind: "arc", short: "paradise turning dark", text: "How does the future turn from a paradise into something worse as the Traveller learns more about it?" },
       ],
     },
@@ -277,7 +277,7 @@
         { kind: "needle", short: "the three books", text: "Which three books does the creature find, and what does he take from each of them?" },
         { kind: "needle", short: "the bargain on the glacier", text: "What does the creature promise Victor on the glacier in exchange for a companion?" },
         { kind: "needle", short: "the wedding-night threat", text: "What threat does the creature make about the wedding night, and who does he actually kill?" },
-        { kind: "arc", short: "three narrators, one story", text: "Three narrators tell this story — Walton, Victor, the creature. How does each one undercut the others?" },
+        { kind: "arc", short: "three narrators, one story", text: "Three narrators tell this story\u00a0— Walton, Victor, the creature. How does each one undercut the others?" },
         { kind: "arc", short: "where sympathy moves", text: "At what point does sympathy move from Victor to the creature, and what moves it?" },
       ],
     },
@@ -289,13 +289,13 @@
       gutenbergId: 2701,
       words: 212796,
       chars: 1218939,
-      hook: "the stress test — 213k words, folded in sections before a single one is sent",
+      hook: "the stress test\u00a0— 213k\u00a0words, folded in sections before a single one is sent",
       chips: [
         { kind: "needle", short: "nailed to the mast", text: "What does Ahab nail to the mast, and what does he promise for it?" },
         { kind: "needle", short: "Father Mapple's sermon", text: "What does Father Mapple preach on before the voyage, and what does he say Jonah's sin was?" },
         { kind: "needle", short: "what saves Ishmael", text: "What keeps Ishmael afloat after the Pequod goes down, and whose was it?" },
         { kind: "arc", short: "tone, first page to last", text: "How does Ishmael's tone change from the first chapter to the last?" },
-        { kind: "arc", short: "where the voyage turns", text: "The crew signs on for an ordinary whaling voyage — where does the ship's purpose turn into Ahab's hunt?" },
+        { kind: "arc", short: "where the voyage turns", text: "The crew signs on for an ordinary whaling voyage\u00a0— where does the ship's purpose turn into Ahab's hunt?" },
       ],
     },
   ];
@@ -384,20 +384,20 @@
       label: "fits the budget",
       heading: "Small enough that nothing happens",
       note: "Under the auto-compaction threshold: the whole text rides along untouched, " +
-        "no summarizer call. At the default 8,000-token budget nothing lands here — " +
+        "no summarizer call. At the default 8,000-token budget nothing lands here\u00a0— " +
         "raise the budget and books start arriving.",
     },
     "budget-compact": {
       label: "compacts on your first question",
       heading: "Sent whole, then compacted on your first question",
       note: "These fit the model's real window in one piece, so nothing folds on " +
-        "arrival. They are far over the working budget, though — the first question " +
+        "arrival. They are far over the working budget, though\u00a0— the first question " +
         "triggers one summarizer call over the whole text.",
     },
     "oversize-fold": {
       label: "folds on arrival",
-      heading: "Too large to send at all — folded on arrival",
-      note: "Past 0.8 × the real window nothing can be sent — one compact call would " +
+      heading: "Too large to send at all\u00a0— folded on arrival",
+      note: "Past 0.8 × the real window nothing can be sent\u00a0— one compact call would " +
         "overflow the summarizer too. So: summarized in sections on arrival, joined " +
         "into one digest. Every section stays reopenable.",
     },
@@ -406,7 +406,7 @@
       heading: "Worth reading the price before you click",
       note: "Same mechanics as above, with a bill worth a decision: the summarizer " +
         "reads every word once, on your credentials, so these ask first. Which books " +
-        "land here depends on the model — change it and this group changes.",
+        "land here depends on the model\u00a0— change it and this group changes.",
     },
   };
 

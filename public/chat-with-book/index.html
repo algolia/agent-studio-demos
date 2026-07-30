@@ -3,26 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chat with a book — Agent Studio context APIs</title>
+<title>Chat with a book&nbsp;— Agent Studio context APIs</title>
 
 <!-- ── Social cards ───────────────────────────────────────────────
      Absolute URLs throughout: a crawler has no page to resolve a relative
      path against. The image is a real 1200×630 screenshot of this page with a
      document already ingested, so the token count on the card is one the trim
      endpoint actually returned. ──── -->
-<meta name="description" content="Chat with an entire book on a small-context model — hierarchical compaction folds Moby-Dick's 1.2M characters into a conversation that never overflows a 200k window, and every API call is shown on screen.">
+<meta name="description" content="Chat with an entire book on a small-context model&nbsp;— hierarchical compaction folds Moby-Dick's 1.2M&nbsp;characters into a conversation that never overflows a 200k&nbsp;window, and every API call is shown on screen.">
 <meta property="og:site_name" content="Agent Studio demos">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://agent-studio-demos.pages.dev/chat-with-book/">
-<meta property="og:title" content="Chat with a book — Agent Studio context APIs">
-<meta property="og:description" content="Chat with an entire book on a small-context model — hierarchical compaction folds Moby-Dick's 1.2M characters into a conversation that never overflows a 200k window, and every API call is shown on screen.">
+<meta property="og:title" content="Chat with a book&nbsp;— Agent Studio context APIs">
+<meta property="og:description" content="Chat with an entire book on a small-context model&nbsp;— hierarchical compaction folds Moby-Dick's 1.2M&nbsp;characters into a conversation that never overflows a 200k&nbsp;window, and every API call is shown on screen.">
 <meta property="og:image" content="https://agent-studio-demos.pages.dev/assets/og/chat-with-book.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="The Chat with a book demo, a document ingested and the token meter carrying its count.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Chat with a book — Agent Studio context APIs">
-<meta name="twitter:description" content="Chat with an entire book on a small-context model — hierarchical compaction folds Moby-Dick's 1.2M characters into a conversation that never overflows a 200k window, and every API call is shown on screen.">
+<meta name="twitter:title" content="Chat with a book&nbsp;— Agent Studio context APIs">
+<meta name="twitter:description" content="Chat with an entire book on a small-context model&nbsp;— hierarchical compaction folds Moby-Dick's 1.2M&nbsp;characters into a conversation that never overflows a 200k&nbsp;window, and every API call is shown on screen.">
 <meta name="twitter:image" content="https://agent-studio-demos.pages.dev/assets/og/chat-with-book.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,13 +61,13 @@
       <div class="cost-tile" id="tile-naive" tabindex="0">
         <span class="ct-label">Naive<span class="ct-badge" id="naive-badge" hidden>wouldn't even fit ✗</span></span>
         <span class="ct-value" id="naive-usd"></span>
-        <span class="ct-sub"><span id="naive-tok">0 tok</span></span>
+        <span class="ct-sub"><span id="naive-tok">0&nbsp;tok</span></span>
       </div>
       <span class="cost-op" id="op-minus" aria-hidden="true">−</span>
       <div class="cost-tile" id="tile-real" tabindex="0">
         <span class="ct-label">Real<span class="ct-est" id="real-est" hidden>est.</span></span>
         <span class="ct-value" id="real-usd"></span>
-        <span class="ct-sub"><span id="real-tok">0 tok</span></span>
+        <span class="ct-sub"><span id="real-tok">0&nbsp;tok</span></span>
       </div>
       <span class="cost-op" id="op-equals" aria-hidden="true">=</span>
       <!-- ── The third tile has two states ──────────────────────────────
@@ -82,7 +82,7 @@
         <span class="ct-value" id="saved-usd"></span>
         <span class="ct-value ct-unlocked" id="unlocked-value" hidden></span>
         <span class="ct-sub" id="saved-sub">
-          <span id="saved-tok">0 tok</span>
+          <span id="saved-tok">0&nbsp;tok</span>
           <span class="ct-chip">
             <span class="ct-chip-num" id="saved-pct">—</span>
             <span class="ct-chip-track" id="saved-track" aria-hidden="true"><span id="saved-fill"></span></span>
@@ -110,7 +110,7 @@
       A conversation runs out of room long before it runs out of things to say.
       Two calls fix that: <code>context/trim</code> counts,
       <code>context/compact</code> folds. Take a book off the shelf and watch.
-      A fold is not a shredder — every folded section opens back up.
+      A fold is not a shredder&nbsp;— every folded section opens back up.
     </p>
     <div class="masthead-meters">
       <div class="hero-stat">
@@ -149,7 +149,7 @@
     <p class="hint" id="shelf-status" role="status"></p>
 
     <details class="byo" id="byo">
-      <summary>…or bring your own — paste, a file, or a URL</summary>
+      <summary>…or bring your own&nbsp;— paste, a file, or a URL</summary>
 
       <label class="field-label" for="doc">Paste a long document</label>
       <textarea id="doc" rows="7" placeholder="Release notes, a spec, a transcript, a chapter…"></textarea>
@@ -164,7 +164,7 @@
 
       <label class="field-label url-label" for="url">
         …or fetch a web page
-        <button class="info" type="button" data-tip-h="Fetched by your browser" data-tip="Stripped to plain text here — scripts, styles and navigation dropped. A site that blocks cross-origin reads goes through the public reader named in config.js instead, and the page says so when that happens.">?</button>
+        <button class="info" type="button" data-tip-h="Fetched by your browser" data-tip="Stripped to plain text here&nbsp;— scripts, styles and navigation dropped. A site that blocks cross-origin reads goes through the public reader named in config.js instead, and the page says so when that happens.">?</button>
       </label>
       <div class="row url-row">
         <input id="url" type="url" inputmode="url" autocomplete="off"
@@ -192,7 +192,7 @@
       <div>
         <label class="field-label" for="budget">
           Working budget
-          <button class="info" type="button" data-tip-h="A demo device, on purpose" data-tip="The meter fills against this budget, not the model's window — real windows are too big to fill while you watch. Auto-compaction fires at 70% of it.">?</button>
+          <button class="info" type="button" data-tip-h="A demo device, on purpose" data-tip="The meter fills against this budget, not the model's window&nbsp;— real windows are too big to fill while you watch. Auto-compaction fires at 70% of it.">?</button>
         </label>
         <select id="budget"></select>
         <p class="hint" id="budget-hint"></p>
@@ -205,7 +205,7 @@
     <figure class="meter-figure">
       <figcaption>
         <span class="meter-title">Context carried</span>
-        <span class="meter-read" id="meter-read">0 / 8,000 tokens</span>
+        <span class="meter-read" id="meter-read">0 / 8,000&nbsp;tokens</span>
       </figcaption>
       <div class="meter" id="meter"
            role="meter" aria-valuemin="0" aria-valuenow="0" aria-valuemax="8000"
@@ -241,7 +241,7 @@
     <div class="thread" id="thread">
       <div class="empty">
         <p><strong>Nothing carried yet.</strong></p>
-        <p>Take a book off the shelf, ingest a document of your own, or just ask a question — the meter starts moving from the first turn.</p>
+        <p>Take a book off the shelf, ingest a document of your own, or just ask a question&nbsp;— the meter starts moving from the first turn.</p>
       </div>
     </div>
     <!-- ── Suggestions ────────────────────────────────────────────────
@@ -253,14 +253,14 @@
       <div class="chip-group">
         <span class="chip-label chip-label-needle">
           needle
-          <button class="info" type="button" data-tip-h="One answer, in one place" data-tip="A line, a scene, a number. Search is built for this: fetch the passage, spend a few hundred tokens. Here, the model answers from the folded record — reopening a section if the digest dropped the detail.">?</button>
+          <button class="info" type="button" data-tip-h="One answer, in one place" data-tip="A line, a scene, a number. Search is built for this: fetch the passage, spend a few hundred tokens. Here, the model answers from the folded record&nbsp;— reopening a section if the digest dropped the detail.">?</button>
         </span>
         <div class="chip-row" id="chips-needle"></div>
       </div>
       <div class="chip-group">
         <span class="chip-label chip-label-arc">
           arc
-          <button class="info" type="button" data-tip-h="The shape of the whole book" data-tip="A tone that shifts, sympathy that moves. No single passage holds the answer, so search has nothing to fetch — the model must carry the book end to end. That is the fold's job.">?</button>
+          <button class="info" type="button" data-tip-h="The shape of the whole book" data-tip="A tone that shifts, sympathy that moves. No single passage holds the answer, so search has nothing to fetch&nbsp;— the model must carry the book end to end. That is the fold's job.">?</button>
         </span>
         <div class="chip-row" id="chips-arc"></div>
       </div>
@@ -286,7 +286,7 @@
     </form>
 
     <details class="wire">
-      <summary>Wire log <span class="wire-count" id="wire-count">0 calls</span></summary>
+      <summary>Wire log <span class="wire-count" id="wire-count">0&nbsp;calls</span></summary>
       <p class="panel-sub">Every request this page makes, in order. Method, path, and the stats the API sent back.</p>
       <ol class="wire-list" id="wire-list"></ol>
     </details>
@@ -296,13 +296,13 @@
 <footer class="footer">
   <p class="footer-lede">Built on Agent Studio context APIs <span class="tag">unstable</span></p>
   <ul class="footer-links" id="footer-endpoints">
-    <li data-endpoint="/1/unstable/context/trim"><code>POST /1/unstable/context/trim</code> — deterministic token count and trim</li>
-    <li data-endpoint="/1/unstable/context/compact"><code>POST /1/unstable/context/compact</code> — LLM summary of older turns, on your provider</li>
-    <li data-endpoint="/1/agents/{agent_id}/completions"><code>POST /1/agents/{agent_id}/completions</code> — streaming chat, <code>compatibilityMode=ai-sdk-5</code></li>
+    <li data-endpoint="/1/unstable/context/trim"><code>POST /1/unstable/context/trim</code>&nbsp;— deterministic token count and trim</li>
+    <li data-endpoint="/1/unstable/context/compact"><code>POST /1/unstable/context/compact</code>&nbsp;— LLM summary of older turns, on your provider</li>
+    <li data-endpoint="/1/agents/{agent_id}/completions"><code>POST /1/agents/{agent_id}/completions</code>&nbsp;— streaming chat, <code>compatibilityMode=ai-sdk-5</code></li>
   </ul>
   <p class="footer-note">
     Unstable endpoints can change without notice. This page calls them straight from the
-    browser for demo clarity — put a backend in front of your key before shipping.
+    browser for demo clarity&nbsp;— put a backend in front of your key before shipping.
     <a id="repo-link" href="https://github.com/algolia/agent-studio-demos" target="_blank" rel="noopener">Source</a>
   </p>
 </footer>

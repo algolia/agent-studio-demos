@@ -1101,7 +1101,7 @@ p.ingest-status { margin: 12px 0 0; }
 }
 .tooltip.on { opacity: 1; }
 .tooltip code { display: block; margin-top: 6px; color: var(--accent); white-space: pre-wrap; }
-.tooltip .tip-body { display: block; }
+.tooltip .tip-body { display: block; text-wrap: pretty; }
 
 /* the rich flavour holds a whole generated summary, so it scrolls — which means
    it has to accept the pointer that scrolls it */

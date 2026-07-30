@@ -112,7 +112,8 @@ test("impossible mode stops subtracting entirely", () => {
   assert.equal(v.saved, null, "no dollar delta is defined against a request that is refused");
   assert.ok(v.unlocked, "the third tile has something to say instead");
   assert.equal(v.unlocked.label, "Unlocked");
-  assert.equal(v.unlocked.value, "363k on a 200k window");
+  // \u00a0 between a number and its unit is the copy gate's wrap glue (--fix)
+  assert.equal(v.unlocked.value, "363k on a 200k\u00a0window");
   assert.match(v.unlocked.sub, /impossible/);
   assert.doesNotMatch(v.unlocked.value + v.unlocked.sub, /\$/, "no price in the unlocked state");
   assert.deepEqual(v.ops, { minus: "·", equals: "→" }, "nothing on screen claims a subtraction");
@@ -122,11 +123,11 @@ test("impossible mode stops subtracting entirely", () => {
 
 test("the badge and the unlocked copy quote the same two numbers", () => {
   const v = view({ naiveUsd: 2.5, realUsd: 0.3, naivePeak: 363000, turns: 3 });
-  assert.equal(v.naive.badge, "wouldn't even fit ✗ (363k tok > 200k window)");
-  assert.match(v.unlocked.headline, /363,000 tokens/);
+  assert.equal(v.naive.badge, "wouldn't even fit ✗ (363k\u00a0tok > 200k\u00a0window)");
+  assert.match(v.unlocked.headline, /363,000\u00a0tokens/);
   assert.match(v.unlocked.headline, /200,000-token window/);
-  assert.match(M.tileCopy.badge(v), /363,000 tokens/);
-  assert.match(M.tileCopy.badge(v), /against a 200,000 window/);
+  assert.match(M.tileCopy.badge(v), /363,000\u00a0tokens/);
+  assert.match(M.tileCopy.badge(v), /against a 200,000\u00a0window/);
   assert.match(M.tileCopy.saved(v), /no subtraction|not expensive, it is impossible/);
   assert.match(M.tileCopy.savedFormula(v), /no subtraction is defined/);
 });
@@ -138,12 +139,12 @@ test("an oversize document ingested before any question is already impossible", 
   assert.equal(v.mode, "impossible");
   assert.equal(v.saved, null);
   assert.equal(v.naive.usdText, "$0.0000");
-  assert.equal(v.unlocked.value, "410k on a 200k window");
+  assert.equal(v.unlocked.value, "410k on a 200k\u00a0window");
 });
 
 test("a million-token history reads in millions, not in five digits of k", () => {
   const v = view({ naivePeak: 1250000 });
-  assert.equal(v.unlocked.value, "1.3M on a 200k window");
+  assert.equal(v.unlocked.value, "1.3M on a 200k\u00a0window");
 });
 
 /* ── The boundary ─────────────────────────────────────────────── */
@@ -177,8 +178,8 @@ test("money reads to four decimals under a dollar and two above", () => {
 });
 
 test("token counts keep their sign and their thousands separators", () => {
-  assert.equal(M.signedTokens(363000), "363,000 tok");
-  assert.equal(M.signedTokens(-1200), "-1,200 tok");
+  assert.equal(M.signedTokens(363000), "363,000\u00a0tok");
+  assert.equal(M.signedTokens(-1200), "-1,200\u00a0tok");
   assert.equal(M.shortTokens(999), "999");
   assert.equal(M.shortTokens(1000), "1k");
   assert.equal(M.shortTokens(200000), "200k");

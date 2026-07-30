@@ -57,22 +57,22 @@
   const PRICING = {
     "claude-haiku-4-5": {
       label: "claude-haiku-4.5", inPerMTok: 1.00, outPerMTok: 5.00,
-      source: "Anthropic published list price for claude-haiku-4.5 — $1.00 input / $5.00 output " +
+      source: "Anthropic published list price for claude-haiku-4.5\u00a0— $1.00 input / $5.00 output " +
         "per million tokens.",
     },
     "gpt-4.1-mini": {
       label: "gpt-4.1-mini", inPerMTok: 0.40, outPerMTok: 1.60,
-      source: "OpenAI published list price for gpt-4.1-mini — $0.40 input / $1.60 output per " +
+      source: "OpenAI published list price for gpt-4.1-mini\u00a0— $0.40 input / $1.60 output per " +
         "million tokens.",
     },
     "gpt-4.1-nano": {
       label: "gpt-4.1-nano", inPerMTok: 0.10, outPerMTok: 0.40,
-      source: "OpenAI published list price for gpt-4.1-nano — $0.10 input / $0.40 output per " +
+      source: "OpenAI published list price for gpt-4.1-nano\u00a0— $0.10 input / $0.40 output per " +
         "million tokens.",
     },
     "small": {
       label: "Enablers small", inPerMTok: 0.10, outPerMTok: 0.10, placeholder: true,
-      source: "Internal model — illustrative pricing. There is no public list price for it, so " +
+      source: "Internal model\u00a0— illustrative pricing. There is no public list price for it, so " +
         "$0.10 / $0.10 per million tokens is a placeholder chosen to keep the arithmetic " +
         "readable, not a quote. Read the ratio, not the absolute figure.",
     },
@@ -81,7 +81,7 @@
   const NO_PRICE = {
     label: "unpriced", inPerMTok: 0, outPerMTok: 0, placeholder: true,
     source: "No price is configured for this model, so both sides of the meter are billed at " +
-      "zero for it — the figures below undercount rather than guess.",
+      "zero for it\u00a0— the figures below undercount rather than guess.",
   };
 
   /** longest matching key wins: config ids are dated, e.g. claude-haiku-4-5-20251001 */
@@ -130,7 +130,7 @@
 
   function signedTokens(n) {
     const r = Math.round(n || 0);
-    return `${r < 0 ? "-" : ""}${fmt(Math.abs(r))} tok`;
+    return `${r < 0 ? "-" : ""}${fmt(Math.abs(r))}\u00a0tok`;
   }
 
   /** 363k, 1.2M — for the copy where the order of magnitude is the point */
@@ -187,7 +187,7 @@
         tokens: c.naiveTokens, tokensText: signedTokens(c.naiveTokens),
         peak, window: win, overWindow,
         badge: overWindow
-          ? `wouldn't even fit ✗ (${shortTokens(peak)} tok > ${shortTokens(win)} window)`
+          ? `wouldn't even fit ✗ (${shortTokens(peak)}\u00a0tok > ${shortTokens(win)}\u00a0window)`
           : null,
       },
       real: {
@@ -225,9 +225,9 @@
     } else {
       view.unlocked = {
         label: "Unlocked",
-        value: `${shortTokens(peak)} on a ${shortTokens(win)} window`,
-        sub: "naive run: impossible — no price to subtract",
-        headline: `${fmt(peak)} tokens of history riding a ${fmt(win)}-token window — a naive ` +
+        value: `${shortTokens(peak)} on a ${shortTokens(win)}\u00a0window`,
+        sub: "naive run: impossible\u00a0— no price to subtract",
+        headline: `${fmt(peak)}\u00a0tokens of history riding a ${fmt(win)}-token window\u00a0— a naive ` +
           `run of this conversation is not expensive, it is impossible.`,
       };
     }
@@ -241,24 +241,24 @@
    */
   const tileCopy = {
     eyebrow: "Two prices for the same conversation. **Naive** re-sends the full document and " +
-      "history every turn. **Real** is what was actually spent — the summarizer's own bill " +
+      "history every turn. **Real** is what was actually spent\u00a0— the summarizer's own bill " +
       "included. The third tile is the difference, while a naive run is still possible at all.",
 
     naive(v) {
-      const base = `**${fmt(v.naive.tokens)} tokens over ${v.counts.turns} ` +
+      const base = `**${fmt(v.naive.tokens)}\u00a0tokens over ${v.counts.turns} ` +
         `turn${v.counts.turns === 1 ? "" : "s"}**: the whole document plus the whole history, ` +
-        `re-sent every turn. No summarizer on this side — nothing to summarize with.`;
+        `re-sent every turn. No summarizer on this side\u00a0— nothing to summarize with.`;
       const fit = v.naive.overWindow
-        ? ` Its largest payload, ${fmt(v.naive.peak)} tokens, is past ${v.modelLabel}'s ` +
-          `${fmt(v.naive.window)}-token window — the provider would refuse it outright.`
+        ? ` Its largest payload, ${fmt(v.naive.peak)}\u00a0tokens, is past ${v.modelLabel}'s ` +
+          `${fmt(v.naive.window)}-token window\u00a0— the provider would refuse it outright.`
         : "";
       return `${base}${fit} ${v.price.line}`;
     },
     naiveFormula: () => "naive = Σ (original document + full history) × $in  +  answer × $out",
 
     badge(v) {
-      return `**${fmt(v.naive.peak)} tokens in one payload, against a ${fmt(v.naive.window)} ` +
-        `window.** A naive run would be refused, not billed — the price beside this badge is ` +
+      return `**${fmt(v.naive.peak)}\u00a0tokens in one payload, against a ${fmt(v.naive.window)}\u00a0` +
+        `window.** A naive run would be refused, not billed\u00a0— the price beside this badge is ` +
         `what it would have cost, had it been possible at all.`;
     },
 
@@ -266,7 +266,7 @@
       const k = v.counts;
       return `**${k.chatCalls} chat call${k.chatCalls === 1 ? "" : "s"} + ${k.summCalls} ` +
         `summarizer call${k.summCalls === 1 ? "" : "s"}** (${usd(k.summUsd)} · ` +
-        `${fmt(k.summTokens)} tokens of summarizing). The fold bills itself here — a saving ` +
+        `${fmt(k.summTokens)}\u00a0tokens of summarizing). The fold bills itself here\u00a0— a saving ` +
         `that hides its own cost never saved anything. Summarizer usage is estimated; the API ` +
         `does not expose it yet. ${v.price.line}`;
     },
@@ -277,7 +277,7 @@
       if (v.mode === "impossible") return tileCopy.unlocked(v);
       const s = v.saved;
       if (v.naive.usd <= 0) {
-        return `Naive minus real. Nothing asked yet, so nothing to compare — load a document, ` +
+        return `Naive minus real. Nothing asked yet, so nothing to compare\u00a0— load a document, ` +
           `ask a question, and both sides start moving. ${v.price.line}`;
       }
       const head = `**${v.naive.usdText} − ${v.real.usdText} = ${s.usdText}** — ` +
@@ -297,9 +297,9 @@
 
     unlocked(v) {
       return `${v.unlocked.headline} There is nothing to subtract: the largest naive payload ` +
-        `(${fmt(v.naive.peak)} tokens) is past ${v.modelLabel}'s ${fmt(v.naive.window)}-token ` +
+        `(${fmt(v.naive.peak)}\u00a0tokens) is past ${v.modelLabel}'s ${fmt(v.naive.window)}-token ` +
         `window, where the provider answers 400, not an invoice. **The fold did not buy a ` +
-        `discount here — it bought the conversation.** Real spend stays on the tile beside ` +
+        `discount here\u00a0— it bought the conversation.** Real spend stays on the tile beside ` +
         `this one, summarizer included. ${v.price.line}`;
     },
   };

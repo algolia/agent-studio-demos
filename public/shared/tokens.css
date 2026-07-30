@@ -65,6 +65,22 @@ body {
 }
 
 code, .mono { font-family: var(--mono); font-size: 0.86em; }
+
+/* ── Wrap hygiene ─────────────────────────────────────────────────
+   Line breaking is the browser's job; these lines are its brief.
+   `pretty` plans breaks over the whole paragraph instead of greedily
+   line by line — no orphaned last word, no "Two calls / fix that"
+   when a better break sat one word back. `balance` keeps a short
+   block from splitting 90/10. Both are hints: a browser that has
+   never heard of them wraps exactly as before. And an inline code
+   span is one word to the reader — context/trim cut at the slash is
+   not two smaller words, it is noise — so in prose it never breaks.
+   (Em-dashes and number–unit pairs are glued in the copy itself:
+   scripts/check-copy.js --fix.) ─────────────────────────────────── */
+
+p, li { text-wrap: pretty; }
+h1, h2, h3 { text-wrap: balance; }
+p code, li code { white-space: nowrap; }
 a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 
 :focus-visible {

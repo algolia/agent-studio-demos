@@ -4,6 +4,7 @@
 
      node scripts/check-copy.js            # report and gate
      node scripts/check-copy.js --verbose  # also list every long sentence
+     node scripts/check-copy.js --fix      # glue em-dashes and number–unit pairs
 
    ── The rule this enforces ───────────────────────────────────────
    Two numbers, and one exemption:
@@ -37,6 +38,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const VERBOSE = process.argv.includes("--verbose");
+const FIX = process.argv.includes("--fix");
 const ROOT = path.join(__dirname, "..");
 
 /** Two minutes at 200 wpm, and a looser ceiling for opt-in tooltip depth */
@@ -69,7 +71,7 @@ const JS_FILES = [
 /* ── Text extraction ──────────────────────────────────────────── */
 
 const decode = (s) => s
-  .replace(/&mdash;|&#8212;/g, "—").replace(/&nbsp;|&#160;/g, " ")
+  .replace(/&mdash;|&#8212;/g, "—").replace(/&nbsp;|&#160;/g, " ")
   .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
   .replace(/&quot;/g, '"').replace(/&#39;|&rsquo;/g, "'");
 
@@ -98,6 +100,13 @@ function extract(html) {
   return { blocks, tooltips };
 }
 
+// A quote inside a regex literal (`/"/g`) opens a phantom "literal" that swallows
+// code until the next real quote. Code is recognizable; prose never carries these
+// tokens, and the formula strings they also exclude are meant for the tooltip's
+// code slot, not for reading as sentences. Shared by the scanner and the fixer —
+// whatever the scanner would refuse to measure, the fixer refuses to touch.
+const codeish = /[;{}]|=>|<\/|\breturn\b|\bconst\b|\bfunction\b| = /;
+
 /**
  * The page's copy is mostly NOT in the HTML: tooltips, event notes and card text
  * are template literals in app.js, assembled at render time. This pulls every
@@ -123,7 +132,7 @@ function extractJsRuns(src) {
   for (const m of [...s.matchAll(lit)]) {
     const text = m[0].slice(1, -1)
       .replace(/\$\{[^}]*\}/g, " ")
-      .replace(/\\n/g, " ")
+      .replace(/\\n|\\u00a0/g, " ")
       // a closing block tag ends a run the same way it ends a paragraph on
       // screen — three <p>s built in one template are three texts, not one
       .replace(/<\/(?:p|li|h[1-6])>/gi, "\u0000")
@@ -140,15 +149,84 @@ function extractJsRuns(src) {
     lastEnd = m.index + m[0].length;
   }
   if (current) runs.push(current);
-  // A quote inside a regex literal (`/"/g`) still opens a phantom that swallows
-  // code until the next real quote. Code is recognizable; prose never carries
-  // these tokens, and the formula strings they also exclude are meant for the
-  // tooltip's code slot, not for reading as sentences.
-  const codeish = /[;{}]|=>|<\/|\breturn\b|\bconst\b|\bfunction\b| = /;
   return runs
     .flatMap((r) => r.split("\u0000"))
     .map((r) => r.replace(/\s+/g, " ").trim())
     .filter((r) => r && !codeish.test(r));
+}
+
+/* ── Wrap hygiene ─────────────────────────────────────────────────
+   Where a line breaks is the browser's decision, and CSS carries most of the
+   instructions (text-wrap in shared/tokens.css; inline code spans never break
+   inside prose). Two atoms CSS cannot see still split badly at some width: an
+   em-dash left free to open a line, and a unit orphaned from its number
+   ("200k / window"). Both are mechanical, so both are linted — and writable:
+
+     node scripts/check-copy.js --fix
+
+   glues them in place, as `&nbsp;` in HTML and as a `\u00a0` escape inside JS
+   string literals. Each pattern only ever tightens an existing single space,
+   so the fix is idempotent and never reflows a source line. There is no
+   "correct" render to screenshot — the same paragraph wraps differently at
+   every width — which is exactly why the protection lives in the text itself. */
+
+const UNIT = "(?:tokens?|tok|characters?|chars?|words?|window|exchanges?|turns?" +
+  "|calls?|sections?|passages?|messages?|hits?|min)";
+const GLUE = [
+  // "shredder —" can break before the dash and open the next line with "—"
+  { re: /(\S)( )(—)/g },
+  // "200k window" can strand the unit; `}` is a closing interpolation in JS,
+  // so "${fmt(peak)} tokens" is glued the same way a literal number is
+  { re: new RegExp(`(\\d[\\d,.]*[kKmM%]?|\\})( )(${UNIT})\\b`, "g") },
+];
+
+const glue = (text, nbsp, onCount) =>
+  GLUE.reduce((t, { re }) => t.replace(re, (_, a, _sp, b) => (onCount(), a + nbsp + b)), text);
+
+/** Everything the page renders is fixable; script, style and comments are not. */
+function glueHtml(src) {
+  let count = 0;
+  const out = src
+    .split(/(<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<!--[\s\S]*?-->)/)
+    .map((part, i) => (i % 2 ? part : glue(part, "&nbsp;", () => count++)))
+    .join("");
+  return { out, count };
+}
+
+/** Prose string literals only — exempt regions, comments and codeish phantoms
+    are skipped on the same terms the scanner skips them. */
+function glueJs(src) {
+  let count = 0;
+  const spans = [];
+  const spanRes = [
+    /\/\*\s*check-copy:\s*off\s*\*\/[\s\S]*?\/\*\s*check-copy:\s*on\s*\*\//g,
+    /\/\*[\s\S]*?\*\//g,
+    /^[ \t]*\/\/.*$/gm,
+  ];
+  for (const re of spanRes) {
+    for (const m of src.matchAll(re)) spans.push([m.index, m.index + m[0].length]);
+  }
+  const skip = (i) => spans.some(([a, b]) => i >= a && i < b);
+  const out = src.replace(/`(?:[^`\\]|\\.)*`|"(?:[^"\n\\]|\\.)*"/g, (lit, offset) => {
+    if (skip(offset)) return lit;
+    const gist = lit.slice(1, -1).replace(/\$\{[^}]*\}/g, " ").replace(/<[^>]+>/g, " ");
+    if (codeish.test(gist)) return lit;
+    return lit[0] + glue(lit.slice(1, -1), "\\u00a0", () => count++) + lit[0];
+  });
+  return { out, count };
+}
+
+/** lint or write, depending on --fix; either way the report loop gets one line */
+function glueFile(file, rel, fixer) {
+  const { out, count } = fixer(fs.readFileSync(file, "utf8"));
+  if (!count) return;
+  if (FIX) {
+    fs.writeFileSync(file, out);
+    console.log(`  glued     ${count} breakable spot${count === 1 ? "" : "s"}`);
+  } else {
+    fail.push(`${rel}: ${count} breakable em-dash / number–unit spot(s) — ` +
+      "run node scripts/check-copy.js --fix");
+  }
 }
 
 /* ── Readability ──────────────────────────────────────────────── */
@@ -226,6 +304,7 @@ for (const rel of PAGES) {
     `${v.wordsPerSentence.toFixed(1)} words/sentence`);
   console.log(`  tooltips  ${pad(t.words)} words · ${tooltips.length} of them · ` +
     `grade ${t.grade.toFixed(1)}`);
+  glueFile(file, rel, glueHtml);
 
   if (v.words > LIMITS.visibleWords) {
     fail.push(`${rel}: ${v.words} visible words, budget ${LIMITS.visibleWords} ` +
@@ -284,6 +363,7 @@ for (const rel of JS_FILES) {
   console.log(`\n${rel}`);
   console.log(`  strings   ${pad(total)} words · ${runs.length} runs · longest ` +
     `${runs.length ? Math.max(...runs.map((r) => wordsOf(r).length)) : 0}w`);
+  glueFile(file, rel, glueJs);
   if (over.length) {
     console.log(`  ${over.length} run${over.length === 1 ? "" : "s"} over ` +
       `${LIMITS.jsRunWords} words — each is asking to be shown instead:`);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Infinite conversation — Agent Studio context APIs</title>
+<title>Infinite conversation&nbsp;— Agent Studio context APIs</title>
 
 <!-- ── Social cards ───────────────────────────────────────────────
      Absolute URLs throughout: a crawler has no page to resolve a relative
@@ -12,14 +12,14 @@
 <meta property="og:site_name" content="Agent Studio demos">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://agent-studio-demos.pages.dev/infinite-conversation/">
-<meta property="og:title" content="Infinite conversation — Agent Studio context APIs">
+<meta property="og:title" content="Infinite conversation&nbsp;— Agent Studio context APIs">
 <meta property="og:description" content="Arrive in the middle of a conversation with hundreds of turns and far more tokens than the working budget can hold behind it, then keep going by clicking suggested replies while compaction quietly keeps it alive.">
 <meta property="og:image" content="https://agent-studio-demos.pages.dev/assets/og/infinite-conversation.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="The Infinite conversation demo, a seeded saga folded on arrival and the cost meter carrying its count.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Infinite conversation — Agent Studio context APIs">
+<meta name="twitter:title" content="Infinite conversation&nbsp;— Agent Studio context APIs">
 <meta name="twitter:description" content="Arrive in the middle of a conversation with hundreds of turns and far more tokens than the working budget can hold behind it, then keep going by clicking suggested replies while compaction quietly keeps it alive.">
 <meta name="twitter:image" content="https://agent-studio-demos.pages.dev/assets/og/infinite-conversation.png">
 
@@ -61,13 +61,13 @@
       <div class="cost-tile" id="tile-naive" tabindex="0">
         <span class="ct-label">Naive<span class="ct-badge" id="naive-badge" hidden>wouldn't even fit ✗</span></span>
         <span class="ct-value" id="naive-usd"></span>
-        <span class="ct-sub"><span id="naive-tok">0 tok</span></span>
+        <span class="ct-sub"><span id="naive-tok">0&nbsp;tok</span></span>
       </div>
       <span class="cost-op" id="op-minus" aria-hidden="true">−</span>
       <div class="cost-tile" id="tile-real" tabindex="0">
         <span class="ct-label">Real<span class="ct-est" id="real-est" hidden>est.</span></span>
         <span class="ct-value" id="real-usd"></span>
-        <span class="ct-sub"><span id="real-tok">0 tok</span></span>
+        <span class="ct-sub"><span id="real-tok">0&nbsp;tok</span></span>
       </div>
       <span class="cost-op" id="op-equals" aria-hidden="true">=</span>
       <div class="cost-tile is-hero" id="tile-saved" tabindex="0">
@@ -75,7 +75,7 @@
         <span class="ct-value" id="saved-usd"></span>
         <span class="ct-value ct-unlocked" id="unlocked-value" hidden></span>
         <span class="ct-sub" id="saved-sub">
-          <span id="saved-tok">0 tok</span>
+          <span id="saved-tok">0&nbsp;tok</span>
           <span class="ct-chip">
             <span class="ct-chip-num" id="saved-pct">—</span>
             <span class="ct-chip-track" id="saved-track" aria-hidden="true"><span id="saved-fill"></span></span>
@@ -101,7 +101,7 @@
     <h1 aria-label="Infinite conversation">Infinite<span class="fold-mark" aria-hidden="true"></span>conversation</h1>
     <p class="lede">
       You are arriving late. This thread has hundreds of turns behind it, more
-      tokens than the budget can hold — and it is still going.
+      tokens than the budget can hold&nbsp;— and it is still going.
       <code>context/trim</code> counts what is really there.
       <code>context/compact</code> folds the backlog: once, in front of you.
       After that it folds itself, turn after turn. Click a suggested reply and
@@ -131,7 +131,7 @@
   <!-- ── Left rail: the thread to join, the engine, the fold ─────── -->
   <section class="panel" aria-labelledby="pick-h">
     <h2 id="pick-h" class="panel-h">1 · Pick up a thread</h2>
-    <p class="panel-sub">Three conversations that have been running a long time. Every figure on these cards is counted from the file that ships with this page — nothing is rounded up for effect.</p>
+    <p class="panel-sub">Three conversations that have been running a long time. Every figure on these cards is counted from the file that ships with this page&nbsp;— nothing is rounded up for effect.</p>
 
     <div class="sagas" id="sagas" role="group" aria-label="Conversations to join"></div>
     <p class="hint" id="saga-status" role="status"></p>
@@ -153,7 +153,7 @@
       <div>
         <label class="field-label" for="budget">
           Working budget
-          <button class="info" type="button" data-tip-h="A demo device, on purpose" data-tip="The meter fills against this budget, not the model's window — real windows are too big to fill while you watch. The real window still decides what the provider would refuse outright.">?</button>
+          <button class="info" type="button" data-tip-h="A demo device, on purpose" data-tip="The meter fills against this budget, not the model's window&nbsp;— real windows are too big to fill while you watch. The real window still decides what the provider would refuse outright.">?</button>
         </label>
         <select id="budget"></select>
         <p class="hint" id="budget-hint"></p>
@@ -166,7 +166,7 @@
     <figure class="meter-figure">
       <figcaption>
         <span class="meter-title">Context carried</span>
-        <span class="meter-read" id="meter-read">0 / 8,000 tokens</span>
+        <span class="meter-read" id="meter-read">0 / 8,000&nbsp;tokens</span>
       </figcaption>
       <div class="meter" id="meter"
            role="meter" aria-valuemin="0" aria-valuenow="0" aria-valuemax="8000"
@@ -234,7 +234,7 @@
     <p class="turnline" id="turnline"></p>
 
     <details class="wire">
-      <summary>Wire log <span class="wire-count" id="wire-count">0 calls</span></summary>
+      <summary>Wire log <span class="wire-count" id="wire-count">0&nbsp;calls</span></summary>
       <p class="panel-sub">Every request this page makes, in order. Method, path, and the stats the API sent back.</p>
       <ol class="wire-list" id="wire-list"></ol>
     </details>
@@ -244,13 +244,13 @@
 <footer class="footer">
   <p class="footer-lede">Built on Agent Studio context APIs <span class="tag">unstable</span></p>
   <ul class="footer-links" id="footer-endpoints">
-    <li data-endpoint="/1/unstable/context/trim"><code>POST /1/unstable/context/trim</code> — deterministic token count, no model behind it</li>
-    <li data-endpoint="/1/unstable/context/compact"><code>POST /1/unstable/context/compact</code> — LLM summary of older turns, on your provider</li>
-    <li data-endpoint="/1/agents/{agent_id}/completions"><code>POST /1/agents/{agent_id}/completions</code> — streaming chat, <code>compatibilityMode=ai-sdk-5</code></li>
+    <li data-endpoint="/1/unstable/context/trim"><code>POST /1/unstable/context/trim</code>&nbsp;— deterministic token count, no model behind it</li>
+    <li data-endpoint="/1/unstable/context/compact"><code>POST /1/unstable/context/compact</code>&nbsp;— LLM summary of older turns, on your provider</li>
+    <li data-endpoint="/1/agents/{agent_id}/completions"><code>POST /1/agents/{agent_id}/completions</code>&nbsp;— streaming chat, <code>compatibilityMode=ai-sdk-5</code></li>
   </ul>
   <p class="footer-note">
     Unstable endpoints can change without notice. This page calls them straight from the
-    browser for demo clarity — put a backend in front of your key before shipping.
+    browser for demo clarity&nbsp;— put a backend in front of your key before shipping.
     <a id="repo-link" href="https://github.com/algolia/agent-studio-demos" target="_blank" rel="noopener">Source</a>
   </p>
 </footer>
