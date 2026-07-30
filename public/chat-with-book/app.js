@@ -1405,12 +1405,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
    costs nothing anybody was going to spend and keeps far more detail than the
    digest alone. ────────────────────────────────────────────────── */
 
+/* check-copy: off */
 const READ_IT_FRAMING =
   "Here is the document we are working from. You have read it: speak from it as " +
   "your own knowledge of the document. Do not open an answer with \"based on the " +
   "summary\", and do not mention summaries, digests, extracts, condensing or " +
   "context windows — unless I ask you how this page works, in which case explain it " +
   "plainly.";
+/* check-copy: on */
 
 /**
  * The endpoint opens its summary with "Summary of the conversation so far:", and a
@@ -1545,6 +1547,7 @@ const SENTINEL_HEAD = "<<unfold";
 function sentinelPreamble(fold) {
   const n = fold.sections.length;
   const list = fold.sections.map((s, i) => `  ${i + 1}. ${gistOf(s, i)}`).join("\n");
+  /* check-copy: off */
   return userMsg(
     `Working notes for this conversation, from me — the person you are talking to.\n\n` +
     `The full text of the document is stored here in ${n} parts. What each one holds:\n${list}\n\n` +
@@ -1556,6 +1559,7 @@ function sentinelPreamble(fold) {
     `<<UNFOLD section=2 focus="that character's dialogue when they refuse, verbatim">>\n\n` +
     `I will fetch that part and hand it back to you, and then you answer normally — ` +
     `without mentioning that any of this happened.`);
+  /* check-copy: on */
 }
 
 /**
@@ -2880,16 +2884,12 @@ function addSearchCard({ search, before }) {
     ? `assistant searched the shelf · “${query}”`
     : "assistant searched the shelf";
   card.querySelector(".se-why").innerHTML =
-    `The model judged that this needed something it could not see, so it called ` +
-    `<code>search_the_shelf</code> instead of answering from memory. The passages that come ` +
-    `back are added to this turn and go up to the model with your question — which is why ` +
-    `the meter moves. A tool call is one HTTP request but <em>two</em> model steps: one to ` +
-    `decide to search, one to answer with the hits in hand.`;
+    `The model needed something it could not see, so it called ` +
+    `<code>search_the_shelf</code>. The passages come back into this turn and go up with ` +
+    `your question — which is why the meter moves.`;
   tip(card.querySelector(".event-h"),
-    "A real Agent Studio tool call, not a mock: the tool is configured on the agent with " +
-    "mode=static, so it can only ever search this one index — a per-request index override " +
-    "is refused with a 422. Five passages come back, flat, with no snippet or highlight " +
-    "metadata, because a nested match object costs tokens and cannot be quoted.",
+    "A real Agent Studio tool call, not a mock: the tool is pinned to one index with " +
+    "**mode=static**, and a per-request override comes back 422.",
     `${search.name || "search_the_shelf"}(${JSON.stringify(input)})\n` +
     "  → POST /1/indexes/public_domain_books/query");
 
@@ -2977,16 +2977,14 @@ function addUnfoldCard({ section, focus, attempt, chars }) {
   card.querySelector(".uf-title").textContent =
     `assistant reopened part ${section} · refolding with focus “${focus}”`;
   card.querySelector(".uf-why").innerHTML =
-    `The answer to that needs something the record no longer holds, so instead of guessing, ` +
-    `the model asked for a part back — in one line this page recognises. Part ${section} ` +
-    `(${fmt(chars)} characters of original text) is being folded again around ` +
-    `<em>${escapeHtml(focus)}</em>, and the extract goes back to the model with your question. ` +
-    `Unfold ${attempt} of ${TUNE.unfoldMaxPerTurn} allowed this turn.`;
+    `The record no longer holds what that answer needs, so the model asked for a part back ` +
+    `instead of guessing. Part ${section} (${fmt(chars)} characters) is folding again around ` +
+    `<em>${escapeHtml(focus)}</em>, and the extract goes up with your question. ` +
+    `Unfold ${attempt} of ${TUNE.unfoldMaxPerTurn} this turn.`;
   tip(card.querySelector(".event-h"),
-    "A prototype of agent-driven context paging — the model asks for its own memories back. " +
-    "The sentinel line is a client-side convention, parsed by this page: the production " +
-    "version would be a server-side tool the agent calls, with the same shape and none of the " +
-    "string matching. What you are watching is the loop, not a mock of it.",
+    "A prototype of agent-driven context paging: the model asks for its own memories back. " +
+    "The **sentinel line** is a client-side convention this page parses — in production it " +
+    "would be a server-side tool with the same shape.",
     `<<UNFOLD section=${section} focus="${focus}">>  →  POST /1/unstable/context/compact`);
 
   const steps = card.querySelector(".uf-steps");
@@ -3323,6 +3321,7 @@ async function runUnfold(sentinel, question, extras, attempt) {
     const stage = card.done(tokensIn(stats, estTokens(section.chars)),
       tokensOut(stats, estTokens(extract.length)), ms, extract);
     state.unfoldSettle = stage.settle;
+    /* check-copy: off */
     extras.push(userMsg(
       `Here is that part of the document, in full on the point you asked about.\n\n` +
       `${extract}\n\n` +
@@ -3334,6 +3333,7 @@ async function runUnfold(sentinel, question, extras, attempt) {
       `passage above is on loan for this answer only, and copying it into your reply is what ` +
       `keeps it in the conversation afterwards. ` +
       `Do not mention this exchange, extracts, parts, or summaries.`));
+    /* check-copy: on */
     return true;
   } catch (e) {
     card.failed(`failed — ${e.status || "network"}`);
@@ -3423,6 +3423,7 @@ async function askSection(fold, i, question) {
         `of it went to the model, aimed at what you asked.`);
     }
 
+    /* check-copy: off */
     const framed =
       `${READ_IT_FRAMING}\n\n` +
       `This is ${label} of the document, in full.\n\n${context}\n\n` +
@@ -3431,6 +3432,7 @@ async function askSection(fold, i, question) {
       `where a quotation is what answers the question, but do not reproduce the passage wholesale: ` +
       `it is on loan for this answer, and copying it into your reply is what keeps it in the ` +
       `conversation afterwards. If the answer is genuinely not in it, say so in one line.`;
+    /* check-copy: on */
 
     const out = await streamAnswer([userMsg(framed)], {
       note: `stream=true · ${state.model.model} · dive in · ${label} only · ~${fmt(loaned)} tok loaned`,
