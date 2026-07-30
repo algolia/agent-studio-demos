@@ -23,6 +23,22 @@ const CFG = window.DEMO_CONFIG;
 const M = window.DemoMeter;
 const BOOKS = window.DEMO_BOOKS;
 
+/* ── The reader's language ────────────────────────────────────────
+   Eight of them, and the English is right here rather than in shared/i18n.js:
+   every call below is `t(key, "the English")`, so the copy gate still measures
+   the real string and a language with no entry for a key falls back to it. A
+   missing translation shows English; it never shows a blank or a key.
+
+   Two different jobs ride on one picker. The chrome — labels, buttons, headings,
+   the plan line under every book — is swapped in the page. And the choice is sent
+   to the model, so the conversation itself changes language: that is the half a
+   visitor came for, and it is the half that cannot be done with a stylesheet. */
+
+const I18N = window.DEMO_I18N;
+const t = (key, en, vars) => I18N.t(key, en, vars);
+/** true only for the seven: English is what the markup and this file already say */
+const translating = () => I18N.lang() !== I18N.DEFAULT;
+
 /* ── Greedy retrieval ─────────────────────────────────────────────
    The third thing that fills a context window, after a long document and a long
    conversation: what a tool hands back. `hitsPerPage` is welded to the agent —
@@ -46,7 +62,15 @@ const BOOKS = window.DEMO_BOOKS;
 
    The other bound is the index: a search returns at most the number of passages
    that match, so a narrow query at 1,000 hits brings back 16. Every level is a
-   ceiling, which is why every projection on this page says "up to". */
+   ceiling, which is why every projection on this page says "up to".
+
+   Eight indices did NOT multiply this, and it was worth checking rather than
+   assuming. The MCP server generates one tool per bound index, so the model picks
+   an index by picking a tool and one call reads one index — measured 2026-07-30:
+   hitsPerPage=5 over eight bound indices, one call, 2 hits, all from the Russian
+   one. A turn can still make several calls, and the meter charges what actually
+   arrived rather than this projection; the projection is per search, which is
+   what the picker's own tooltip says. */
 
 const GREED_LEVELS = [5, 50, 100, 500, 1000];
 const GREED_DEFAULT = 5;
@@ -156,6 +180,7 @@ const el = {
   heroTokens: $("hero-tokens"), heroFolds: $("hero-folds"), heroSaved: $("hero-saved"),
   tooltip: $("tooltip"),
   themeToggle: $("theme-toggle"), themeGlyph: $("theme-glyph"), themeLabel: $("theme-label"),
+  lang: $("lang"),
   costbar: $("costbar"), costToggle: $("cost-toggle"), meterInfo: $("meter-info"),
   tileNaive: $("tile-naive"), tileReal: $("tile-real"), tileSaved: $("tile-saved"),
   naiveUsd: $("naive-usd"), realUsd: $("real-usd"), savedUsd: $("saved-usd"),
@@ -504,8 +529,8 @@ function chargeSummarizer({ stats, inTok, outTok }) {
  * Call it after the user message has been pushed.
  */
 function realInputTokens(newChars, extras) {
-  const notes = state.fold && state.fold.sections.length > 1
-    ? textOf(sentinelPreamble(state.fold)).length : 0;
+  const notes = (state.fold && state.fold.sections.length > 1
+    ? textOf(sentinelPreamble(state.fold)).length : 0) + langNoteChars();
   const loaned = (extras || []).reduce((n, m) => n + textOf(m).length, 0);
   return Math.round(state.tokens + estTokens(newChars + notes + loaned));
 }
@@ -531,7 +556,48 @@ function meterView() {
 }
 
 function renderCost() {
-  strip.render(meterView());
+  const view = meterView();
+  strip.render(view);
+  relabelStrip(view);
+}
+
+/**
+ * The three tiles' words, in the reader's language.
+ *
+ * shared/meter.js writes them, and it stays English on purpose: the other demo
+ * on this site uses the same strip and does not offer a language picker, so the
+ * kit is not the place for a translation table. What the kit does hand over is
+ * the view it just rendered — label, chip and badge included — which is exactly
+ * enough to say the same thing again in another language.
+ *
+ * English short-circuits: nothing is rewritten, so meter.js's own copy is what
+ * ships and the two can never disagree about the English.
+ */
+function relabelStrip(view) {
+  if (!translating()) return;
+  if (view.mode === "impossible") {
+    el.savedLabel.textContent = t("tile.unlocked", view.unlocked.label);
+    el.unlockedSub.textContent = t("tile.unlockedSub", view.unlocked.sub);
+  } else {
+    el.savedLabel.textContent = t("tile.saved", view.saved.label);
+    el.savedPct.textContent = savedChip(view.saved);
+  }
+  if (view.naive.overWindow) {
+    // rebuilt rather than pattern-matched: the numbers are the kit's, the words
+    // are ours, and "window" is not a word worth leaving in English on its own
+    el.naiveBadge.textContent = `${t("tile.wontFit", "wouldn't even fit ✗")} ` +
+      `(${M.shortTokens(view.naive.peak)} > ${M.shortTokens(view.naive.window)}\u00a0tok)`;
+  }
+}
+
+/** the small chip under Saved: a ratio, a promise, or a dash */
+function savedChip(saved) {
+  if (saved.behind) return t("tile.payingBack", saved.chipText);
+  if (saved.chipText === "—") return saved.chipText;
+  if (/%/.test(saved.chipText)) {
+    return t("tile.pct", saved.chipText, { pct: Math.round(saved.pct) });
+  }
+  return t("tile.noTurn", saved.chipText);
 }
 
 function resetCost() {
@@ -546,7 +612,7 @@ function initCostbar() {
     const open = el.costbar.dataset.open !== "1";
     el.costbar.dataset.open = open ? "1" : "0";
     el.costToggle.setAttribute("aria-expanded", String(open));
-    el.costToggle.textContent = open ? "Hide" : "Breakdown";
+    setCostToggleLabel();
   });
 
   // bound once, read live: every one of these asks the kit for the wording that
@@ -563,6 +629,14 @@ function initCostbar() {
   tip(el.unlockedInfo, () => M.tileCopy.unlocked(meterView()), null, { heading: "Unlocked" });
 
   renderCost();
+}
+
+/** the toggle names what it will do, in whichever language it is doing it */
+function setCostToggleLabel() {
+  const open = el.costbar.dataset.open === "1";
+  el.costToggle.textContent = open
+    ? t("cost.hide", "Hide")
+    : t("cost.breakdown", "Breakdown");
 }
 
 /* ── Message helpers ──────────────────────────────────────────── */
@@ -735,7 +809,10 @@ function renderMeterState() {
   const over = state.tokens > max;
   const p = state.foldProgress;
 
-  let dot = "state-ok", label = "Room to spare";
+  // The four resting states are translated; the two lines a running fold writes
+  // are not. Those are a progress readout with a section counter in them — the
+  // same register as the wire log, and gone in seconds either way.
+  let dot = "state-ok", label = t("state.ok", "Room to spare");
   if (p) {
     dot = "state-working";
     label = p.phase === "reduce"
@@ -743,9 +820,16 @@ function renderMeterState() {
       : `${over ? "Over budget" : "Folding"}\u00a0— folding now (section ${Math.min(p.done + 1, p.total)}/${p.total})…`;
   } else if (over) {
     dot = "state-over";
-    label = `Over budget by ${fmt(state.tokens - max)}\u00a0tokens\u00a0— fold to continue`;
-  } else if (state.tokens >= max) { dot = "state-over"; label = "At the budget\u00a0— fold to continue"; }
-  else if (state.tokens >= max * CFG.compactAtRatio) { dot = "state-warn"; label = "Approaching the fold"; }
+    label = t("state.over",
+      `Over budget by ${fmt(state.tokens - max)}\u00a0tokens\u00a0— fold to continue`,
+      { n: fmt(state.tokens - max) });
+  } else if (state.tokens >= max) {
+    dot = "state-over";
+    label = t("state.at", "At the budget\u00a0— fold to continue");
+  } else if (state.tokens >= max * CFG.compactAtRatio) {
+    dot = "state-warn";
+    label = t("state.warn", "Approaching the fold");
+  }
   el.meterState.innerHTML = `<span class="dot ${dot}" aria-hidden="true"></span> ${escapeHtml(label)}`;
 }
 
@@ -1619,7 +1703,8 @@ function sentinelPreamble(fold) {
  */
 function requestMessages(extras) {
   const pre = state.fold && state.fold.sections.length > 1 ? [sentinelPreamble(state.fold)] : [];
-  return pre.concat(state.messages, extras || []);
+  const lang = replyLanguageNote();
+  return pre.concat(state.messages, extras || [], lang ? [lang] : []);
 }
 
 /* The endpoint counts the payload it was actually given, so its stats beat the
@@ -2143,15 +2228,49 @@ function bookSizeLine(book, est) {
   return `${fmt(book.words)} words · ≈${fmt(est.tokens)} tokens`;
 }
 
-/** where the token figure came from — a guess, or something measured */
-function ratioNote() {
+/** where the token figure came from, and either answer is a measurement */
+function ratioNote(est) {
   return state.charsPerToken
     ? `converted at the ${charsPerToken().toFixed(1)} characters per token this conversation ` +
       `measured through the trim endpoint`
-    : `converted at ${BOOKS.SHELF_DEFAULTS.charsPerToken} characters per token, measured on ` +
-      `Alice against the same endpoint — the first probe of this conversation replaces it with ` +
+    : `converted at the ${est.charsPerToken} characters per token measured for this book ` +
+      `against the same endpoint — the first probe of this conversation replaces it with ` +
       `its own ratio`;
 }
+
+/* ── The plan line, in the reader's language ──────────────────────
+   `estimate()` in shared/books.js builds `what` and `price` in English, and it
+   stays that way: it is pure, it is what the tests assert against, and the other
+   caller of that module has no picker. Everything those two sentences are made of
+   comes back on the estimate as numbers — sections, calls, dollars — so the same
+   claim can be said again in another language without books.js knowing.
+
+   The English is the fallback on every call, so `en` renders books.js's own
+   wording byte for byte. ── */
+
+function planWhat(est) {
+  if (est.foldsOnArrival) return t("plan.folds", est.what, { n: est.foldSections });
+  return est.compactCalls > 0
+    ? t("plan.compacts", est.what)
+    : t("plan.fits", est.what);
+}
+
+function planPrice(est) {
+  if (est.compactCalls === 0) return t("plan.noCall", est.price);
+  if (est.usd === null) {
+    return t("plan.callsNoRate", est.price, { n: est.compactCalls });
+  }
+  const rate = est.rate && est.rate.placeholder
+    ? t("plan.illustrative", est.rateNote)
+    : t("plan.listPrice", est.rateNote);
+  // One call is not "1 calls" in any of these languages, and one call is the
+  // common case: every book that fits the window whole makes exactly one. So the
+  // caller picks the key rather than a plural helper guessing at seven grammars.
+  const key = est.compactCalls === 1 ? "plan.call1" : "plan.calls";
+  return t(key, est.price, { n: est.compactCalls, usd: est.usdLabel, rate });
+}
+
+const planLine = (est) => `${planWhat(est)} · ${planPrice(est)}`;
 
 function bookTile(book, est) {
   const tile = document.createElement("button");
@@ -2159,12 +2278,23 @@ function bookTile(book, est) {
   tile.className = "shelf-book";
   tile.dataset.slug = book.slug;
   tile.dataset.regime = est.regime;
+  if (book.lang) tile.dataset.lang = book.lang;
   tile.disabled = state.busy;
   tile.setAttribute("aria-pressed", "false");
 
   const title = document.createElement("span");
   title.className = "sb-title";
-  title.textContent = book.title;
+  // On the originals, the flag IS the label: nine tiles in seven scripts, and a
+  // reader scanning for the Russian one should not have to read nine titles. The
+  // accessible name says the language in words a beat later.
+  if (book.lang) {
+    const flag = document.createElement("span");
+    flag.className = "sb-flag";
+    flag.textContent = I18N.langOf(book.lang).flag;
+    flag.setAttribute("aria-hidden", "true");
+    title.append(flag, document.createTextNode(" "));
+  }
+  title.append(document.createTextNode(book.title));
   const by = document.createElement("span");
   by.className = "sb-by";
   by.textContent = `${book.author} · ${book.year}`;
@@ -2179,10 +2309,10 @@ function bookTile(book, est) {
   plan.className = "sb-plan";
   const what = document.createElement("span");
   what.className = "sb-what";
-  what.textContent = est.what;
+  what.textContent = planWhat(est);
   const price = document.createElement("span");
   price.className = "sb-price";
-  price.textContent = est.price;
+  price.textContent = planPrice(est);
   plan.append(what, price);
 
   const hook = document.createElement("span");
@@ -2193,7 +2323,8 @@ function bookTile(book, est) {
   if (est.costGated) {
     const flag = document.createElement("span");
     flag.className = "sb-gate-flag";
-    flag.textContent = `asks first · over ${usd(est.costConfirmUsd)}`;
+    flag.textContent = t("gate.flag", `asks first · over ${usd(est.costConfirmUsd)}`,
+      { usd: usd(est.costConfirmUsd) });
     tile.appendChild(flag);
   }
   tile.appendChild(hook);
@@ -2201,8 +2332,9 @@ function bookTile(book, est) {
   // the accessible name carries the figures, because a screen reader reading
   // "The Awakening" alone would not have been told what pressing it costs
   tile.setAttribute("aria-label",
+    (book.lang ? `${I18N.langOf(book.lang).native}. ` : "") +
     `${book.title}, ${book.author}, ${book.year}. ${fmt(book.words)} words, about ` +
-    `${fmt(est.tokens)} tokens. ${est.line}.` +
+    `${fmt(est.tokens)} tokens. ${planLine(est)}.` +
     (est.costGated ? " Asks for confirmation before ingesting." : ""));
 
   tip(tile, () => {
@@ -2211,9 +2343,14 @@ function bookTile(book, est) {
       ? `No rate is configured for this model, so no bill is quoted — the call count is still real.`
       : `**~${usd(live.usd)}**: ${fmt(live.tokens)} tokens read once by the summarizer at ` +
         `${M.priceLine(live.rate)} An estimate, not an invoice.`;
-    return `Gutenberg ebook #${book.gutenbergId}, licence header removed, nothing else ` +
-      `edited. Clicking makes it the first user message. ` +
-      `${live.what[0].toUpperCase()}${live.what.slice(1)}. ${bill} Token figure ${ratioNote()}.`;
+    // Белые ночи is not on Gutenberg as plain text at all, so provenance is a
+    // fact about the book and not a template with an id in it
+    const from = book.source === "wikisource"
+      ? `From ${book.sourceHost}, the editorial layer stripped\u00a0— footnotes, source ` +
+        `notes and navigation, which is the part its licence covers.`
+      : `Gutenberg ebook #${book.gutenbergId}, licence header removed, nothing else edited.`;
+    return `${from} Clicking makes it the first user message. ` +
+      `${live.what[0].toUpperCase()}${live.what.slice(1)}. ${bill} Token figure ${ratioNote(live)}.`;
   }, null, { heading: `${book.title} · ${fmt(book.chars)} characters` });
   tile.addEventListener("click", () => pickBook(book));
   return tile;
@@ -2229,31 +2366,67 @@ function renderShelf() {
   closeCostGate();
   el.shelf.textContent = "";
   BOOKS.groupByRegime(shelfOpts()).forEach((group) => {
-    const section = document.createElement("section");
-    section.className = "shelf-group";
-    section.dataset.regime = group.regime;
-
-    const head = document.createElement("h3");
-    head.className = "shelf-group-h";
-    head.append(document.createTextNode(group.copy.heading));
-    const count = document.createElement("span");
-    count.className = "shelf-group-n";
-    count.textContent = group.entries.length === 1 ? "1 book" : `${group.entries.length} books`;
-    const info = document.createElement("button");
-    info.type = "button";
-    info.className = "info";
-    info.textContent = "?";
-    tip(info, group.copy.note);
-    head.append(count, info);
-
-    const grid = document.createElement("div");
-    grid.className = "shelf-grid";
-    group.entries.forEach(({ book, est }) => grid.appendChild(bookTile(book, est)));
-
-    section.append(head, grid);
+    const section = shelfSection(
+      group.regime,
+      t(`regime.${group.regime}.heading`, group.copy.heading),
+      group.entries,
+      group.copy.note);
     el.shelf.appendChild(section);
   });
+  el.shelf.appendChild(originalsSection());
   if (state.book) markShelf(state.book.slug);
+}
+
+/** one heading, one count, one tooltip, one grid — every group is this shape */
+function shelfSection(regime, heading, entries, note) {
+  const section = document.createElement("section");
+  section.className = "shelf-group";
+  section.dataset.regime = regime;
+
+  const head = document.createElement("h3");
+  head.className = "shelf-group-h";
+  head.append(document.createTextNode(heading));
+  const count = document.createElement("span");
+  count.className = "shelf-group-n";
+  const n = entries.length;
+  count.textContent = n === 1
+    ? t("shelf.books.one", "1 book")
+    : t("shelf.books.many", `${n} books`, { n });
+  const info = document.createElement("button");
+  info.type = "button";
+  info.className = "info";
+  info.textContent = "?";
+  tip(info, note);
+  head.append(count, info);
+
+  const grid = document.createElement("div");
+  grid.className = "shelf-grid";
+  entries.forEach(({ book, est }) => grid.appendChild(bookTile(book, est)));
+
+  section.append(head, grid);
+  return section;
+}
+
+/* ── The originals ────────────────────────────────────────────────
+   Nine works in the language they were written in, and they are NOT sorted into
+   the four regimes above. Two reasons, and the second is the real one. Seven of
+   the nine fold on arrival, so three of the four headings would stand nearly
+   empty while one carried a queue. And the sort a reader wants here is not "what
+   will happen when I click" — every tile still says that for itself — it is
+   "which language", which a flag answers before a word is read.
+
+   The tiles are the same tiles. Same anatomy, same derived figures, same chips,
+   and the chips are already in the book's own language: a Japanese question about
+   a Japanese text, hitting the index that segments Japanese. ── */
+
+function originalsSection() {
+  const entries = BOOKS.originals(shelfOpts());
+  const section = shelfSection("originals", t("originals.h", "In the original"), entries,
+    "None of these is a translation, and none of them is in English. Each language has its " +
+    "own Algolia index, because word segmentation is an index-level setting — 紅樓夢 cannot " +
+    "share one with Faust. Their questions are in the book's language too.");
+  section.classList.add("is-originals");
+  return section;
 }
 
 function markShelf(slug) {
@@ -2294,7 +2467,8 @@ function showCostGate(book, est) {
 
   const h = document.createElement("p");
   h.className = "gate-h";
-  h.textContent = `${book.title} costs about ${usd(est.usd)} to ingest`;
+  h.textContent = t("gate.title", `${book.title} costs about ${usd(est.usd)} to ingest`,
+    { title: book.title, usd: usd(est.usd) });
 
   const body = document.createElement("p");
   body.className = "gate-body";
@@ -2317,7 +2491,7 @@ function showCostGate(book, est) {
   const go = document.createElement("button");
   go.type = "button";
   go.className = "btn primary gate-go";
-  go.textContent = `Ingest anyway · ~${usd(est.usd)}`;
+  go.textContent = t("gate.go", `Ingest anyway · ~${usd(est.usd)}`, { usd: usd(est.usd) });
   go.addEventListener("click", () => {
     closeCostGate();
     pickBook(book, { confirmed: true });
@@ -2325,7 +2499,7 @@ function showCostGate(book, est) {
   const no = document.createElement("button");
   no.type = "button";
   no.className = "btn ghost gate-no";
-  no.textContent = "Not now";
+  no.textContent = t("gate.no", "Not now");
   no.addEventListener("click", () => {
     closeCostGate();
     shelfStatus(`${book.title} not ingested — nothing was sent.`, null);
@@ -2362,7 +2536,9 @@ function showGreedGate(text, est) {
 
   const h = document.createElement("p");
   h.className = "gate-h";
-  h.textContent = `This question carries ≈${fmt(est.tokens)} tokens · ~${usd(est.usd)}`;
+  h.textContent = t("greed.title",
+    `This question carries ≈${fmt(est.tokens)} tokens · ~${usd(est.usd)}`,
+    { tok: fmt(est.tokens), usd: usd(est.usd) });
 
   const body = document.createElement("p");
   body.className = "gate-body";
@@ -2393,7 +2569,8 @@ function showGreedGate(text, est) {
   go.className = "btn primary gate-go";
   // the tokens are why this panel exists, and the dollars are already in the
   // heading: on a cheap model $0.02 reads as a reason not to bother reading on
-  go.textContent = `Ask anyway · ≈${fmt(est.tokens)} tok`;
+  go.textContent = t("greed.go", `Ask anyway · ≈${fmt(est.tokens)} tok`,
+    { tok: fmt(est.tokens) });
   go.addEventListener("click", () => {
     // a confirm left open while another turn started must not race it into the
     // history: the panel outlives the state it was priced against
@@ -2404,7 +2581,7 @@ function showGreedGate(text, est) {
   const no = document.createElement("button");
   no.type = "button";
   no.className = "btn ghost gate-no";
-  no.textContent = "Not now";
+  no.textContent = t("gate.no", "Not now");
   no.addEventListener("click", () => {
     closeGreedGate();
     // the question goes back in the box, exactly as a failed turn returns it
@@ -2448,7 +2625,7 @@ async function pickBook(book, { confirmed = false } = {}) {
   let text;
   busy(true);
   try {
-    shelfStatus(`Fetching ${book.title}…`, "working");
+    shelfStatus(t("status.fetching", `Fetching ${book.title}…`, { title: book.title }), "working");
     const t0 = performance.now();
     const res = await fetch(url);
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -2456,7 +2633,7 @@ async function pickBook(book, { confirmed = false } = {}) {
     logCall(url, null, null,
       `${fmt(text.length)} chars in ${Math.round(performance.now() - t0)}ms · a static file on ` +
       `this origin — no API, no key, no third party`, "GET");
-    shelfStatus(`${book.title} · ${fmt(text.length)} chars — ${est.what}`, "working");
+    shelfStatus(`${book.title} · ${fmt(text.length)} chars — ${planWhat(est)}`, "working");
   } catch (e) {
     shelfStatus(`Could not load ${book.title} from this site.`, "err");
     logCall(url, null, e.message, "failed", "GET");
@@ -2467,7 +2644,8 @@ async function pickBook(book, { confirmed = false } = {}) {
 
   const ok = await ingest(text);
   if (ok) {
-    shelfStatus(`${book.title} is in the conversation — ask it something.`, "ok");
+    shelfStatus(t("status.loaded", `${book.title} is in the conversation — ask it something.`,
+      { title: book.title }), "ok");
   } else {
     shelfStatus("", null);
   }
@@ -2553,7 +2731,7 @@ function renderSuggestionChips() {
     if (bookChips === 0) return;
     const note = document.createElement("span");
     note.className = "chip-note";
-    note.textContent = "after your first question";
+    note.textContent = t("chip.later", "after your first question");
     tip(note, "Written by the agent, from the conversation — and there is no conversation " +
       "yet. Ask one of the openings above and this row starts moving with the answers.");
     row.appendChild(note);
@@ -2802,11 +2980,11 @@ function turnChip({ label, tip: title }) {
 
 /** could this partial answer still turn out to be a sentinel line? */
 function maybeSentinel(partial) {
-  const t = partial.trimStart().toLowerCase();
-  if (!t) return true;
-  return t.length < SENTINEL_HEAD.length
-    ? SENTINEL_HEAD.startsWith(t)
-    : t.startsWith(SENTINEL_HEAD);
+  const head = partial.trimStart().toLowerCase();
+  if (!head) return true;
+  return head.length < SENTINEL_HEAD.length
+    ? SENTINEL_HEAD.startsWith(head)
+    : head.startsWith(SENTINEL_HEAD);
 }
 
 /**
@@ -3012,6 +3190,20 @@ function addSearchCard({ search, before }) {
     : [];
   const query = nested.length ? nested.join("” + “")
     : (input.query || input.q || input.search_query || "");
+  /* Which of the eight indices the model reached for — and it is in the tool's
+     NAME, not in its arguments. Measured on 2026-07-30: the MCP server generates
+     one tool per bound index, so an eight-index tool arrives at the model as eight
+     tools called `algolia_search_index_public_domain_books`,
+     `…_books_ru`, and so on, each with the index's own description. Choosing an
+     index IS choosing a tool. The arguments are read too, for the internal
+     transport, which names the index per query instead. */
+  const fromName = /algolia_search_index_(public_domain_books(?:_[a-z]{2})?)/
+    .exec(search.name || "");
+  const picked = (Array.isArray(input.queries) ? input.queries : [input])
+    .map((q) => q && (q.indexName || q.index))
+    .filter(Boolean)
+    .concat(fromName ? [fromName[1]] : []);
+  const indices = [...new Set(picked)];
   card.querySelector(".se-title").textContent = query
     ? `assistant searched the shelf · “${query}”`
     : "assistant searched the shelf";
@@ -3020,17 +3212,28 @@ function addSearchCard({ search, before }) {
     `<code>search_the_shelf</code>. The passages come back into this turn and go up with ` +
     `your question — which is why the meter moves.`;
   tip(card.querySelector(".event-h"),
-    "A real Agent Studio tool call, not a mock: the tool is pinned to one index with " +
-    "**mode=static**, and a per-request override comes back 422.",
+    "A real Agent Studio tool call, not a mock: the tool is pinned to eight indices with " +
+    "**mode=static**, one per language, and a per-request override comes back 422.",
     `${search.name || "search_the_shelf"}(${JSON.stringify(input)})\n` +
-    "  → POST /1/indexes/public_domain_books/query");
+    `  → POST /1/indexes/${indices[0] || "{one of " + BOOKS.indexNames().length + "}"}/query`);
+  if (indices.length) {
+    const chip = document.createElement("span");
+    chip.className = "se-index";
+    chip.textContent = indices.map((n) => n.replace(/^public_domain_books_?/, "") || "en")
+      .join(" + ");
+    tip(chip, `The index this search actually went to, out of the ` +
+      `${BOOKS.indexNames().length} the tool is bound to. One per language, because word ` +
+      `segmentation is an index-level setting and 紅樓夢 cannot share one with Faust.`);
+    card.querySelector(".event-h").appendChild(chip);
+  }
 
   const steps = card.querySelector(".se-steps");
   const live = card.querySelector(".se-live");
   const row = document.createElement("li");
   row.dataset.state = "working";
   row.innerHTML = '<span class="mark" aria-hidden="true"></span>' +
-    `<span class="lbl">searching 16 books, 11,115 passages · up to ${fmt(greed())} hits</span>` +
+    `<span class="lbl">searching ${BOOKS.shelfSpan().books} books in ` +
+    `${BOOKS.shelfSpan().languages} languages · up to ${fmt(greed())} hits</span>` +
     '<span class="val">…</span>';
   steps.appendChild(row);
   // above the answer bubble, because it happened before the answer did
@@ -3072,7 +3275,11 @@ function addSearchCard({ search, before }) {
           const where = h.chapterTitle
             ? `${h.chapterTitle}`
             : (h.chapter === null || h.chapter === undefined ? "no chapter" : `chapter ${h.chapter}`);
-          return `**${h.book || "unknown book"}** · ${where}${h.position ? ` · passage ${h.position}` : ""}\n\n` +
+          // the language, from the shelf rather than from the record: the English
+          // index predates the field and a title is join enough
+          const lang = h.lang || BOOKS.langOfTitle(h.book);
+          return `**${h.book || "unknown book"}**${lang ? ` · ${lang}` : ""} · ${where}` +
+            `${h.position ? ` · passage ${h.position}` : ""}\n\n` +
             `${(h.text || "").slice(0, 700)}${(h.text || "").length > 700 ? "…" : ""}`;
         }).join("\n\n---\n\n") +
           (hits.length > shown.length
@@ -3083,9 +3290,13 @@ function addSearchCard({ search, before }) {
         peek.type = "button";
         peek.className = "sum-peek";
         const books = [...new Set(hits.map((h) => h.book).filter(Boolean))];
-        peek.textContent = books.length === 1
+        // How many languages answered — the one figure that says the eight indices
+        // are eight indices and not a label on one.
+        const langs = [...new Set(books.map((b) => BOOKS.langOfTitle(b)).filter(Boolean))];
+        peek.textContent = (books.length === 1
           ? `${fmt(hits.length)} from ${books[0]}`
-          : `${fmt(hits.length)} across ${books.length} books`;
+          : `${fmt(hits.length)} across ${books.length} books`) +
+          (langs.length > 1 ? ` · ${langs.join(" ")}` : "");
         tip(peek, cited, null,
           { rich: true, markdown: true, heading: `What came back · ${fmt(tok)} tokens` });
         row.appendChild(peek);
@@ -3632,7 +3843,8 @@ async function askSection(fold, i, question) {
       `Answer from this text, in your own words. Quote briefly — a phrase or a line, attributed — ` +
       `where a quotation is what answers the question, but do not reproduce the passage wholesale: ` +
       `it is on loan for this answer, and copying it into your reply is what keeps it in the ` +
-      `conversation afterwards. If the answer is genuinely not in it, say so in one line.`;
+      `conversation afterwards. If the answer is genuinely not in it, say so in one line.` +
+      (langNoteChars() ? `\n\n${textOf(replyLanguageNote())}` : "");
     /* check-copy: on */
 
     const out = await streamAnswer([userMsg(framed)], {
@@ -3773,7 +3985,7 @@ function busy(on) {
   el.urlBtn.disabled = on;
   el.reset.disabled = on;
   el.compact.disabled = on || !canCompact();
-  el.send.textContent = on ? "…" : "Send";
+  el.send.textContent = on ? "…" : t("btn.send", "Send");
   // a second book or a second question mid-fold would race the history swap
   document.querySelectorAll(".shelf-book, .chip, .greed-btn").forEach((b) => {
     // A spent chip — or a greed level with no agent id — is disabled for a reason
@@ -3808,8 +4020,9 @@ function resetAll() {
   renderChips(null);
   markShelf(null);
   tipPinned = null; closeTip();
-  el.thread.innerHTML = '<div class="empty"><p><strong>Cleared.</strong></p>' +
-    '<p>Take a book off the shelf, or ingest a document of your own.</p></div>';
+  el.thread.innerHTML = `<div class="empty"><p><strong>${escapeHtml(t("cleared.h", "Cleared."))}` +
+    `</strong></p><p>${t("cleared.p",
+      "Take a book off the shelf, or ingest a document of your own.")}</p></div>`;
   el.ingestStatus.textContent = "";
   urlStatus("");
   renderMeter(); renderLedger();
@@ -4045,11 +4258,13 @@ function setGreedHint() {
   const tok = greedTokens(level);
   const win = modelWindow();
   const tail = tok > win
-    ? ` · past ${state.model.label}'s ${fmt(win)}-token window`
-    : (level > GREED_DEFAULT && tok >= GREED_CONFIRM_TOKENS ? " · asks before it sends" : "");
-  el.greedHint.textContent =
-    `up to ≈${fmt(tok)} tokens a search` +
-    (level === GREED_DEFAULT ? " · today's default" : tail);
+    ? " · " + t("greed.past", `past ${state.model.label}'s ${fmt(win)}-token window`,
+      { label: state.model.label, win: fmt(win) })
+    : (level > GREED_DEFAULT && tok >= GREED_CONFIRM_TOKENS
+      ? " · " + t("greed.asks", "asks before it sends") : "");
+  el.greedHint.textContent = level === GREED_DEFAULT
+    ? t("greed.default", `up to ≈${fmt(tok)} tokens a search · today's default`, { tok: fmt(tok) })
+    : t("greed.hint", `up to ≈${fmt(tok)} tokens a search`, { tok: fmt(tok) }) + tail;
   el.greedHint.classList.toggle("is-warn", tok > win);
 }
 
@@ -4068,7 +4283,7 @@ function applyTheme(theme) {
   const dark = theme === "dark";
   // the button names what it will do, not what is on screen
   el.themeGlyph.textContent = dark ? "☀" : "☾";
-  el.themeLabel.textContent = dark ? "Light" : "Dark";
+  el.themeLabel.textContent = dark ? t("theme.light", "Light") : t("theme.dark", "Dark");
   el.themeToggle.setAttribute("aria-pressed", String(dark));
   el.themeToggle.setAttribute("aria-label",
     dark ? "Switch to the light theme" : "Switch to the dark theme");
@@ -4085,6 +4300,104 @@ function initTheme() {
     `properties, so there is no second palette to fall out of sync.`);
 }
 
+/* ── Language ─────────────────────────────────────────────────────
+   The head script has already put the stored choice on <html lang> before first
+   paint, for the same reason the theme is resolved there: an attribute a screen
+   reader or a :lang() rule reads has to be right from the first byte. This is the
+   rest of it — the picker, the swap, and the note the model is sent.
+
+   Two things change when the picker moves, and only one of them is the page. The
+   chrome is repainted from the same render functions that already redraw when the
+   model changes, so there is no second rendering path to keep in step. And the
+   next request carries a reply-language note, which is the half a visitor came
+   for: the shelf's own questions are already in the book's language, and now the
+   answers come back in the reader's. ────────────────────────── */
+
+function storedLang() {
+  const attr = document.documentElement.dataset.lang;
+  return I18N.known(attr) ? attr : I18N.DEFAULT;
+}
+
+function applyLang(code, { repaint = true } = {}) {
+  const next = I18N.setLang(code);
+  try { localStorage.setItem("ic-lang", next); } catch (_) { /* private mode */ }
+  document.documentElement.lang = next;
+  document.documentElement.dataset.lang = next;
+  I18N.applyDom(document);
+  el.lang.value = next;
+  // At boot there is nothing to repaint yet: no model is selected, the budget
+  // select is empty, and the first render is a few lines below. Asking the shelf
+  // to price itself against a model that does not exist yet is how an init order
+  // becomes load-bearing without saying so.
+  if (repaint) relabel();
+}
+
+/**
+ * Everything written from JS rather than from the markup, said again. These are
+ * the same functions the model and budget pickers already call — a language is
+ * one more thing the page derives its labels from, not a new rendering path.
+ */
+function relabel() {
+  setCostToggleLabel();
+  applyTheme(currentTheme());
+  setBudgetHint();
+  setModelHint();
+  renderGreed();
+  renderShelf();
+  renderMeter();
+  renderChips(state.book);
+  el.send.textContent = state.busy ? "…" : t("btn.send", "Send");
+}
+
+function initLang() {
+  I18N.LANGS.forEach((l) => {
+    const opt = document.createElement("option");
+    opt.value = l.code;
+    // flag first because it is what the eye lands on, native name because it is
+    // what a reader recognises — and an option can hold nothing but text
+    opt.textContent = `${l.flag} ${l.native}`;
+    el.lang.appendChild(opt);
+  });
+  el.lang.addEventListener("change", () => applyLang(el.lang.value));
+  applyLang(storedLang(), { repaint: false });
+  tip(el.lang, () => {
+    const l = I18N.langOf(I18N.lang());
+    return l.code === I18N.DEFAULT
+      ? `The page and the conversation both. Pick another and the answers come back in it\u00a0— ` +
+        `the choice rides on every request as a short note to the model.`
+      : `The page is in ${l.native}, and so are the answers: every request carries a note ` +
+        `asking for ${l.english}. The book stays in its own language, quoted and then glossed.`;
+  }, null, { heading: "Page and conversation" });
+}
+
+/* ── The note the model is sent ────────────────────────────────────
+   A reply-language instruction, and it rides LAST — after the history, after any
+   loaned extract. Placement is not cosmetic: an instruction 900,000 tokens
+   upstream of the question is an instruction competing with everything after it.
+   It is also phrased to re-anchor on what came before it, because the failure mode
+   of a trailing instruction is a model that answers the instruction.
+
+   It is a `user` message like every other note this page sends: /completions
+   refuses a `system` role with 422, and a user message labelled "SYSTEM:" reads as
+   an injection attempt and gets declined on its face. ────────── */
+
+function replyLanguageNote() {
+  const l = I18N.langOf(I18N.lang());
+  if (l.code === I18N.DEFAULT) return null;
+  /* check-copy: off */
+  return userMsg(
+    `One more note from me, the person you are talking to: write to me in ${l.english} ` +
+    `(${l.native}), whatever language the book is in. Quote the book in its own words, then ` +
+    `say what the quotation means in ${l.english}. Now answer my last message, in ${l.english}.`);
+  /* check-copy: on */
+}
+
+/** what that note weighs, so the meter counts what the request actually carries */
+function langNoteChars() {
+  const note = replyLanguageNote();
+  return note ? textOf(note).length : 0;
+}
+
 function init() {
   if (!CFG || !CFG.appId || CFG.appId === "YOUR_APP_ID") {
     document.body.innerHTML =
@@ -4093,6 +4406,9 @@ function init() {
       "app id, API key, and agent ids before loading this page.</p>";
     return;
   }
+  // language first: every label below reads through t(), including the theme
+  // button's own
+  initLang();
   initTheme();
   initModels();
   initBudgets();
@@ -4143,7 +4459,11 @@ function init() {
   el.reset.addEventListener("click", () => {
     resetAll();
     // the shelf keeps its selection: the chips are the reason to come back to it
-    if (state.book) shelfStatus(`${state.book.title} cleared — pick it again, or another.`, null);
+    if (state.book) {
+      shelfStatus(t("status.cleared",
+        `${state.book.title} cleared — pick it again, or another.`,
+        { title: state.book.title }), null);
+    }
   });
   el.composer.addEventListener("submit", (e) => {
     e.preventDefault();

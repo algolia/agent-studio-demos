@@ -14,6 +14,13 @@
    file does not have. Run `node scripts/fetch-books.js` and it prints the
    figures to paste in.
 
+   `charsPerToken` is measured per BOOK, through /context/trim, by
+   `scripts/measure-tokens.js`. Not per language: English alone runs from 2.98 on
+   Alice to 4.02 on The Time Machine, a 35% spread, so a tile priced at the shelf
+   average is priced from a book the reader is not looking at. The spread is not
+   cosmetic — one shared 3.0 was folding the Nights, which at its own 3.95 fits
+   the window whole.
+
    The chips are questions with answers in the text. They come in two families
    and the distinction is the whole thesis of this demo:
 
@@ -45,6 +52,7 @@
       gutenbergId: 1952,
       words: 6085,
       chars: 31498,
+      charsPerToken: 3.50,
       hook: "the smallest thing on the shelf, and still too big for an 8k budget",
       chips: [
         { kind: "needle", short: "what John prescribes", text: "John is a physician\u00a0— what does he decide is wrong with his wife, and what does he prescribe for it?" },
@@ -61,6 +69,7 @@
       gutenbergId: 23,
       words: 40750,
       chars: 223994,
+      charsPerToken: 3.97,
       hook: "a first-person argument, and every step of it is evidence",
       chips: [
         { kind: "needle", short: "who taught him letters", text: "Who begins teaching Douglass to read in Baltimore, and what makes her stop?" },
@@ -77,6 +86,7 @@
       gutenbergId: 21,
       words: 44877,
       chars: 243658,
+      charsPerToken: 3.62,
       hook: "three hundred separate fables\u00a0— the one book on this shelf where search should win outright",
       chips: [
         { kind: "needle", short: "what the fox says", text: "In The Fox and the Grapes, what exactly does the fox say as she turns away?" },
@@ -94,6 +104,7 @@
       gutenbergId: 160,
       words: 64028,
       chars: 359407,
+      charsPerToken: 3.62,
       hook: "the Gutenberg edition carries Chopin's selected short stories after the novel, and they are in this file too",
       chips: [
         { kind: "needle", short: "the parrot's phrase", text: "What does the caged parrot in the opening scene keep repeating, and who is driven off by it?" },
@@ -110,6 +121,7 @@
       gutenbergId: 408,
       words: 68628,
       chars: 399016,
+      charsPerToken: 3.90,
       hook: "essays, a short story and printed music in one volume",
       chips: [
         { kind: "needle", short: "double-consciousness", text: "Where does Du Bois introduce double-consciousness, and how does he define it?" },
@@ -126,6 +138,7 @@
       gutenbergId: 45,
       words: 102501,
       chars: 561144,
+      charsPerToken: 3.27,
       hook: "the first book on the shelf too large to send in one piece",
       chips: [
         { kind: "needle", short: "carrots and the slate", text: "What does Anne do when Gilbert Blythe calls her Carrots?" },
@@ -142,6 +155,7 @@
       gutenbergId: 128,
       words: 111597,
       chars: 597836,
+      charsPerToken: 3.95,
       hook: "stories inside stories inside stories\u00a0— the frame is the thing retrieval cannot see",
       chips: [
         { kind: "needle", short: "the fisherman's net", text: "In The Story of the Fisherman, what does the fisherman bring up in his net, and how does he get the genius back into it?" },
@@ -158,6 +172,7 @@
       gutenbergId: 1342,
       words: 127359,
       chars: 728714,
+      charsPerToken: 3.84,
       hook: "the most-read novel in English, and long past the size a single request can carry",
       chips: [
         { kind: "needle", short: "the first proposal", text: "How does Darcy open his first proposal at Hunsford, and what does Elizabeth say back to him?" },
@@ -174,6 +189,7 @@
       gutenbergId: 345,
       words: 161321,
       chars: 845890,
+      charsPerToken: 3.79,
       hook: "letters, diaries, telegrams and news cuttings\u00a0— a novel assembled from documents",
       chips: [
         { kind: "needle", short: "the Demeter's log", text: "What does the log found aboard the Demeter at Whitby record about the voyage?" },
@@ -190,6 +206,7 @@
       gutenbergId: 1260,
       words: 185390,
       chars: 1022380,
+      charsPerToken: 3.63,
       hook: "five houses, one narrator, and she is arguing with you the whole way",
       chips: [
         { kind: "needle", short: "the red-room", text: "What lands Jane in the red-room at Gateshead, and what happens to her while she is shut in it?" },
@@ -206,6 +223,7 @@
       gutenbergId: 4300,
       words: 265059,
       chars: 1519708,
+      charsPerToken: 3.42,
       hook: "one day, eighteen episodes, a different prose style in each\u00a0— and the ingest bill to match",
       chips: [
         { kind: "needle", short: "the word Molly asks about", text: "What word does Molly ask Bloom to explain at breakfast, and how does he explain it to her?" },
@@ -222,6 +240,7 @@
       gutenbergId: 2600,
       words: 563286,
       chars: 3208273,
+      charsPerToken: 3.41,
       hook: "the biggest thing here by a factor of two, and the most expensive click on the page",
       chips: [
         { kind: "needle", short: "the soirée that opens it", text: "Whose Petersburg soirée opens the book, and which guest talks out of turn at it?" },
@@ -238,6 +257,7 @@
       gutenbergId: 11,
       words: 26525,
       chars: 144600,
+      charsPerToken: 2.98,
       hook: "the warm-up\u00a0— short enough to read, long enough to overflow a small budget",
       chips: [
         { kind: "needle", short: "the bottle and the cake", text: "What is written on the bottle Alice drinks from, and on the cake she finds afterwards?" },
@@ -255,6 +275,7 @@
       gutenbergId: 35,
       words: 32454,
       chars: 179699,
+      charsPerToken: 4.02,
       hook: "one voice, one evening\u00a0— a story told inside another story",
       chips: [
         { kind: "needle", short: "what year the dials read", text: "What year do the dials of the machine record when the Traveller first stops?" },
@@ -272,6 +293,7 @@
       gutenbergId: 84,
       words: 75042,
       chars: 419337,
+      charsPerToken: 3.94,
       hook: "three narrators nested inside each other, and none of them neutral",
       chips: [
         { kind: "needle", short: "the three books", text: "Which three books does the creature find, and what does he take from each of them?" },
@@ -289,6 +311,7 @@
       gutenbergId: 2701,
       words: 212796,
       chars: 1218939,
+      charsPerToken: 3.70,
       hook: "the stress test\u00a0— 213k\u00a0words, folded in sections before a single one is sent",
       chips: [
         { kind: "needle", short: "nailed to the mast", text: "What does Ahab nail to the mast, and what does he promise for it?" },
@@ -300,16 +323,17 @@
     },
   ];
 
-  /* ── The multilingual shelf, staged ────────────────────────────────
+  /* ── The multilingual shelf ────────────────────────────────────────
      Nine works in seven languages, none of them a translation: this is the shelf
      that asks whether any of the above generalises past English.
 
-     It is a SEPARATE array on purpose. Nothing renders it yet — the pipeline
-     (fetch, passages, one Algolia index per language) is built and run, and the
-     page that shows it is not. Keeping `books` at sixteen means every existing
-     caller, including scripts/create-book-agents.js, is untouched by this landing.
+     It stays a SEPARATE array now that the page renders it. `books` is the
+     English shelf and `groupByRegime` groups that one; the originals get their
+     own section, because "grouped by what happens when you click" and "in the
+     language it was written in" are two different sorts and stacking them would
+     scatter nine books across four headings.
 
-     Three fields the English shelf does not need:
+     Two fields the English shelf does not carry:
 
        lang           ISO 639-1, and the reason there is more than one index.
                       `indexLanguages` is a settings-global — it cannot vary per
@@ -320,10 +344,11 @@
        indexName      where this book's passages live. Derived from `lang`, and
                       written down anyway: a UI that has to reconstruct a
                       destination is a UI that can get it wrong.
-       charsPerToken  MEASURED, per language, against /context/trim — not the
-                      English 3.0 reused. A Cyrillic or Han character does not
-                      cost what a Latin one costs, and a wrong ratio does not
-                      just blur a label, it moves a book into the wrong regime.
+
+     `charsPerToken` is measured here exactly as it is on the English shelf, and
+     the numbers are a different order of magnitude: around 0.3 for ja and zh,
+     three tokens to the character. A wrong ratio does not just blur a label, it
+     moves a book into the wrong regime.
 
      `year` here is the WORK's year of publication, not an edition's. The English
      shelf dates its files to the edition because half of them are translations
@@ -543,17 +568,18 @@
 
        hierarchical fold   fires at oversizeAtRatio × the model's REAL window,
                            the ceiling the provider enforces. At the default
-                           0.8 × 200,000 that is 160,000 tokens, which only the
-                           four biggest books reach. Past it nothing can be
+                           0.8 × 200,000 that is 160,000 tokens, which seven of
+                           the sixteen reach. Past it nothing can be
                            sent, and a single compact call would overflow the
                            summarizer the same way — so the document is
                            summarized in sections first.
 
-     `charsPerToken` defaults to 3, and that number was measured rather than
-     assumed: Alice's committed text is 144,600 characters and /context/trim
-     reported 48,116 tokens for it on the default model, which is 3.006 chars per
-     token. It is deliberately NOT the 4 that config.js carries as its pre-probe
-     fold-sizing fallback — that one only has to keep a section small enough to
+     `charsPerToken` comes from the book itself; this default only serves a book
+     that has none — a pasted document, a fetched page — and it was measured
+     rather than assumed: Alice's committed text is 144,600 characters and
+     /context/trim reported 48,116 tokens for it on the default model, which is
+     3.006 chars per token. It is deliberately NOT the 4 that config.js carries as
+     its pre-probe fold-sizing fallback — that one only has to keep a section small enough to
      summarize, where guessing high is harmless. Here a wrong ratio moves a book
      into the wrong regime, so it is the measurement. A live conversation
      re-measures on every probe; pass that ratio in and the labels sharpen.
@@ -646,9 +672,10 @@
    */
   /**
    * Precedence, and the order is the whole point: an explicit `opts` beats the
-   * book's own measurement, which beats the shelf default. The multilingual shelf
-   * carries a per-language `charsPerToken` — Japanese is nowhere near English's
-   * 3.0 — so a book that knows its own ratio uses it. But a live conversation
+   * book's own measurement, which beats the shelf default. Every book on both
+   * shelves carries its own `charsPerToken` — 2.98 to 4.02 inside English, and
+   * around 0.3 in Japanese — so a book that knows its ratio uses it, and the
+   * default is left for text that arrived from nowhere. But a live conversation
    * re-measures on every probe and passes the result in, and that measurement is
    * newer than anything written down here, so it still wins.
    */
@@ -761,6 +788,18 @@
       }));
   }
 
+  /**
+   * The originals in one list, priced, smallest first — the same shape
+   * `groupByRegime` returns for one group. They are NOT grouped by regime: seven
+   * of the nine fold, so four headings would be one heading with a queue behind
+   * it, and the sort a reader wants here is the cheap ones first.
+   */
+  function originals(opts) {
+    return BOOKS_I18N
+      .map((book) => ({ book, est: estimate(book, opts) }))
+      .sort((a, b) => a.est.tokens - b.est.tokens);
+  }
+
   /** Root-absolute: the deployable root is `public/`, so this path holds for
       every demo on the site regardless of how deep its own folder sits. */
   function bookUrl(book) {
@@ -771,12 +810,52 @@
     return BOOKS.find((b) => b.slug === slug) || null;
   }
 
+  /** either shelf, by slug — what a click on any tile resolves through */
+  function anyBook(slug) {
+    return findBook(slug) || BOOKS_I18N.find((b) => b.slug === slug) || null;
+  }
+
+  /**
+   * The language a retrieved passage is in, worked out from the book it names.
+   *
+   * The live English index predates the `lang` field, so a hit from it carries no
+   * language of its own — and backfilling 11,115 records to restate a fact the
+   * manifest already knows would be a write for nothing. A title is the join key:
+   * it is what the tool returns and what the shelf is keyed on.
+   */
+  function langOfTitle(title) {
+    const want = String(title == null ? "" : title).trim();
+    if (!want) return null;
+    const hit = BOOKS_I18N.concat(BOOKS).find((b) => b.title === want);
+    return hit ? (hit.lang || "en") : null;
+  }
+
+  /** every index the search tool is bound to: English first, then one per language */
+  function indexNames() {
+    const seen = ["public_domain_books"];
+    for (const b of BOOKS_I18N) if (!seen.includes(b.indexName)) seen.push(b.indexName);
+    return seen;
+  }
+
+  /** what the whole searchable shelf is, derived so a label cannot go stale */
+  function shelfSpan() {
+    return {
+      books: BOOKS.length + BOOKS_I18N.length,
+      languages: indexNames().length,
+    };
+  }
+
   global.DEMO_BOOKS = {
     books: BOOKS,
-    /** staged, not wired: the multilingual shelf nothing renders yet */
+    /** the originals, in their own languages, rendered as their own section */
     booksI18n: BOOKS_I18N,
     bookUrl,
     findBook,
+    anyBook,
+    originals,
+    langOfTitle,
+    indexNames,
+    shelfSpan,
     SHELF_DEFAULTS,
     REGIMES,
     REGIME_ORDER,

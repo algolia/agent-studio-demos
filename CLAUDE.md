@@ -22,7 +22,12 @@ understood without a caption; a caption without the state change is homework.
 - Most copy lives in JS template literals, not HTML. The gate scans both.
 - **The conversation is exempt.** Text sent to or from the model is literature,
   not page voice. Bracket model-facing prompts in JS with
-  `/* check-copy: off */ … /* check-copy: on */`. Nothing else is exempt.
+  `/* check-copy: off */ … /* check-copy: on */`.
+- **`shared/i18n.js` is the only other exemption**, because the gate measures
+  English and that file holds no English: every call is `t(key, "the English")`
+  with the English left in the markup or in `app.js`, where the gate still reads
+  it. Translations are held to length by `tests/i18n.test.js` instead. Nothing
+  else is exempt.
 - Tooltips are lead line + one thought (≤40 words) + formula in the code slot.
   HTML: `data-tip` + `data-tip-h`. JS: `tip(node, body, code, { heading })`.
   One `**bold**` per plain tip, on the number or term that matters.

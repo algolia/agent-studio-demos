@@ -84,6 +84,24 @@ const INDEX_NAME = process.env.ALGOLIA_INDEX_NAME || "public_domain_books";
 const argv = process.argv.slice(2);
 const PUSH = argv.includes("--push");
 
+/* ── --only, and why it exists ────────────────────────────────────
+   This file's desired state is twenty live agents, and a re-run converges all of
+   them. That is the right default and the wrong first move after changing the tool
+   shape: binding eight indices instead of one changes what the model sees on every
+   request, and the honest way to find out what it does with that is to move ONE
+   agent, ask it something, read the frames, and only then move the other nineteen.
+
+     node scripts/create-book-agents.js --push --only enablers/5
+
+   Matches on `slug/hits`, or on a bare slug for every page size of one model. */
+
+const ONLY = (() => {
+  const i = argv.indexOf("--only");
+  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : null;
+})();
+
+const selected = (v) => !ONLY || ONLY === v.slug || ONLY === `${v.slug}/${v.hits}`;
+
 /* ── The models to clone ──────────────────────────────────────────
    Kept as data rather than read from config.js, because config.js is gitignored
    (it holds the public search key) and a script in this repo must run from a
@@ -108,8 +126,10 @@ const GREEDS = [50, 100, 500, 1000];
 const DEFAULT_HITS = 5;
 
 /** every agent this file owns: the four defaults, then four greedy clones each */
-const VARIANTS = MODELS.flatMap((m) =>
+const ALL_VARIANTS = MODELS.flatMap((m) =>
   [DEFAULT_HITS, ...GREEDS].map((hits) => ({ ...m, hits })));
+
+const VARIANTS = ALL_VARIANTS.filter(selected);
 
 /* ── The shelf, as the model is told about it ─────────────────────
    Read from books.js so the tool description cannot drift from what is actually
@@ -118,21 +138,33 @@ const VARIANTS = MODELS.flatMap((m) =>
    The War and Peace note is not decoration: the Maude translation accents its
    names, and a search for "Anna Pavlovna" without the accent finds nothing. */
 
-function shelfLine() {
+const shorten = (a) => a.replace(/\s*\(trans\..*?\)/, "").replace(/^selected by /, "");
+const titleLine = (books) => books.map((b) => `${b.title} (${shorten(b.author)})`).join(" · ");
+
+function readShelf() {
   const src = fs.readFileSync(path.join(__dirname, "..", "public", "shared", "books.js"), "utf8");
   const sandbox = { window: {} };
   new Function("window", src)(sandbox.window);
-  const books = (sandbox.window.DEMO_BOOKS || {}).books || [];
-  if (books.length < 2) throw new Error("could not read the shelf out of books.js");
-  const shorten = (a) => a.replace(/\s*\(trans\..*?\)/, "").replace(/^selected by /, "");
+  const shelf = sandbox.window.DEMO_BOOKS || {};
+  const books = shelf.books || [];
+  const originals = shelf.booksI18n || [];
+  if (books.length < 2 || !originals.length) {
+    throw new Error("could not read both shelves out of books.js");
+  }
   return {
     count: books.length,
     titles: books.map((b) => b.title),
-    line: books.map((b) => `${b.title} (${shorten(b.author)})`).join(" · "),
+    line: titleLine(books),
+    originals,
+    /** lang → the books in it, in the order books.js lists them */
+    byLang: originals.reduce((acc, b) => {
+      (acc[b.lang] || (acc[b.lang] = [])).push(b);
+      return acc;
+    }, {}),
   };
 }
 
-const SHELF = shelfLine();
+const SHELF = readShelf();
 
 /* Passages on THIS shelf, not every passage in the file. passages.jsonl carries
    every book the repo has chunked — the i18n shelf went to one index per language
@@ -140,20 +172,27 @@ const SHELF = shelfLine();
    when the index it can search holds 11,115. Counted by book title against the
    shelf read above, which is the same list the description names. */
 
-const PASSAGE_COUNT = (() => {
+const PASSAGES_BY_LANG = (() => {
   const p = path.join(__dirname, "..", "passages.jsonl");
   if (!fs.existsSync(p)) return null;
   const titles = new Set(SHELF.titles);
-  let n = 0;
+  const byLang = {};
   for (const line of fs.readFileSync(p, "utf8").split("\n")) {
     if (!line.trim()) continue;
     let rec;
     try { rec = JSON.parse(line); } catch (_) { continue; }
-    if (titles.has(rec.book)) n += 1;
+    // English counts by TITLE, not by lang: the English index holds exactly the
+    // sixteen the description names, and passages.jsonl holds every book the repo
+    // has ever chunked.
+    const key = titles.has(rec.book) ? "en" : rec.lang;
+    if (!key) continue;
+    byLang[key] = (byLang[key] || 0) + 1;
   }
-  return n;
+  return byLang;
 })();
 
+const passageCount = (lang) => (PASSAGES_BY_LANG || {})[lang] || null;
+const PASSAGE_COUNT = passageCount("en");
 const shelfSize = PASSAGE_COUNT
   ? `${PASSAGE_COUNT.toLocaleString("en-US")} passages`
   : "passages";
@@ -188,6 +227,8 @@ WHAT YOU ALREADY HAVE. Usually the whole book is in this conversation, pasted in
 
 WHEN TO SEARCH. Use the shelf search tool when the reader wants something precise that you cannot see: an exact phrase, who speaks a line, where an event happens, or anything about a book that is not in this conversation. Searching is also the only way to compare across books, because only one book is ever pasted in. Put the book's title in the query text — titles are searchable. Do not use facet filters.
 
+WHICH INDEX. The shelf is eight indices, one per language, and each one's description names the language and the works in it. Search the index that holds the book being asked about, in that book's own language and script: a question about 羅生門 goes to the Japanese index with Japanese words in it, not to the English one. If the reader asks in their own language about a book written in another, search in the BOOK's language — that is where the words are — and answer in theirs.
+
 WHEN NOT TO SEARCH. Questions about a book as a whole — its arc, its themes, its tone, how a character changes, what the book is doing — cannot be answered by five passages. Answer those from the text you hold. Searching them yields confident fragments and a worse answer than reading would have given.
 
 ANSWER LIKE SOMEONE WHO HAS READ IT. Ground every answer in the book's own words: quote the line that settles it and say where it sits. "DRINK ME, on the bottle she finds at the bottom of the hall — chapter 1" is worth three of "the bottle is labelled DRINK ME", because the first shows you actually looked. For a question about the whole book, name two or three specific moments instead of describing a theme in the abstract. One concrete detail the reader had forgotten is worth a paragraph of summary.
@@ -196,7 +237,7 @@ Be brief but not curt. Two or three sentences with a quotation in them beat five
 
 IF THE CONTEXT WAS COMPACTED. Earlier turns may have been folded into a summary to save room. When a detail is no longer there, say so plainly and offer to look it up. Do not fill a gap by invention. If a search comes back with nothing useful, say that too, rather than reaching for what you remember of the book.
 
-LANGUAGE. Reply in the language the reader writes to you in, whatever language the book is in. If the book is in a different language from theirs, quote the original and then gloss it in their language.`;
+LANGUAGE. Reply in the language the reader writes to you in, whatever language the book is in. If the reader asks for a language explicitly, that request wins over anything you infer. If the book is in a different language from theirs, quote the original and then gloss it in their language.`;
 
 /* ── The tool ─────────────────────────────────────────────────────
    Flat records, on purpose and against the index's own defaults. The index
@@ -219,13 +260,53 @@ LANGUAGE. Reply in the language the reader writes to you in, whatever language t
 
 const RETRIEVE = ["book", "chapter", "chapterTitle", "position", "text"];
 
-const toolsFor = (hitsPerPage) => [{
-  type: "algolia_search_index",
-  name: "search_the_shelf",
-  mode: "static",
-  indices: [{
-    index: INDEX_NAME,
-    description: INDEX_DESCRIPTION,
+/* ── One index per language, bound to the same tool ────────────────
+   Eight entries, and a tool takes at most ten, so the shelf has room for two more
+   languages before this has to become something cleverer.
+
+   Why not one index: `indexLanguages` is a settings-global. It cannot vary per
+   record, and CJK word segmentation only happens when the CJK language is
+   declared on the index itself — so 羅生門 and Faust cannot share one, and once
+   the shelf is split for those two there is no reason to leave the rest mixed.
+
+   Each description names its language, its works and its size, because that
+   description is the only thing the model has to pick an index with. Naming the
+   language in the FIRST clause is deliberate: a question in Russian should reach
+   the Russian index without the model reading nine titles to work out which one
+   holds Достоевский. And the sizes are honest — the Japanese index holds thirteen
+   passages, which is worth the model knowing before it decides to search there. */
+
+const LANG_NAMES = {
+  fr: "French", de: "German", es: "Spanish", it: "Italian",
+  ru: "Russian", ja: "Japanese", zh: "Chinese (traditional)",
+};
+
+function langDescription(lang) {
+  const books = SHELF.byLang[lang];
+  const n = passageCount(lang);
+  const size = n ? `${n.toLocaleString("en-US")} passages` : "passages";
+  return `${LANG_NAMES[lang] || lang} only, in the original language, not a translation. ` +
+    `${size} from: ${titleLine(books)}. Search this index with ${LANG_NAMES[lang] || lang} ` +
+    `words, in the language's own script. Use it when the reader asks about one of those ` +
+    `works, or asks in ${LANG_NAMES[lang] || lang} about something they might hold. ` +
+    `One hit is one passage and carries its book, chapter and position, so you can cite it. ` +
+    `DO NOT use facet filters here either: put the title in the query text.`;
+}
+
+/** English first, keeping the unsuffixed index, then one entry per language */
+function indicesFor(hitsPerPage) {
+  const langs = Object.keys(SHELF.byLang);
+  const entries = [{ index: INDEX_NAME, description: INDEX_DESCRIPTION }]
+    .concat(langs.map((lang) => ({
+      index: `${INDEX_NAME}_${lang}`,
+      description: langDescription(lang),
+    })));
+  // hitsPerPage rides on EVERY entry, on both channels. A greedy variant with the
+  // page size on the first index only is a knob that works for English and lies
+  // for the other seven.
+  return entries.map((e) => ({
+    index: e.index,
+    description: e.description,
     // `searchParameters` is the internal tool's channel. On the MCP path it is
     // still forwarded, into the MCP server's `custom` field as a legacy fallback
     // (agent/tools/mcp.py) — and notably WITHOUT the `distinct` strip that
@@ -250,7 +331,14 @@ const toolsFor = (hitsPerPage) => [{
       attributesToRetrieve: { exposed: false, default: RETRIEVE },
       custom: { attributesToHighlight: [], attributesToSnippet: [] },
     },
-  }],
+  }));
+}
+
+const toolsFor = (hitsPerPage) => [{
+  type: "algolia_search_index",
+  name: "search_the_shelf",
+  mode: "static",
+  indices: indicesFor(hitsPerPage),
 }];
 
 /* ── Suggestions ──────────────────────────────────────────────────
@@ -288,7 +376,9 @@ const nameFor = ({ slug, hits }) =>
 const payloadFor = (variant) => ({
   name: nameFor(variant),
   description: `Chat-with-a-book demo agent (${variant.model}) — shelf search over ` +
-    `${INDEX_NAME}, ${SHELF.count} titles, hitsPerPage=${variant.hits}`,
+    `${indicesFor(variant.hits).length} indices, ` +
+    `${SHELF.count + SHELF.originals.length} titles in ` +
+    `${Object.keys(SHELF.byLang).length + 1} languages, hitsPerPage=${variant.hits}`,
   model: variant.model,
   providerId: variant.providerId,
   instructions: INSTRUCTIONS,
@@ -398,11 +488,17 @@ async function main() {
     for (const v of VARIANTS) {
       console.log(`  ${nameFor(v).padEnd(52)} model=${v.model} hitsPerPage=${v.hits}`);
     }
-    console.log(`\nShelf read from books.js: ${SHELF.count} titles` +
-      (PASSAGE_COUNT ? `, ${PASSAGE_COUNT.toLocaleString("en-US")} passages in passages.jsonl` : ""));
-    console.log(`Tool: search_the_shelf · mode=static · index=${INDEX_NAME} · ` +
+    console.log(`\nShelf read from books.js: ${SHELF.count} English titles` +
+      (PASSAGE_COUNT ? `, ${PASSAGE_COUNT.toLocaleString("en-US")} passages in passages.jsonl` : "") +
+      `, plus ${SHELF.originals.length} originals in ${Object.keys(SHELF.byLang).length} languages`);
+    const bound = indicesFor(DEFAULT_HITS);
+    console.log(`Tool: search_the_shelf · mode=static · ${bound.length} indices · ` +
       `hitsPerPage=${[DEFAULT_HITS, ...GREEDS].join("/")}`);
-    console.log(`Tool description: ${INDEX_DESCRIPTION.length} chars\n`);
+    for (const e of bound) {
+      console.log(`  ${e.index.padEnd(26)} ${e.description.length} chars of description`);
+    }
+    console.log(`Tool schema: ${JSON.stringify(toolsFor(DEFAULT_HITS)).length} chars, ` +
+      `sent on every request\n`);
     console.log("First payload, exactly as it would be sent:\n");
     console.log(JSON.stringify(payloadFor(VARIANTS[0]), null, 2));
     console.log("\nNothing was written. Re-run with --push, and with ALGOLIA_APP_ID and " +
@@ -458,28 +554,38 @@ async function main() {
     const id = ids[v.slug][v.hits];
     const a = await call(creds, "GET", `/1/agents/${id}`);
     const tool = (a.tools || [])[0] || {};
-    const index = (tool.indices || [])[0] || {};
+    const live = tool.indices || [];
+    const index = live[0] || {};
     const cfg = a.config || {};
     const sugg = cfg.suggestions || {};
-    const controls = index.searchControls || {};
     // The page size is the whole point of a greedy variant, so it is verified on
-    // BOTH channels: the internal tool reads searchParameters, the MCP server
-    // reads searchControls, and only one of them running is enough to make the
-    // knob a no-op without saying so.
-    const paged = (index.searchParameters || {}).hitsPerPage === v.hits &&
-      (controls.hitsPerPage || {}).default === v.hits;
-    const good = tool.mode === "static" && index.index === INDEX_NAME &&
+    // BOTH channels and on EVERY index: the internal tool reads searchParameters,
+    // the MCP server reads searchControls, and one index left at the default page
+    // size is a knob that works for English and lies for the other seven.
+    const want = indicesFor(v.hits).map((e) => e.index);
+    const bound = live.map((e) => e.index);
+    const allPaged = live.length === want.length && live.every((e) =>
+      (e.searchParameters || {}).hitsPerPage === v.hits &&
+      ((e.searchControls || {}).hitsPerPage || {}).default === v.hits);
+    const sameIndices = want.every((name, i) => bound[i] === name);
+    const good = tool.mode === "static" && sameIndices && allPaged &&
       a.status === "published" && sugg.enabled === true &&
-      !!index.searchControls && a.instructions === INSTRUCTIONS && paged;
+      !!index.searchControls && a.instructions === INSTRUCTIONS;
     if (good) ok++;
     console.log(`${good ? "ok  " : "BAD "} ${`${v.slug}/${v.hits}`.padEnd(14)} ${id} · ${a.status} · ` +
-      `mode=${tool.mode} index=${index.index} · ` +
-      `hitsPerPage=${(index.searchParameters || {}).hitsPerPage}` +
-      `/${(controls.hitsPerPage || {}).default} · ` +
+      `mode=${tool.mode} indices=${live.length}/${want.length} · ` +
+      `hitsPerPage=${v.hits} on every index: ${allPaged} · ` +
       `suggestions=${sugg.enabled} · temp=${cfg.temperature} · ` +
       `instructionsMatch=${a.instructions === INSTRUCTIONS}`);
+    if (!sameIndices) console.log(`     bound: ${bound.join(", ")}`);
   }
   console.log(`\n${ok}/${VARIANTS.length} verified.`);
+
+  if (ONLY) {
+    console.log(`\nOnly ${ONLY} was touched. Re-run without --only to converge all ` +
+      `${ALL_VARIANTS.length}.`);
+    return;
+  }
 
   console.log("\nAdd these to the matching entries in public/shared/config.js, and to the\n" +
     "DEMO_CONFIG_JS repository variable for production:\n");

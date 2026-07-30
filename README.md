@@ -57,13 +57,32 @@ checked against the file. `scripts/fetch-books.js` is that download-and-strip st
 written down — run it with `--force` and it re-derives all sixteen files and reports
 them identical.
 
+Nine more are shelved separately, under **In the original**: works in French,
+German, Spanish, Italian, Russian, Japanese and Chinese, none of them a
+translation. Eight of the nine are Gutenberg too; *Белые ночи* is not there as
+plain text at all and comes from ru.wikisource.org, with the editorial layer its
+licence covers stripped by `scripts/wikisource.js`. Each language gets its own
+Algolia index, because `indexLanguages` is a settings-global and CJK segmentation
+only happens when the index declares the language — 紅樓夢 cannot share one with
+*Faust*. The search tool is bound to all eight, and the Algolia MCP server turns
+that into one tool per index, so the model picks a language by picking a tool.
+Their suggested questions are in the book's own language, and the page's chrome
+follows the reader's: eight languages in the masthead picker, and the choice rides
+on every request as a short note asking the model to answer in it.
+
+`charsPerToken` is measured per book, not per language, through `/context/trim`
+(`scripts/measure-tokens.js`). English alone runs 2.98 on *Alice* to 4.02 on *The
+Time Machine* — a 35% spread inside one tongue — and Japanese runs about 0.32,
+three tokens to the character. It is not a rounding detail: one shared 3.0 was
+folding the *Arabian Nights*, which at its own 3.95 fits the window whole.
+
 The shelf is grouped by what loading a book will do, and each tile says so before
 you click it:
 
 | Regime | What happens | On the shelf |
 | --- | --- | --- |
-| **budget-compact** | fits the model window whole, exceeds the working budget, so one summarizer call on the first question | the eight smaller books |
-| **oversize-fold** | past 0.8 × the model's real window, so summarized in *N* parts on arrival, then compacted as you chat | the eight larger books |
+| **budget-compact** | fits the model window whole, exceeds the working budget, so one summarizer call on the first question | the nine smaller books |
+| **oversize-fold** | past 0.8 × the model's real window, so summarized in *N* parts on arrival, then compacted as you chat | the seven larger books |
 | **cost-gated** | an estimate big enough to be worth a decision, so it asks before it spends | model-dependent — none at the default rate |
 
 None of that is written down per book. `window.DEMO_BOOKS.estimate(book, opts)`
@@ -75,8 +94,8 @@ rearrange.
 
 **Ingesting a big book costs real money.** The summarizer reads every word once, on
 your own provider credentials, and that is a per-click cost rather than a one-off:
-*War and Peace* is about 1.07M tokens through the fold. At the default model's rate
-that is roughly eleven cents and at ten times the rate it is a dollar and change, so
+*War and Peace* is about 941k tokens through the fold. At the default model's rate
+that is roughly nine cents and at ten times the rate it is ninety-four, so
 each tile carries its own estimate and the expensive ones ask first. The figures are
 estimates — the API does not report the summarizer's own token usage — and where the
 rate behind one is a placeholder rather than a published price, the tile says so.

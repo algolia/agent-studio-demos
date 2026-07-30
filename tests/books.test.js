@@ -31,10 +31,17 @@ const read = (slug) => fs.readFileSync(path.join(TEXTS, `${slug}.txt`), "utf8");
 test("sixteen books, each with the fields a tile and a fetch need", () => {
   assert.equal(SHELF.books.length, 16);
   for (const b of SHELF.books) {
-    for (const field of ["slug", "title", "author", "year", "gutenbergId", "words", "chars", "hook", "chips"]) {
+    for (const field of ["slug", "title", "author", "year", "gutenbergId", "words", "chars",
+      "charsPerToken", "hook", "chips"]) {
       assert.ok(b[field] !== undefined, `${b.slug || "?"} is missing ${field}`);
     }
     assert.match(b.slug, /^[a-z0-9-]+$/, "a slug is also a filename");
+    // Measured per book, not per language: English runs 2.98 (Alice) to 4.02 (The
+    // Time Machine), a 35% spread inside one tongue. A tile priced at the shelf
+    // average would be priced from a book the reader is not looking at.
+    assert.equal(typeof b.charsPerToken, "number");
+    assert.ok(b.charsPerToken > 2.5 && b.charsPerToken < 4.5,
+      `${b.slug}: ${b.charsPerToken} is not a plausible English chars-per-token ratio`);
     assert.equal(typeof b.year, "number");
     // `year` is this EDITION's year, not the work's: the Æsop is Townsend's 1867
     // translation and the Nights is Lang's 1898 selection, which is what the file
@@ -194,7 +201,7 @@ const I18N = SHELF.booksI18n;
 const CJK = new Set(["ja", "zh"]);
 const minQuestionChars = (lang) => (CJK.has(lang) ? 12 : 30);
 
-test("nine works in seven languages, staged and not wired", () => {
+test("nine works in seven languages, on their own shelf", () => {
   assert.equal(I18N.length, 9);
   const fields = ["slug", "title", "author", "year", "lang", "indexName", "source",
     "gutenbergId", "words", "chars", "charsPerToken", "hook", "chips"];
@@ -232,11 +239,66 @@ test("nine works in seven languages, staged and not wired", () => {
   assert.equal(new Set(all).size, all.length, "the two shelves share a texts folder");
   assert.equal(new Set(I18N.map((b) => b.lang)).size, 7, "seven languages, seven indices");
 
-  // the staging tripwire: merging the shelves has to be a deliberate act
+  // The two shelves stay two arrays. `findBook` is the English shelf's lookup and
+  // keeps answering null here; `anyBook` is the one a tile click resolves through,
+  // and it has to reach both or half the shelf is unclickable.
   assert.equal(SHELF.books.length, 16, "the English shelf did not grow");
   for (const b of I18N) {
     assert.equal(SHELF.findBook(b.slug), null, `${b.slug} is reachable through findBook`);
+    assert.equal(SHELF.anyBook(b.slug), b, `${b.slug} is not reachable through anyBook`);
   }
+  for (const b of SHELF.books) assert.equal(SHELF.anyBook(b.slug), b);
+  assert.equal(SHELF.anyBook("no-such-book"), null);
+});
+
+test("the originals render as one section, cheapest first", () => {
+  const rows = SHELF.originals();
+  assert.equal(rows.length, 9, "every original is on the section");
+  const sizes = rows.map((r) => r.est.tokens);
+  assert.deepEqual(sizes, sizes.slice().sort((a, b) => a - b), "not smallest-first");
+  // 羅生門 first at 6,597 characters, 紅樓夢 last at 906,089 — and the order is by
+  // TOKENS, which is why the Chinese one is last rather than don Quijote's 2.1M
+  // characters: 0.30 chars per token against 2.60.
+  assert.equal(rows[0].book.slug, "rashomon");
+  assert.equal(rows[8].book.slug, "honglou-meng");
+  assert.ok(rows[8].book.chars < SHELF.findBook("war-and-peace").chars);
+  // the tile needs all three derived figures, whichever shelf it is on
+  for (const { book, est } of rows) {
+    assert.ok(est.what && est.price && est.line, `${book.slug} has no plan line`);
+    assert.equal(est.charsPerToken, book.charsPerToken);
+  }
+  // and the section prices itself against the live config exactly as the shelf does
+  assert.equal(SHELF.originals({ charsPerToken: 3 })[0].est.charsPerToken, 3);
+});
+
+test("a retrieved passage's language comes from the manifest, not the record", () => {
+  // The live English index predates the `lang` field. A title is the join key, so
+  // a hit from any of the eight indices can be labelled without a backfill.
+  assert.equal(SHELF.langOfTitle("Moby-Dick; or, The Whale"), "en");
+  assert.equal(SHELF.langOfTitle("羅生門"), "ja");
+  assert.equal(SHELF.langOfTitle("Белые ночи"), "ru");
+  assert.equal(SHELF.langOfTitle("Faust: Der Tragödie erster Teil"), "de");
+  // whitespace happens on the way back through a tool call
+  assert.equal(SHELF.langOfTitle("  Les Fleurs du Mal  "), "fr");
+  assert.equal(SHELF.langOfTitle("A Book Nobody Shelved"), null);
+  assert.equal(SHELF.langOfTitle(null), null);
+  assert.equal(SHELF.langOfTitle(""), null);
+  // every title on both shelves resolves, which is what makes the badge safe
+  for (const b of SHELF.books.concat(I18N)) {
+    assert.equal(SHELF.langOfTitle(b.title), b.lang || "en", b.slug);
+  }
+});
+
+test("the search tool's eight indices, and the span the card quotes", () => {
+  const names = SHELF.indexNames();
+  assert.equal(names.length, 8, "English plus one per language");
+  assert.equal(names[0], "public_domain_books", "English keeps the unsuffixed index");
+  assert.equal(new Set(names).size, names.length, "each index named once");
+  assert.ok(names.length <= 10, "a search tool takes at most ten indices");
+  for (const b of I18N) assert.ok(names.includes(b.indexName), `${b.slug} has no index bound`);
+
+  // derived, so the card cannot quote a shelf that has since grown
+  assert.deepEqual(SHELF.shelfSpan(), { books: 25, languages: 8 });
 });
 
 test("every multilingual text is on disk, and stripped of its wrapper", () => {
@@ -372,29 +434,30 @@ const LIST_RATE = { label: "claude-haiku-4.5", inPerMTok: 1.0, outPerMTok: 5.0 }
 const bookOf = (tokens) => ({ slug: "synthetic", chars: Math.round(tokens * SHELF_DEFAULTS.charsPerToken) });
 
 test("the shelf's measured regimes, book by book", () => {
-  // Measured on 2026-07-29 against the committed files at 3 chars per token —
-  // itself measured, not assumed: Alice is 144,600 characters and /context/trim
-  // reported 48,116 tokens for it. Window 200,000, working budget 8,000. The
-  // table is here so a change to the derivation has to be argued for rather than
-  // absorbed: it moved once already, when the ratio turned out to be 3 and not
-  // 4.6, and eight books changed regime.
+  // Measured on 2026-07-30 with scripts/measure-tokens.js, one 50,000-character
+  // sample per book through /1/unstable/context/trim. Window 200,000, working
+  // budget 8,000. The table is here so a change to the derivation has to be
+  // argued for rather than absorbed: it has moved twice now — once when the ratio
+  // turned out to be 3 rather than 4.6, and again when every book got its OWN
+  // measurement instead of Alice's 3.0, which is a third fewer tokens on The Time
+  // Machine and moved the Nights back to the sendable side.
   const EXPECTED = {
-    "the-yellow-wallpaper": ["budget-compact", 10499, 1, 1],
-    "alice-in-wonderland": ["budget-compact", 48200, 1, 1],
-    "the-time-machine": ["budget-compact", 59900, 1, 1],
-    "narrative-of-frederick-douglass": ["budget-compact", 74665, 2, 1],
-    "aesops-fables": ["budget-compact", 81219, 2, 1],
-    "the-awakening": ["budget-compact", 119802, 2, 1],
-    "the-souls-of-black-folk": ["budget-compact", 133005, 3, 1],
-    "frankenstein": ["budget-compact", 139779, 3, 1],
-    "anne-of-green-gables": ["oversize-fold", 187048, 4, 5],
-    "arabian-nights": ["oversize-fold", 199279, 4, 5],
-    "pride-and-prejudice": ["oversize-fold", 242905, 5, 6],
-    "dracula": ["oversize-fold", 281963, 5, 6],
-    "jane-eyre": ["oversize-fold", 340793, 6, 7],
-    "moby-dick": ["oversize-fold", 406313, 7, 8],
-    "ulysses": ["oversize-fold", 506569, 9, 10],
-    "war-and-peace": ["oversize-fold", 1069424, 18, 19],
+    "the-yellow-wallpaper": ["budget-compact", 8999, 1, 1],
+    "the-time-machine": ["budget-compact", 44701, 1, 1],
+    "alice-in-wonderland": ["budget-compact", 48523, 1, 1],
+    "narrative-of-frederick-douglass": ["budget-compact", 56422, 1, 1],
+    "aesops-fables": ["budget-compact", 67309, 2, 1],
+    "the-awakening": ["budget-compact", 99284, 2, 1],
+    "the-souls-of-black-folk": ["budget-compact", 102312, 2, 1],
+    "frankenstein": ["budget-compact", 106431, 2, 1],
+    "arabian-nights": ["budget-compact", 151351, 3, 1],
+    "anne-of-green-gables": ["oversize-fold", 171604, 3, 4],
+    "pride-and-prejudice": ["oversize-fold", 189769, 4, 5],
+    "dracula": ["oversize-fold", 223190, 4, 5],
+    "jane-eyre": ["oversize-fold", 281647, 5, 6],
+    "moby-dick": ["oversize-fold", 329443, 6, 7],
+    "ulysses": ["oversize-fold", 444359, 8, 9],
+    "war-and-peace": ["oversize-fold", 940843, 16, 17],
   };
   for (const b of SHELF.books) {
     const want = EXPECTED[b.slug];
@@ -415,12 +478,17 @@ test("every book on this shelf compacts at the default budget", () => {
   }
 });
 
-test("half the shelf is now too large to send in one piece", () => {
+test("seven of the sixteen are too large to send in one piece", () => {
+  // It was eight at Alice's 3.0. Every book's own ratio is higher than hers, so
+  // every book got cheaper, and the Nights — 597,836 characters at 3.95 — crossed
+  // back under the 160,000-token fold line. Which is the argument for measuring:
+  // one shelf-wide ratio was folding a book that fits.
   const folds = SHELF.books.filter((b) => estimate(b).foldsOnArrival).map((b) => b.slug).sort();
   assert.deepEqual(folds, [
-    "anne-of-green-gables", "arabian-nights", "dracula", "jane-eyre",
+    "anne-of-green-gables", "dracula", "jane-eyre",
     "moby-dick", "pride-and-prejudice", "ulysses", "war-and-peace",
   ]);
+  assert.equal(estimate(SHELF.findBook("arabian-nights")).foldsOnArrival, false);
 });
 
 test("the fold threshold belongs to the sendable side", () => {
@@ -453,7 +521,7 @@ test("with no rate configured, no dollar figure is invented", () => {
   assert.equal(est.rate, null);
   assert.equal(est.rateNote, null);
   assert.equal(est.usdLabel, "cost depends on the model");
-  assert.equal(est.price, "~19 summarizer calls · cost depends on the model");
+  assert.equal(est.price, "~17 summarizer calls · cost depends on the model");
   assert.equal(est.costGated, false, "an unknown bill is never gated — there is nothing to gate on");
 });
 
@@ -462,9 +530,9 @@ test("the bill follows the model the visitor picked", () => {
   const cheap = estimate(wp, { price: PLACEHOLDER_RATE });
   const dear = estimate(wp, { price: LIST_RATE });
 
-  // 1,069,424 tokens × $0.10 / MTok, and the same book at ten times the rate
-  assert.equal(cheap.usdLabel, "$0.1069");
-  assert.equal(dear.usdLabel, "$1.07");
+  // 940,843 tokens × $0.10 / MTok, and the same book at ten times the rate
+  assert.equal(cheap.usdLabel, "$0.0941");
+  assert.equal(dear.usdLabel, "$0.9408");
   // the mechanism does not depend on the price, only the decision does
   assert.equal(cheap.foldSections, dear.foldSections);
   assert.equal(cheap.what, dear.what);
@@ -492,7 +560,11 @@ test("switching to a pricier model raises the confirm by itself", () => {
   const gated = SHELF.books
     .filter((b) => estimate(b, { price: LIST_RATE }).costGated)
     .map((b) => b.slug);
-  assert.deepEqual(gated, ["ulysses", "war-and-peace"]);
+  // one book, and only just: at $1.00/MTok the line is half a million tokens, and
+  // Ulysses now measures 444,359 — it was over at Alice's ratio and is not at its
+  // own. A gate that moves when the measurement improves is the gate working.
+  assert.deepEqual(gated, ["war-and-peace"]);
+  assert.equal(estimate(SHELF.findBook("ulysses"), { price: LIST_RATE }).costGated, false);
   for (const slug of gated) {
     assert.equal(regimeOf(SHELF.findBook(slug), { price: LIST_RATE }), "cost-gated");
   }
@@ -542,19 +614,19 @@ test("the verdict follows the config, which is why it is derived", () => {
   const measured = estimate(moby, { charsPerToken: 4.6 });
   assert.ok(measured.tokens < estimate(moby).tokens);
   assert.equal(measured.charsPerToken, 4.6);
-  assert.equal(estimate(moby).charsPerToken, 3);
+  assert.equal(estimate(moby).charsPerToken, 3.7);
 });
 
 test("the copy a tile prints says what happens and what it costs", () => {
   const est = estimate(SHELF.findBook("war-and-peace"), { price: PLACEHOLDER_RATE });
-  assert.equal(est.what, "folds into 18 parts on arrival");
-  assert.equal(est.price, "~19 summarizer calls ≈ $0.1069 at an illustrative rate");
+  assert.equal(est.what, "folds into 16 parts on arrival");
+  assert.equal(est.price, "~17 summarizer calls ≈ $0.0941 at an illustrative rate");
   assert.equal(est.line,
-    "folds into 18 parts on arrival · ~19 summarizer calls ≈ $0.1069 at an illustrative rate");
+    "folds into 16 parts on arrival · ~17 summarizer calls ≈ $0.0941 at an illustrative rate");
 
   const one = estimate(SHELF.findBook("aesops-fables"), { price: PLACEHOLDER_RATE });
   assert.equal(one.line,
-    "compacts on your first question · ~1 summarizer call ≈ $0.0081 at an illustrative rate");
+    "compacts on your first question · ~1 summarizer call ≈ $0.0067 at an illustrative rate");
 
   // singular and plural both read as English
   assert.equal(estimate(bookOf(200000)).what, "folds into 4 parts on arrival");
@@ -567,26 +639,30 @@ test("the copy a tile prints says what happens and what it costs", () => {
   assert.equal(SHELF.formatUsd(0), "$0.0000");
   assert.equal(
     estimate(SHELF.findBook("war-and-peace"), { price: LIST_RATE, formatUsd: (v) => `~${v.toFixed(1)} dollars` }).price,
-    "~19 summarizer calls ≈ ~1.1 dollars at a list price");
+    "~17 summarizer calls ≈ ~0.9 dollars at a list price");
 });
 
 /* ── The measured ratios, and what they cost ───────────────────────
-   `estimate` now reads a per-book `charsPerToken` when the book carries one. Three
-   things have to hold and only the first is obvious: the book's number is used,
-   an explicit `opts` still beats it, and the English shelf — which carries no such
-   field — is untouched. ── */
+   `estimate` reads a per-book `charsPerToken`, and every book on both shelves now
+   carries one. Three things have to hold: the book's number is used, an explicit
+   `opts` still beats it, and a book WITHOUT one still falls back to the shelf
+   default — that last is what keeps the synthetic fixtures in this file, and any
+   document a reader pastes in, priced at all. ── */
 
 test("a book's own ratio beats the shelf default", () => {
   const zh = SHELF.booksI18n.find((b) => b.slug === "honglou-meng");
   assert.equal(estimate(zh).charsPerToken, 0.3);
   assert.equal(estimate(zh).tokens, Math.round(zh.chars / 0.3));
 
-  // the English shelf carries no per-book ratio, so it still gets the default —
-  // this is the assertion that says the change was backward-compatible
+  // English is measured per book too, and not one of the sixteen is Alice's 3.0
   const moby = SHELF.findBook("moby-dick");
-  assert.equal(moby.charsPerToken, undefined);
-  assert.equal(estimate(moby).charsPerToken, SHELF_DEFAULTS.charsPerToken);
-  assert.equal(estimate(moby).charsPerToken, 3);
+  assert.equal(moby.charsPerToken, 3.7);
+  assert.equal(estimate(moby).tokens, Math.round(moby.chars / 3.7));
+
+  // a book with no ratio of its own — a synthetic fixture, a pasted document —
+  // still gets the shelf default, which is Alice's measurement
+  assert.equal(estimate({ slug: "x", chars: 30000 }).charsPerToken, SHELF_DEFAULTS.charsPerToken);
+  assert.equal(SHELF_DEFAULTS.charsPerToken, 3);
 });
 
 test("an explicit ratio beats the book's own", () => {
@@ -654,7 +730,8 @@ test("the measured ratio is what puts three books in the right regime", () => {
 });
 
 test("grouping still covers only the English shelf", () => {
-  // groupByRegime reads BOOKS, and that is what "staged, not wired" means in code
+  // groupByRegime reads BOOKS. The originals are rendered by `originals()` into a
+  // section of their own, so a regime heading never mixes the two sorts.
   const seen = groupByRegime().flatMap((g) => g.entries.map((e) => e.book.slug));
   assert.equal(seen.length, 16);
   for (const b of SHELF.booksI18n) {

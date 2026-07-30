@@ -41,10 +41,22 @@
       : window.matchMedia("(prefers-color-scheme: dark)").matches;
     document.documentElement.dataset.theme = dark ? "dark" : "light";
   })();
+  /* And the language, on the same terms and for the same reason. Only the
+     document's own language attributes are set here — the copy is swapped in
+     app.js, which runs before first paint at the end of body. What this buys is
+     that `lang` is right from the first byte a screen reader or a :lang() rule
+     sees, rather than a beat later. */
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("ic-lang"); } catch (e) { /* private mode */ }
+    var ok = ["en", "de", "es", "fr", "it", "ja", "ru", "zh"].indexOf(saved) >= 0;
+    document.documentElement.lang = ok ? saved : "en";
+    document.documentElement.dataset.lang = ok ? saved : "en";
+  })();
 </script>
 </head>
 <body>
-<a class="skip" href="#chat">Skip to the conversation</a>
+<a class="skip" href="#chat" data-i18n="skip">Skip to the conversation</a>
 
 <!-- ── The meter ─────────────────────────────────────────────────────
      Sticky rather than position:fixed, and deliberately: as the first child of
@@ -54,18 +66,18 @@
 <div class="costbar" id="costbar" data-open="0">
   <div class="costbar-inner">
     <span class="costbar-eyebrow">
-      the meter
+      <span data-i18n="meter.eyebrow">the meter</span>
       <button class="info" id="meter-info" type="button">?</button>
     </span>
     <div class="cost-tiles" id="cost-tiles">
       <div class="cost-tile" id="tile-naive" tabindex="0">
-        <span class="ct-label">Naive<span class="ct-badge" id="naive-badge" hidden>wouldn't even fit ✗</span></span>
+        <span class="ct-label"><span data-i18n="tile.naive">Naive</span><span class="ct-badge" id="naive-badge" hidden>wouldn't even fit ✗</span></span>
         <span class="ct-value" id="naive-usd"></span>
         <span class="ct-sub"><span id="naive-tok">0&nbsp;tok</span></span>
       </div>
       <span class="cost-op" id="op-minus" aria-hidden="true">−</span>
       <div class="cost-tile" id="tile-real" tabindex="0">
-        <span class="ct-label">Real<span class="ct-est" id="real-est" hidden>est.</span></span>
+        <span class="ct-label"><span data-i18n="tile.real">Real</span><span class="ct-est" id="real-est" hidden data-i18n="tile.est">est.</span></span>
         <span class="ct-value" id="real-usd"></span>
         <span class="ct-sub"><span id="real-tok">0&nbsp;tok</span></span>
       </div>
@@ -91,22 +103,32 @@
         <span class="ct-sub ct-unlocked-sub" id="unlocked-sub" hidden></span>
       </div>
     </div>
-    <button class="cost-toggle" id="cost-toggle" type="button" aria-expanded="false" aria-controls="cost-tiles">Breakdown</button>
+    <button class="cost-toggle" id="cost-toggle" type="button" aria-expanded="false" aria-controls="cost-tiles" data-i18n="cost.breakdown">Breakdown</button>
   </div>
 </div>
 
 <header class="masthead">
   <div class="masthead-inner">
     <div class="masthead-tools">
-      <a class="theme-toggle" href="../"><span class="glyph" aria-hidden="true">←</span> All demos</a>
+      <!-- The words are hidden on a narrow masthead (see style.css), so the
+           accessible name is authored rather than inherited from them. -->
+      <a class="theme-toggle" href="../" aria-label="All demos" data-i18n-label="nav.allDemos"><span class="glyph" aria-hidden="true">←</span> <span data-i18n="nav.allDemos">All demos</span></a>
+      <!-- ── The language picker ─────────────────────────────────────────
+           A select and not eight chips: eight is enough to wrap a phone
+           masthead into two rows, and the one control that is already on this
+           page in three places is a select. Its options are built in app.js
+           from DEMO_I18N.LANGS, flag and native name each — the flag is what
+           makes it scannable, the native name is what makes it right. ──── -->
+      <select class="theme-toggle lang-select" id="lang"
+              aria-label="Language" data-i18n-label="field.lang"></select>
       <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">
         <span class="glyph" id="theme-glyph" aria-hidden="true">◐</span>
         <span id="theme-label">Dark</span>
       </button>
     </div>
     <p class="eyebrow">Algolia Agent Studio · context APIs <span class="tag">unstable</span></p>
-    <h1 aria-label="Chat with a book">Chat with<span class="fold-mark" aria-hidden="true"></span>a book</h1>
-    <p class="lede">
+    <h1 aria-label="Chat with a book" data-i18n-html="title" data-i18n-label="titleLabel">Chat with<span class="fold-mark" aria-hidden="true"></span>a book</h1>
+    <p class="lede" data-i18n-html="lede">
       A conversation runs out of room long before it runs out of things to say.
       <span class="nb">Two calls fix that:</span> <code>context/trim</code> counts,
       <code>context/compact</code> folds. Take a book off the shelf and watch.
@@ -115,17 +137,17 @@
     <div class="masthead-meters">
       <div class="hero-stat">
         <span class="hero-num" id="hero-tokens">0</span>
-        <span class="hero-label">tokens carried</span>
+        <span class="hero-label" data-i18n="hero.tokens">tokens carried</span>
       </div>
       <div class="hero-stat">
         <span class="hero-num" id="hero-folds">0</span>
-        <span class="hero-label">folds so far</span>
+        <span class="hero-label" data-i18n="hero.folds">folds so far</span>
       </div>
       <div class="hero-stat">
         <span class="hero-num" id="hero-saved">0</span>
-        <span class="hero-label">tokens reclaimed</span>
+        <span class="hero-label" data-i18n="hero.reclaimed">tokens reclaimed</span>
       </div>
-      <a class="cta" href="https://github.com/algolia/agent-studio-demos" id="repo-cta" target="_blank" rel="noopener">
+      <a class="cta" href="https://github.com/algolia/agent-studio-demos" id="repo-cta" target="_blank" rel="noopener" data-i18n-html="cta">
         Like it? Use the code in your project <span aria-hidden="true">→</span>
       </a>
     </div>
@@ -135,8 +157,8 @@
 <main class="grid">
   <!-- ── Left rail: ingest, model, meter, ledger ─────────────────── -->
   <section class="panel" aria-labelledby="ingest-h">
-    <h2 id="ingest-h" class="panel-h">1 · Load the context</h2>
-    <p class="panel-sub">Take a book off the shelf, or bring your own text. Every tile says what loading it will cost, before you click. Nothing leaves your browser except the calls in the wire log.</p>
+    <h2 id="ingest-h" class="panel-h" data-i18n="step1">1 · Load the context</h2>
+    <p class="panel-sub" data-i18n="shelf.sub">Take a book off the shelf, or bring your own text. Every tile says what loading it will cost, before you click. Nothing leaves your browser except the calls in the wire log.</p>
 
     <!-- ── The bookshelf ───────────────────────────────────────────────
          Sixteen public-domain books, served from this origin as plain text. The
@@ -149,32 +171,32 @@
     <p class="hint" id="shelf-status" role="status"></p>
 
     <details class="byo" id="byo">
-      <summary>…or bring your own&nbsp;— paste, a file, or a URL</summary>
+      <summary data-i18n="byo.summary">…or bring your own&nbsp;— paste, a file, or a URL</summary>
 
-      <label class="field-label" for="doc">Paste a long document</label>
-      <textarea id="doc" rows="7" placeholder="Release notes, a spec, a transcript, a chapter…"></textarea>
+      <label class="field-label" for="doc" data-i18n="byo.paste">Paste a long document</label>
+      <textarea id="doc" rows="7" data-i18n-ph="byo.placeholder" placeholder="Release notes, a spec, a transcript, a chapter…"></textarea>
 
       <div class="row">
         <label class="file-btn">
           <input type="file" id="file" accept=".txt,.md,.markdown,text/plain" hidden>
-          Choose a .txt or .md file
+          <span data-i18n="byo.file">Choose a .txt or .md file</span>
         </label>
-        <button class="btn ghost" id="sample-btn" type="button">Use a sample</button>
+        <button class="btn ghost" id="sample-btn" type="button" data-i18n="byo.sample">Use a sample</button>
       </div>
 
       <label class="field-label url-label" for="url">
-        …or fetch a web page
+        <span data-i18n="byo.url">…or fetch a web page</span>
         <button class="info" type="button" data-tip-h="Fetched by your browser" data-tip="Stripped to plain text here&nbsp;— scripts, styles and navigation dropped. A site that blocks cross-origin reads goes through the public reader named in config.js instead, and the page says so when that happens.">?</button>
       </label>
       <div class="row url-row">
         <input id="url" type="url" inputmode="url" autocomplete="off"
                placeholder="https://www.gutenberg.org/cache/epub/54873/pg54873-images.html">
-        <button class="btn" id="url-btn" type="button">Fetch</button>
+        <button class="btn" id="url-btn" type="button" data-i18n="byo.fetch">Fetch</button>
       </div>
       <p class="hint" id="url-status" role="status"></p>
 
       <div class="row">
-        <button class="btn primary" id="ingest-btn" type="button">Ingest</button>
+        <button class="btn primary" id="ingest-btn" type="button" data-i18n="byo.ingest">Ingest</button>
       </div>
     </details>
 
@@ -182,16 +204,16 @@
 
     <hr class="rule">
 
-    <h2 class="panel-h">2 · Pick the engine</h2>
+    <h2 class="panel-h" data-i18n="step2">2 · Pick the engine</h2>
     <div class="field-grid">
       <div>
-        <label class="field-label" for="model">Model</label>
+        <label class="field-label" for="model" data-i18n="field.model">Model</label>
         <select id="model"></select>
         <p class="hint" id="model-hint"></p>
       </div>
       <div>
         <label class="field-label" for="budget">
-          Working budget
+          <span data-i18n="field.budget">Working budget</span>
           <button class="info" type="button" data-tip-h="A demo device, on purpose" data-tip="The meter fills against this budget, not the model's window&nbsp;— real windows are too big to fill while you watch. Auto-compaction fires at 70% of it.">?</button>
         </label>
         <select id="budget"></select>
@@ -201,7 +223,7 @@
 
     <div class="greed-field">
       <span class="field-label" id="greed-label">
-        Hits per search
+        <span data-i18n="field.greed">Hits per search</span>
         <button class="info" type="button" data-tip-h="What one search brings back"
                 data-tip="**1,000&nbsp;hits&nbsp;≈ 326,000&nbsp;tokens** of passages in one turn, measured at ~1,300&nbsp;characters each. The page size is welded to the agent, so this picker swaps agents rather than sending a number.">?</button>
       </span>
@@ -211,10 +233,10 @@
 
     <hr class="rule">
 
-    <h2 class="panel-h">3 · Watch the fold</h2>
+    <h2 class="panel-h" data-i18n="step3">3 · Watch the fold</h2>
     <figure class="meter-figure">
       <figcaption>
-        <span class="meter-title">Context carried</span>
+        <span class="meter-title" data-i18n="meter.title">Context carried</span>
         <span class="meter-read" id="meter-read">0 / 8,000&nbsp;tokens</span>
       </figcaption>
       <div class="meter" id="meter"
@@ -234,24 +256,24 @@
     </figure>
 
     <div class="row">
-      <button class="btn" id="compact-btn" type="button">Compact now</button>
-      <button class="btn ghost" id="reset-btn" type="button">Start over</button>
+      <button class="btn" id="compact-btn" type="button" data-i18n="btn.compact">Compact now</button>
+      <button class="btn ghost" id="reset-btn" type="button" data-i18n="btn.reset">Start over</button>
     </div>
 
     <hr class="rule">
 
-    <h2 class="panel-h">The ledger</h2>
-    <p class="panel-sub">One band per message, height proportional to its estimated tokens. Folded history keeps its crease.</p>
+    <h2 class="panel-h" data-i18n="ledger.h">The ledger</h2>
+    <p class="panel-sub" data-i18n="ledger.sub">One band per message, height proportional to its estimated tokens. Folded history keeps its crease.</p>
     <div class="ledger" id="ledger" aria-label="Messages by token weight"></div>
   </section>
 
   <!-- ── Right: chat + wire log ─────────────────────────────────── -->
   <section class="panel chat-panel" id="chat" aria-labelledby="chat-h">
-    <h2 id="chat-h" class="panel-h">The conversation</h2>
+    <h2 id="chat-h" class="panel-h" data-i18n="chat.h">The conversation</h2>
     <div class="thread" id="thread">
       <div class="empty">
-        <p><strong>Nothing carried yet.</strong></p>
-        <p>Take a book off the shelf, ingest a document of your own, or just ask a question&nbsp;— the meter starts moving from the first turn.</p>
+        <p><strong data-i18n="empty.h">Nothing carried yet.</strong></p>
+        <p data-i18n-html="empty.p">Take a book off the shelf, ingest a document of your own, or just ask a question&nbsp;— the meter starts moving from the first turn.</p>
       </div>
     </div>
     <!-- ── Suggestions ────────────────────────────────────────────────
@@ -262,14 +284,14 @@
     <div class="chips" id="chips" hidden>
       <div class="chip-group">
         <span class="chip-label chip-label-needle">
-          needle
+          <span data-i18n="chip.needle">needle</span>
           <button class="info" type="button" data-tip-h="One answer, in one place" data-tip="A line, a scene, a number. Search is built for this: fetch the passage, spend a few hundred tokens. Here, the model answers from the folded record&nbsp;— reopening a section if the digest dropped the detail.">?</button>
         </span>
         <div class="chip-row" id="chips-needle"></div>
       </div>
       <div class="chip-group">
         <span class="chip-label chip-label-arc">
-          arc
+          <span data-i18n="chip.arc">arc</span>
           <button class="info" type="button" data-tip-h="The shape of the whole book" data-tip="A tone that shifts, sympathy that moves. No single passage holds the answer, so search has nothing to fetch&nbsp;— the model must carry the book end to end. That is the fold's job.">?</button>
         </span>
         <div class="chip-row" id="chips-arc"></div>
@@ -282,7 +304,7 @@
            whenever there is nothing to show. ──────────────────────── -->
       <div class="chip-group" id="chips-next-group" hidden>
         <span class="chip-label chip-label-next">
-          next
+          <span data-i18n="chip.next">next</span>
           <button class="info" type="button" data-tip-h="Written by the agent" data-tip="Not a list stored in this page. A suggestions node runs after each answer and streams follow-ups back, so they move with the conversation. Cost: one small extra generation.">?</button>
         </span>
         <div class="chip-row" id="chips-next"></div>
@@ -290,9 +312,10 @@
     </div>
 
     <form class="composer" id="composer">
-      <label class="sr-only" for="prompt">Your message</label>
-      <input id="prompt" type="text" autocomplete="off" placeholder="Ask about what you pasted…">
-      <button class="btn primary" id="send-btn" type="submit">Send</button>
+      <label class="sr-only" for="prompt" data-i18n="composer.label">Your message</label>
+      <input id="prompt" type="text" autocomplete="off"
+             data-i18n-ph="composer.placeholder" placeholder="Ask about what you pasted…">
+      <button class="btn primary" id="send-btn" type="submit" data-i18n="btn.send">Send</button>
     </form>
 
     <details class="wire">
@@ -320,6 +343,7 @@
 <div class="tooltip" id="tooltip" role="tooltip" aria-hidden="true"></div>
 
 <script src="../shared/config.js"></script>
+<script src="../shared/i18n.js"></script>
 <script src="../shared/md.js"></script>
 <script src="../shared/meter.js"></script>
 <script src="../shared/books.js"></script>

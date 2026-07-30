@@ -109,6 +109,20 @@ worst tooltips always lived there. Text addressed to the model rather than the
 reader is conversation, and code marks it exempt between
 `/* check-copy: off */` and `/* check-copy: on */`.
 
+`shared/i18n.js` is not in the scanned list, and that is the one exemption beyond
+the conversation. The gate measures English — Flesch–Kincaid counts English
+syllables and 400 words is two minutes of English at 200 wpm — so running it over
+Japanese would produce a number with nothing attached to it. The English is still
+measured: it never moved into that file. Every call is `t(key, "the English")`,
+with the English staying in the markup or in `app.js` where the gate reads it, and
+each translation is written to be no longer than the string it stands in for.
+`tests/i18n.test.js` enforces that at 2.3× for every label whose English is in the
+markup — the JS-side keys are interpolated, so their length says nothing about the
+rendered string's and they are held by eye instead. It also checks what the
+English fallback would otherwise hide: every language defines the same keys and
+the same placeholders, nothing asks for a key nobody defines, and no value carries
+an HTML entity, since most of them are handed to `textContent`.
+
 The gate runs in CI (the `copy` job in `ci.yml`). It was wired in only after the
 copy passed it: it landed red-by-design one commit earlier, so the rewrite had a
 target and a way to know when it was done — a gate that has always been red
