@@ -1,6 +1,13 @@
-# Real demo credentials — never commit. Any config.js at any depth.
+# The SEARCH-ONLY key served to every visitor. Public by construction, but not
+# committed: the deployed copy is synthesized on the runner from the
+# DEMO_CONFIG_JS repository variable. Any config.js at any depth.
 config.js
 public/shared/config.js
+
+# The WRITE key that scripts/ use to build the index and the agents. Maintainer's
+# machine only — never a browser, never a build, never CI. See .env.example.
+.env
+.env.local
 
 # Built by scripts/build-passages.js from the committed texts — derived, not source.
 passages.jsonl

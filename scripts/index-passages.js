@@ -13,9 +13,12 @@
      node scripts/index-passages.js --push --records-only
 
    ── The credential boundary ──────────────────────────────────────
-   `ALGOLIA_APP_ID` and `ALGOLIA_WRITE_API_KEY` are read from the environment and
-   from nowhere else — not from a file, not from a flag, never printed, and never
-   logged. A write key is not demo furniture: it can delete an index.
+   `ALGOLIA_APP_ID` and `ALGOLIA_WRITE_API_KEY` are read from the environment, or
+   from a gitignored .env at the repo root (see .env.example) — not from a flag,
+   never printed, and never logged. A write key is not demo furniture: it can
+   delete an index, which is why it lives here and never in the browser config.
+   The deployed site carries exactly one credential, a search-only key, built on
+   the runner from the DEMO_CONFIG_JS repository variable.
 
    A dry run needs no credentials at all and is the DEFAULT, which is the
    deliberate resolution of an otherwise circular rule ("--dry-run must exit 0
@@ -80,6 +83,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { loadEnv, describeEnv } = require("./env.js");
 
 const ROOT = path.join(__dirname, "..");
 const PASSAGES = path.join(ROOT, "passages.jsonl");
@@ -102,6 +106,8 @@ const RECORDS_ONLY = has("--records-only");
    rather than throwing, so a dry run can carry on without them. ── */
 
 function credentials() {
+  const note = describeEnv(loadEnv());
+  if (note) console.log(note + "\n");
   const appId = process.env.ALGOLIA_APP_ID;
   const apiKey = process.env.ALGOLIA_WRITE_API_KEY;
   if (!appId || !apiKey) return null;
@@ -117,7 +123,8 @@ function requireCredentials() {
     "  ALGOLIA_APP_ID          the application id of the app to write to\n" +
     "  ALGOLIA_WRITE_API_KEY   a key with addObject and editSettings on that app\n" +
     "\n" +
-    "Neither is read from a file and neither is ever printed. Use a key scoped to\n" +
+    "Export them, or copy .env.example to .env and fill it in (.env is gitignored).\n" +
+    "Neither value is ever printed. Use a key scoped to\n" +
     "this one index; a search-only key will not do, and an admin key is more than\n" +
     "this script needs.\n" +
     "\n" +

@@ -111,7 +111,15 @@ window.DEMO_CONFIG = {
   // /context/compact call, so they parallelise cleanly; the ceiling is the
   // provider's rate limit, not this page. On a 429 the section backs off once
   // and then gives up as a placeholder rather than failing the whole fold.
-  foldConcurrency: 3,
+  //
+  // `null` means ALL sections at once, and it is the default because the fold is
+  // the demo's hot path: a reader watching War and Peace go in should not wait
+  // out five sequential rounds of three. The map has no ordering constraint, so
+  // the whole pass costs one slowest section instead of ceil(n/3) of them — on
+  // the 16-section reference book that is a fold that finishes in about the time
+  // one section takes. Set an integer to cap it if a provider starts answering
+  // 429; the retry already handles the occasional one.
+  foldConcurrency: null,
 
   // After the sections land, one more /context/compact call over the section
   // summaries joins them into a single digest — it dedups entities and smooths

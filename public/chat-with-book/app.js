@@ -862,10 +862,10 @@ function addFoldCard({ before, sectionTokens }) {
     `${fmt(modelWindow())}-token window, so nothing can be sent — and one ` +
     `<code>context/compact</code> call would fail the same way, because it forwards ` +
     `its whole payload to the summarizer. Folding it in sections of ~${fmt(sectionTokens)} ` +
-    `tokens instead, ${CFG.foldConcurrency} at a time, each comfortably inside the window.`;
+    `tokens instead, ${foldLanesLabel()}, each comfortably inside the window.`;
   tip(card.querySelector(".event-h"), () =>
     `Map, then reduce: every section is summarized by its own POST /1/unstable/context/compact ` +
-    `call, up to ${CFG.foldConcurrency} in flight at once (the map), and then one final call over ` +
+    `call, ${foldLanesLabel()} (the map), and then one final call over ` +
     `those summaries joins them into a single digest that dedups repeated names and smooths the ` +
     `seams between sections (the reduce).`,
     `{ providerID, model: "${state.model.model}", keepLastMessages: 0, messages: [section] }`);
@@ -1001,7 +1001,8 @@ function addFoldCard({ before, sectionTokens }) {
     pass(n, count) {
       const group = document.createElement("div");
       group.className = "fold-level";
-      group.innerHTML = `<span class="fold-level-h">Pass ${n} · map · ${count} section${count === 1 ? "" : "s"}, ${Math.min(CFG.foldConcurrency, count)} at a time</span>` +
+      group.innerHTML = `<span class="fold-level-h">Pass ${n} · map · ${count} section${count === 1 ? "" : "s"}, ` +
+        `${foldLanes(count) >= count ? "all at once" : `${foldLanes(count)} at a time`}</span>` +
         '<ol class="fold-steps"></ol>';
       const list = group.querySelector(".fold-steps");
       rows = [];
@@ -1115,7 +1116,7 @@ function addFoldCard({ before, sectionTokens }) {
       tip(timing, () =>
         `Wall time is the clock on the whole fold. Summarizer time is those same calls added up, ` +
         `which is what a strictly sequential fold would have cost. The ratio is bounded by ` +
-        `foldConcurrency (${CFG.foldConcurrency}) and by the reduce, which cannot start until every ` +
+        `foldConcurrency (${foldLanesLabel()}) and by the reduce, which cannot start until every ` +
         `section has landed.`);
 
       const note = document.createElement("p");
@@ -1585,6 +1586,30 @@ const tokensOut = (stats, fallback) =>
   (stats && Number.isFinite(stats.tokensAfterEstimate)) ? stats.tokensAfterEstimate : fallback;
 
 /**
+ * How many section summaries may be in flight.
+ *
+ * `null` (the default) means all of them. The map has no ordering constraint —
+ * each section is an independent /context/compact call — so the whole pass costs
+ * one slowest section rather than ceil(n / lanes) rounds of waiting. On the
+ * 16-section reference book that is the difference between a fold a reader
+ * watches happen and a fold a reader waits out. An integer caps it, for a
+ * provider that starts answering 429 more often than the single retry absorbs.
+ */
+function foldLanes(total) {
+  const c = CFG.foldConcurrency;
+  if (c === null || c === undefined || c === 0 || c === "all") return total;
+  return Math.max(1, Math.min(c, total));
+}
+
+/** How the copy says it, so the page never claims a cap it is not applying */
+function foldLanesLabel() {
+  const c = CFG.foldConcurrency;
+  return (c === null || c === undefined || c === 0 || c === "all")
+    ? "all of them at once"
+    : `up to ${c} at a time`;
+}
+
+/**
  * Run `worker` over items with at most `limit` in flight. Workers are expected
  * not to reject — a failed section becomes a placeholder, because losing one
  * section of a book is recoverable and losing the whole fold is not.
@@ -1758,8 +1783,8 @@ async function foldOversize() {
       pass += 1;
       card.pass(pass, chunks.length);
 
-      /* ── map: sections in parallel, bounded by foldConcurrency ── */
-      const summaries = await mapLimit(chunks, CFG.foldConcurrency, async (chunk, i) => {
+      /* ── map: sections in parallel — all of them, unless capped ── */
+      const summaries = await mapLimit(chunks, foldLanes(chunks.length), async (chunk, i) => {
         const inTokens = estTokens(chunk.length);
         card.begin(i, inTokens);
         const tSec = performance.now();

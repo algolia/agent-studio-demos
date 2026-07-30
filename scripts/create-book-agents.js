@@ -55,15 +55,20 @@
    the ids again, which is usually why you re-ran it.
 
    ── The credential boundary ──────────────────────────────────────
-   `ALGOLIA_APP_ID` and `ALGOLIA_WRITE_API_KEY` come from the environment and
-   nowhere else — never a file, never a flag, never printed. A dry run needs no
-   credentials and is the default.
+   `ALGOLIA_APP_ID` and `ALGOLIA_WRITE_API_KEY` come from the environment, or from
+   a gitignored .env next to this repo's root (see .env.example) — never from a
+   flag, and never printed. This is the WRITE key: it creates and publishes
+   agents. It is not, and must never become, the key in public/shared/config.js,
+   which is search-only and is served to every visitor.
+
+   A dry run needs no credentials and is the default.
    ─────────────────────────────────────────────────────────────── */
 
 "use strict";
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { loadEnv, describeEnv } = require("./env.js");
 
 const HOST = process.env.AGENT_STUDIO_HOST || "https://agent-studio.eu.algolia.com";
 const INDEX_NAME = process.env.ALGOLIA_INDEX_NAME || "public_domain_books";
@@ -254,6 +259,8 @@ const payloadFor = ({ slug, model, providerId }) => ({
 /* ── Credentials and transport ────────────────────────────────── */
 
 function credentials() {
+  const note = describeEnv(loadEnv());
+  if (note) console.log(note + "\n");
   const appId = process.env.ALGOLIA_APP_ID;
   const apiKey = process.env.ALGOLIA_WRITE_API_KEY;
   if (!appId || !apiKey) return null;
@@ -358,7 +365,8 @@ async function main() {
       "Missing credentials. --push needs both of these in the environment:\n\n" +
       "  ALGOLIA_APP_ID          the application id to create the agents in\n" +
       "  ALGOLIA_WRITE_API_KEY   a key allowed to create and publish agents\n\n" +
-      "Neither is read from a file and neither is ever printed.\n" +
+      "Export them, or copy .env.example to .env and fill it in. Neither value is\n" +
+      "ever printed, and .env is gitignored.\n" +
       "Run without --push for a dry run, which needs no credentials at all.");
     process.exit(2);
   }
