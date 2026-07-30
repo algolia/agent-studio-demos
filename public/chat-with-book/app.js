@@ -1717,30 +1717,29 @@ async function reduceSummaries(summaries, pass) {
 /**
  * One section, folded again with a stated focus (the map step, aimed).
  *
- * The focus rides as a labelled prefix inside the section text rather than as its
- * own parameter, because /context/compact has no `instructions` field yet — the
- * endpoint takes providerID, model, messages and the trim knobs, and nothing that
- * says what to keep. When that parameter ships, this becomes
- * `{ …, instructions: focus }` and the prefix comes out; the labelled-prefix form
- * is a workaround, not a design.
+ * The focus rides in a message of its own after the section, because
+ * /context/compact has no `instructions` field yet — the endpoint takes providerID,
+ * model, messages and the trim knobs, and nothing that says what to keep. When that
+ * parameter ships, this becomes `{ …, instructions: focus }` and the second message
+ * comes out; a trailing message is a workaround, not a design.
  *
  * `words` separates the two callers: a refold the reader asked for is kept small
  * and stored, an extract the model asked for is bigger and thrown away.
  */
 async function focusSection(text, i, focus, { words, note, label }) {
   const what = label || `part ${i + 1} of a long document`;
-  const framed =
-    `Read ${what}, below, and write what it contains — but keep, above everything else, ` +
-    `this: ${focus}.\n\n` +
-    `At most ${words} words. Where the focus asks for exact wording, quote it exactly and ` +
-    `attribute it. Where it asks for names, list them all. Everything else can be one clause. ` +
-    `No preamble, no closing remarks.\n\n` +
-    `── Begin ──\n${text}\n\n── End ──\n` +
-    `Now write it: at most ${words} words, keeping ${focus} in full.`;
+  /* check-copy: off */
+  const bracketed = `── Begin: ${what} ──\n${text}\n── End ──`;
+  const ask =
+    `Condense ${what}, above, into at most ${words} words, keeping this above everything ` +
+    `else: ${focus}. Quote exact wording where the focus asks for it, and attribute it. ` +
+    `List every name where it asks for names. One clause for everything else. ` +
+    `Output only the result.`;
+  /* check-copy: on */
   const out = await compactOnce({
     providerID: state.model.providerId,
     model: state.model.model,
-    messages: [userMsg(framed)],
+    messages: [userMsg(bracketed), userMsg(ask)],
     keepLastMessages: 0,
   }, note);
   return { text: summaryTextOf(out), stats: out.stats };
