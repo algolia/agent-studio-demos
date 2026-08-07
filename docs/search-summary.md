@@ -5,7 +5,13 @@ Studio agents:
 
 1. InstantSearch retrieves the current results from the configured index.
 2. The summary agent receives a compact representation of those hits and writes
-   the inline overview and prompt suggestions.
+   the inline overview and prompt suggestions. When the hit list is non-empty,
+   it answers from that supplied evidence without searching again. When the hit
+   list is empty, it uses its configured Algolia Search tool against the same
+   index before answering. The inline card renders any fallback hits as a
+   compact result carousel and labels them as AI-retrieved evidence, so they
+   remain distinguishable from the direct InstantSearch results below. The
+   follow-up side panel keeps its larger carousel.
 3. Selecting a suggestion opens the InstantSearch Chat side panel. The follow-up
    agent receives only the question and uses its own Algolia search tool to
    retrieve fresh evidence.
@@ -24,8 +30,10 @@ summaryCard: {
 
 Use the existing top-level `appId`, `apiKey`, and `host` values. The browser key
 must be search-only. Both agents should be published and configured with prompt
-suggestions enabled. The follow-up agent should have an Algolia search tool bound
-to the same index.
+suggestions enabled. The summary agent should have an Algolia search tool bound
+to the same index and be instructed to use it only when no usable hits are
+supplied. The follow-up agent should also have an Algolia search tool bound to
+the same index.
 
 ## Build and run
 

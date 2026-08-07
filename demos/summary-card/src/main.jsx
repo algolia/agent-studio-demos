@@ -248,18 +248,6 @@ function SummaryCard({ agentId: configuredAgentId, onFollowup, followupError }) 
     );
   }
 
-  if (!hits.length) {
-    return (
-      <section className="summary-card summary-card--empty" aria-label="AI result overview">
-        <div className="summary-card__rail" />
-        <div className="summary-card__body">
-          <p className="summary-card__label">AI result overview</p>
-          <p className="summary-card__placeholder">There are no returned results to summarize for this question.</p>
-        </div>
-      </section>
-    );
-  }
-
   const turnKey = JSON.stringify([
     query,
     hits.slice(0, MAX_SUMMARY_HITS).map((hit) => [hit.objectID, hit.page_title, hit.url]),
@@ -278,10 +266,14 @@ function SummaryCard({ agentId: configuredAgentId, onFollowup, followupError }) 
 }
 
 function SummaryCardHeading({ hitCount }) {
+  const sourceLabel = hitCount > 0
+    ? `${hitCount} live hits · ${Math.min(hitCount, MAX_SUMMARY_HITS)} sent to agent · ${indexName}`
+    : `AI-retrieved evidence · Agent Studio search · ${indexName}`;
+
   return (
     <div className="summary-card__heading">
       <p className="summary-card__label">AI result overview</p>
-      <span className="summary-card__source">{hitCount} live hits · {Math.min(hitCount, MAX_SUMMARY_HITS)} sent to agent · {indexName}</span>
+      <span className={`summary-card__source${hitCount > 0 ? "" : " summary-card__source--ai"}`}>{sourceLabel}</span>
     </div>
   );
 }
@@ -299,8 +291,8 @@ function SummaryChat({ agentId: configuredAgentId, onFollowup, followupError, qu
   React.useEffect(() => {
     if (hasSentTurn.current || !chatRef.current) return;
     hasSentTurn.current = true;
-    // Send the evidence as the internal user turn. CSS hides this message so the
-    // built-in assistant renderer can present the result as the summary card.
+    // Send the prompt as an internal user turn. The inline renderer presents
+    // any fallback search hits as compact result cards below the answer.
     chatRef.current.sendMessage({ text: prompt });
   }, [prompt]);
 
@@ -323,6 +315,7 @@ function SummaryChat({ agentId: configuredAgentId, onFollowup, followupError, qu
           layoutComponent={ChatInlineLayout}
           headerComponent={() => null}
           promptComponent={() => null}
+          itemComponent={ChatResultItem}
           suggestionsComponent={suggestionsComponent}
         />
         {followupError && <p className="summary-card__error" role="alert">{followupError}</p>}
@@ -399,7 +392,7 @@ function createSummaryPrompt(query, hits) {
   }));
 
   return [
-    "Answer the user's question using only the supplied Algolia hits.",
+    "Answer the user's question using the supplied Algolia hits when they are present. If the hits array is empty, use your configured Algolia Search tool to retrieve evidence before answering.",
     `User question: ${query.slice(0, 240)}`,
     "Retrieved hits (JSON):",
     JSON.stringify(compactHits),

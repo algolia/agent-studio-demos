@@ -113,6 +113,8 @@ h1 { margin: 0; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-
 
 .summary-card__source { color: #9ca6ad; font-size: 11px; }
 
+.summary-card__source--ai { color: var(--mint); }
+
 .summary-card__text { max-width: 800px; margin: 20px 0 0; color: #f7f5ee; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: clamp(20px, 2.4vw, 28px); line-height: 1.25; letter-spacing: -.018em; }
 
 .summary-card__placeholder { max-width: 520px; margin: 19px 0 0; color: #c7d0d3; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: 23px; line-height: 1.25; }
@@ -149,9 +151,47 @@ h1 { margin: 0; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-
 
 .summary-card--chat-inline .ais-ChatMessage-leading { display: none; }
 
+.summary-card--chat-inline .ais-ChatMessage-tool { width: 100%; margin-top: 18px; }
+
+.summary-card--chat-inline .ais-ChatToolSearchIndexCarouselHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid #3b4650; }
+
+.summary-card--chat-inline .ais-ChatToolSearchIndexCarouselHeaderCount { color: #c7d0d3; font-family: "Avenir Next", "Segoe UI", sans-serif; font-size: 11px; font-weight: 800; }
+
+.summary-card--chat-inline .ais-ChatToolSearchIndexCarouselHeaderViewAll { color: var(--mint); font-family: "Avenir Next", "Segoe UI", sans-serif; font-size: 11px; font-weight: 800; }
+
+.summary-card--chat-inline .ais-ChatToolSearchIndexCarouselHeaderScrollButtons { display: flex; gap: 4px; }
+
+.summary-card--chat-inline .ais-ChatToolSearchIndexCarouselHeaderScrollButtons button { width: 26px; height: 26px; border: 1px solid #53606a; background: transparent; color: #d9e3e3; }
+
+.summary-card--chat-inline .ais-ChatToolSearchIndexCarouselHeaderScrollButtons button:hover { border-color: var(--mint); color: var(--mint); }
+
+.summary-card--chat-inline .ais-Carousel-list { display: grid; width: 100%; grid-auto-columns: calc((100% - 24px) / 3); grid-auto-flow: column; gap: 12px; margin: 0; padding: 0 0 8px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+
+.summary-card--chat-inline .ais-Carousel-list::-webkit-scrollbar { display: none; }
+
+.summary-card--chat-inline .ais-Carousel-item { width: auto; margin: 0; padding: 0; scroll-snap-align: start; }
+
+.summary-card--chat-inline .chat-result-card { min-height: 190px; padding: 14px 13px 14px 17px; gap: 8px; background: #202c37; box-shadow: 4px 4px 0 #101820; color: #f7f5ee; }
+
+.summary-card--chat-inline .chat-result-card__meta { color: #9ca6ad; font-size: 8px; }
+
+.summary-card--chat-inline .chat-result-card h3 { font-size: 18px; }
+
+.summary-card--chat-inline .chat-result-card__question { color: #c7d0d3; font-size: 11px; }
+
+.summary-card--chat-inline .chat-result-card__excerpt { color: #b6c0c4; font-size: 11px; -webkit-line-clamp: 4; }
+
+.summary-card--chat-inline .chat-result-card a { margin-top: auto; color: var(--mint); font-size: 10px; }
+
 .summary-card--chat-inline .ais-ChatMessage-content { display: block; }
 
-.summary-card--chat-inline .ais-ChatMessage-message { max-width: 800px; color: #f7f5ee; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: clamp(20px, 2.4vw, 28px); line-height: 1.25; letter-spacing: -.018em; }
+.summary-card--chat-inline .ais-ChatMessage-message { width: 100%; max-width: none; color: #f7f5ee; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: clamp(20px, 2.1vw, 25px); line-height: 1.24; letter-spacing: -.018em; }
+
+.summary-card--chat-inline .ais-ChatMessage-message > span { display: block; max-width: 900px; }
+
+/* If the agent emits a preliminary sentence before searching, keep only the
+   final answer beside the AI-retrieved evidence carousel. */
+.summary-card--chat-inline .ais-ChatMessage-message:has(.ais-ChatMessage-tool) > span:not(:last-of-type) { display: none; }
 
 .summary-card--chat-inline .ais-ChatMessage-message p { margin: 0 0 12px; }
 
@@ -341,6 +381,7 @@ h1 { margin: 0; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-
   .summary-card__rail { flex-basis: 22px; }
   .summary-card__body { padding: 22px 20px 24px; }
   .summary-card__heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .summary-card--chat-inline .ais-Carousel-list { grid-auto-columns: min(270px, 82%); }
   .summary-card__text, .summary-card__placeholder { font-size: 21px; }
   .results-heading { align-items: flex-start; flex-direction: column; gap: 18px; margin-top: 55px; }
   .ais-Hits-list { grid-template-columns: 1fr; }
