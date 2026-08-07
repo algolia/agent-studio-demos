@@ -260,9 +260,16 @@ h1 { margin: 0; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-
 
 .followup-chat .ais-ChatPrompt-body:focus-within { border-color: var(--cobalt); outline-color: var(--cobalt); }
 
-.followup-chat .ais-ChatPrompt-textarea { color: var(--ink); }
+.followup-chat .ais-ChatPrompt-textarea {
+  min-height: 46px;
+  color: var(--ink);
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  letter-spacing: 0;
+}
 
-.followup-chat .ais-ChatPrompt-textarea::placeholder { color: #8b9594; }
+.followup-chat .ais-ChatPrompt-textarea::placeholder { color: #8b9594; font-size: 16px; opacity: 1; }
 
 .followup-chat .ais-ChatPrompt-submit { background: var(--cobalt); }
 
