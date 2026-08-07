@@ -3,19 +3,19 @@
 
    Two deliberate constraints shape this file:
 
-   1. This repo has no package.json and no node_modules — no build step, no
-      bundler, nothing to install. Lint runs as `npx eslint public/`, straight
-      from a clean checkout. That rules out `require("@eslint/js")`: the package
+   1. The static demos have no local dependencies; the React summary demo has
+      an isolated Vite build. Lint runs as `npx eslint .`, while generated React
+      output is ignored. That rules out `require("@eslint/js")`: the package
       lives inside npx's own temp prefix, not next to this file, so
       `js.configs.recommended` is simply not reachable. The rules below are
       therefore the useful half of eslint:recommended, written out by name —
       core rules need no plugin. `module.exports` rather than `export default`
       for the same reason: with no package.json there is no `"type": "module"`.
 
-   2. The demos are classic browser scripts loaded with <script src>, not ES
-      modules — md.js closes with `})(window)`, app.js reads globals that
+   2. The static demos are classic browser scripts loaded with <script src>,
+      not ES modules — md.js closes with `})(window)`, app.js reads globals that
       config.js declared. Hence sourceType "script" and a hand-written globals
-      list.
+      list for those files.
    ─────────────────────────────────────────────────────────────── */
 
 const browserGlobals = {
@@ -78,6 +78,7 @@ const nodeGlobals = {
   globalThis: "writable",
   Buffer: "readonly",
   fetch: "readonly",
+  URL: "readonly",
   TextDecoder: "readonly",
   setTimeout: "readonly",
   clearTimeout: "readonly",
@@ -150,7 +151,7 @@ module.exports = [
   {
     // Local credentials. Untracked, so CI never sees this file — ignoring it
     // keeps a local `npx eslint public/` over the exact same set as the CI run.
-    ignores: ["public/shared/config.js"],
+    ignores: ["public/shared/config.js", "public/summary-card/"],
   },
   {
     files: ["**/*.js"],
@@ -158,6 +159,25 @@ module.exports = [
       ecmaVersion: 2022,
       sourceType: "script",
       globals: browserGlobals,
+    },
+    rules: recommended,
+  },
+  {
+    files: ["demos/summary-card/src/**/*.{js,jsx}"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      parserOptions: { ecmaFeatures: { jsx: true } },
+      globals: browserGlobals,
+    },
+    rules: { ...recommended, "no-unused-vars": "off" },
+  },
+  {
+    files: ["demos/summary-card/vite.config.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: nodeGlobals,
     },
     rules: recommended,
   },

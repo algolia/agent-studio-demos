@@ -1,11 +1,14 @@
 # CLAUDE.md
 
-Public demos of the Agent Studio context APIs. Plain HTML/CSS/JS, zero
-dependencies, no build step. Push to `main` deploys to Cloudflare Pages.
+Public demos of Agent Studio. The context demos are plain HTML/CSS/JS; the
+Search summary demo is an isolated React/Vite build that emits static files.
+Push to `main` deploys to Cloudflare Pages.
 
-Three gates, run all of them locally before pushing:
+Build and three gates, run all of them locally before pushing:
 
 ```bash
+npm ci
+npm run build:summary-card
 npx eslint .
 node --test tests/*.test.js
 node scripts/check-copy.js
@@ -52,5 +55,6 @@ Rationale and examples: `docs/_DESIGN.md`. Read it before any copy work.
   `tests/meter.test.js` is the spec.
 - `public/shared/config.js` is gitignored and holds real keys; tests read
   `config.example.js`. Any browser-side Algolia key must be search-only ACL.
-- No frameworks, no package.json, no version-suffixed files. Improve in place;
-  git is the versioning layer.
+- Keep plain demos dependency-free. React is currently isolated to
+  `demos/summary-card/`; its build output belongs under `public/` and its source
+  is the place to improve, not generated files.

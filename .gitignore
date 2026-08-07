@@ -4,6 +4,9 @@
 config.js
 public/shared/config.js
 
+# Built output for the isolated React demo; deployment creates it from source.
+public/summary-card/
+
 # The WRITE key that scripts/ use to build the index and the agents. Maintainer's
 # machine only — never a browser, never a build, never CI. See .env.example.
 .env

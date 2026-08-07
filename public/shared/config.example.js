@@ -8,6 +8,14 @@ window.DEMO_CONFIG = {
   appId: "YOUR_APP_ID",
   apiKey: "YOUR_API_KEY",
 
+  // The React InstantSearch summary-card demo uses the same browser-safe app
+  // credentials, but its own index and two published agents.
+  summaryCard: {
+    indexName: "YOUR_SUPPORT_INDEX",
+    summaryAgentId: "YOUR_SUMMARY_AGENT_ID",
+    followupAgentId: "YOUR_FOLLOWUP_AGENT_ID",
+  },
+
   // One published agent per model: /completions takes the model from the agent
   // (per-request `configuration` overrides are rejected with 422
   // "Dynamic configuration not allowed" on most apps).

@@ -1,10 +1,5 @@
-# Only the Actions in .github/workflows/ have versions to keep current.
-#
-# The demos themselves have no dependencies — no package.json, no lockfile, no
-# bundler. md.js is vendored on purpose, and eslint and wrangler arrive through
-# npx at a pinned major. So there is no npm ecosystem here for Dependabot to
-# watch, and inventing a manifest to give it one would add the build step this
-# repo exists without.
+# The context demos remain dependency-free. The React InstantSearch demo has an
+# isolated npm build, so Dependabot watches that lockfile as well as Actions.
 
 version: 2
 updates:
@@ -14,5 +9,13 @@ updates:
       interval: weekly
     commit-message:
       prefix: "chore(actions)"
+    labels:
+      - dependencies
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(npm)"
     labels:
       - dependencies

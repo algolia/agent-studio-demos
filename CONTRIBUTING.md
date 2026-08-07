@@ -1,7 +1,8 @@
 # Contributing
 
-Small demos, small rules. There is no build step and no dependency to install — a
-clone, a config file and a static server are the whole setup.
+Small demos, small rules. The two context demos need no build step or dependency;
+the React InstantSearch Search summary demo has a pinned npm build so its source
+can stay readable while Cloudflare still serves one static root.
 
 ## Run it locally
 
@@ -10,10 +11,14 @@ clone, a config file and a static server are the whole setup.
 cp public/shared/config.example.js public/shared/config.js
 $EDITOR public/shared/config.js
 
-# 2 · serve the deployable root
+# 2 · build the React InstantSearch demo
+npm ci
+npm run build:summary-card
+
+# 3 · serve the deployable root
 python3 -m http.server 8766 --directory public
 
-# 3 · open http://127.0.0.1:8766/
+# 4 · open http://127.0.0.1:8766/
 ```
 
 Serve over `http://`, never open the file over `file://` — the demos load their
@@ -34,13 +39,16 @@ can show every request, which means whatever key you configure is readable by
 anyone who opens devtools. Use a key scoped to exactly what the demo needs, and
 put a backend in front of it before shipping anything like this.
 
-## The two gates
+## The checks
 
-CI runs exactly these, and so should you before pushing:
+CI runs these, and so should you before pushing:
 
 ```bash
+npm ci
+npm run build:summary-card
 npx eslint .                  # flat config, zero dependencies
 node --test tests/*.test.js   # node:test, no framework
+node scripts/check-copy.js    # copy budgets
 ```
 
 eslint takes the repo root, not a list of directories: `public/`, `tests/`,
@@ -61,18 +69,22 @@ than sprinkling `/* global */` comments.
 
 ## Adding a demo
 
-1. `mkdir public/<demo-slug>` and write an `index.html` that links
+1. For a plain demo, `mkdir public/<demo-slug>` and write an `index.html` that links
    `../shared/tokens.css` first, then its own `style.css`.
-2. Reuse the demo kit in `public/shared/` rather than vendoring copies.
-3. A demo's stylesheet never redeclares a token from `tokens.css`.
-4. Add a card to `public/index.html`: pitch, status, and the endpoints it exercises.
+2. For a React demo, put source under `demos/<demo-slug>/` and add a pinned build
+   script that emits into `public/<demo-slug>/`.
+3. Reuse the demo kit in `public/shared/` rather than vendoring copies where it fits.
+4. A plain demo's stylesheet never redeclares a token from `tokens.css`.
+5. Add a card to `public/index.html`: pitch, status, and the endpoints it exercises.
 
 ## The demo kit
 
-`public/shared/` is what the next demo starts from. Every module is a plain
+`public/shared/` is what the next plain demo starts from. Every module is a plain
 browser script that publishes one global — no build step, no imports, and the
 tests `require()` the same bytes the browser loads (`tests/load.js`). Load them
-with `<script src>` before the demo's own `app.js`.
+with `<script src>` before the demo's own `app.js`. React demos may use npm
+dependencies in their isolated source tree, but their generated output must still
+land under `public/`.
 
 Auto-compaction stays **on by default** in every demo built on this kit. A demo
 that overflows in front of a visitor is not demonstrating anything.

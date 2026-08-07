@@ -12,12 +12,15 @@ const { loadExampleConfig } = require("./load.js");
 const cfg = loadExampleConfig();
 
 test("the template parses and carries every field app.js reads at startup", () => {
-  for (const field of ["host", "appId", "apiKey", "models", "budgets", "defaultBudget", "repoUrl"]) {
+  for (const field of ["host", "appId", "apiKey", "summaryCard", "models", "budgets", "defaultBudget", "repoUrl"]) {
     assert.ok(field in cfg, `config.example.js is missing ${field}`);
   }
   assert.match(cfg.host, /^https:\/\//, "host must be an https origin");
   assert.ok(Array.isArray(cfg.models) && cfg.models.length > 0, "at least one model option");
   assert.ok(Array.isArray(cfg.budgets) && cfg.budgets.length > 0, "at least one budget option");
+  for (const field of ["indexName", "summaryAgentId", "followupAgentId"]) {
+    assert.ok(field in cfg.summaryCard, `summaryCard is missing ${field}`);
+  }
   assert.equal(typeof cfg.compactAtRatio, "number");
   assert.ok(cfg.compactAtRatio > 0 && cfg.compactAtRatio < 1, "compactAtRatio is a share of the budget");
 });
@@ -42,6 +45,9 @@ test("the default budget is one of the offered budgets", () => {
 test("the template holds placeholders, not somebody's real credentials", () => {
   assert.match(cfg.appId, /^YOUR_/, "appId in the template must stay a placeholder");
   assert.match(cfg.apiKey, /^YOUR_/, "apiKey in the template must stay a placeholder");
+  assert.match(cfg.summaryCard.indexName, /^YOUR_/, "summaryCard indexName must stay a placeholder");
+  assert.match(cfg.summaryCard.summaryAgentId, /^YOUR_/, "summaryCard summaryAgentId must stay a placeholder");
+  assert.match(cfg.summaryCard.followupAgentId, /^YOUR_/, "summaryCard followupAgentId must stay a placeholder");
 });
 
 test("config.js is not committed", () => {

@@ -10,19 +10,19 @@
      and og:url against nothing, so a relative path here means no preview at
      all. The images under assets/og/ are real 1200×630 screenshots of these
      pages, shot at the same light theme a first-time visitor sees. ──── -->
-<meta name="description" content="Two single-page demos of what the Agent Studio context APIs make possible: context/trim counts what a conversation is carrying, context/compact folds the old part into a summary you can still open back up.">
+<meta name="description" content="Three browser demos of Algolia Agent Studio: context management, infinite conversations, and search results with an inline AI summary.">
 <meta property="og:site_name" content="Agent Studio demos">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://agent-studio-demos.pages.dev/">
-<meta property="og:title" content="Agent Studio demos&nbsp;— context APIs in the browser">
-<meta property="og:description" content="Two single-page demos of what the Agent Studio context APIs make possible: context/trim counts what a conversation is carrying, context/compact folds the old part into a summary you can still open back up.">
+<meta property="og:title" content="Agent Studio demos&nbsp;— AI experiences in the browser">
+<meta property="og:description" content="Three browser demos of Algolia Agent Studio: context management, infinite conversations, and search results with an inline AI summary.">
 <meta property="og:image" content="https://agent-studio-demos.pages.dev/assets/og/landing.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The Agent Studio demos landing page, with a card each for Chat with a book and Infinite conversation, both of them now live.">
+<meta property="og:image:alt" content="The Agent Studio demos landing page, with cards for Chat with a book, Infinite conversation, and Search summary.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Agent Studio demos&nbsp;— context APIs in the browser">
-<meta name="twitter:description" content="Two single-page demos of what the Agent Studio context APIs make possible: context/trim counts what a conversation is carrying, context/compact folds the old part into a summary you can still open back up.">
+<meta name="twitter:title" content="Agent Studio demos&nbsp;— AI experiences in the browser">
+<meta name="twitter:description" content="Three browser demos of Algolia Agent Studio: context management, infinite conversations, and search results with an inline AI summary.">
 <meta name="twitter:image" content="https://agent-studio-demos.pages.dev/assets/og/landing.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -169,13 +169,12 @@ h1 {
       <span class="glyph" id="theme-glyph" aria-hidden="true">◐</span>
       <span id="theme-label">Dark</span>
     </button>
-    <p class="eyebrow">Algolia Agent Studio · context APIs <span class="tag">unstable</span></p>
+    <p class="eyebrow">Algolia Agent Studio · browser demos</p>
     <h1>Agent Studio<span class="fold-mark" aria-hidden="true"></span>demos</h1>
     <p class="lede">
-      Single-page demos of the Agent Studio context APIs.
-      <code>context/trim</code> counts what a conversation carries.
-      <code>context/compact</code> folds the old part into a summary you can open
-      back up. Everything runs in your browser, and every API call shows on screen.
+      Small browser demos of Agent Studio in action.
+      See context management, infinite conversations, and a search result that
+      becomes an inline AI summary. Every API call shows on screen.
     </p>
   </div>
 </header>
@@ -227,21 +226,41 @@ h1 {
       </div>
     </a>
 
+    <a class="card" href="summary-card/">
+      <div class="thumb" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="card-body">
+        <p class="card-status"><span class="dot"></span> Live</p>
+        <h2>Search summary</h2>
+        <p>
+          Search the Algolia Support Center, then turn the returned evidence into
+          an inline answer. Click a suggested follow-up to open a focused chat.
+        </p>
+        <ul class="card-meta">
+          <li>React InstantSearch</li>
+          <li>summary agent</li>
+          <li>search tool</li>
+          <li>prompt suggestions</li>
+          <li>follow-up chat</li>
+        </ul>
+        <p class="card-go">Open the demo →</p>
+      </div>
+    </a>
+
   </div>
 </main>
 
 <footer class="footer">
   <div class="wrap">
     <p>
-      Built on Agent Studio context APIs <span class="tag">unstable</span>. Unstable
-      endpoints can change without notice.
+      Built on Algolia Agent Studio. Some endpoints used by these demos may change
+      without notice.
     </p>
     <p>
       These pages call the API straight from the browser for demo clarity. Put a
       backend in front of your key before shipping anything like them.
     </p>
     <p>
-      Every demo here is a few hundred lines of plain HTML, CSS and JavaScript&nbsp;—
+      Every demo is intentionally small and inspectable&nbsp;—
       <a href="https://github.com/algolia/agent-studio-demos" target="_blank" rel="noopener">read
       the source on GitHub</a>, fork it, point it at your own app.
     </p>

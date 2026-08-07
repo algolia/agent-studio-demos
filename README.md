@@ -3,7 +3,7 @@
 [![CI](https://github.com/algolia/agent-studio-demos/actions/workflows/ci.yml/badge.svg)](https://github.com/algolia/agent-studio-demos/actions/workflows/ci.yml)
 [![Deploy](https://github.com/algolia/agent-studio-demos/actions/workflows/deploy.yml/badge.svg)](https://github.com/algolia/agent-studio-demos/actions/workflows/deploy.yml)
 
-Small, self-contained single-page demos of the [Algolia Agent Studio](https://www.algolia.com/doc/guides/algolia-ai/agent-studio) context APIs. No build step, no framework, no bundler — every demo is plain HTML, CSS and JavaScript served as static files.
+Small, self-contained single-page demos of [Algolia Agent Studio](https://www.algolia.com/doc/guides/algolia-ai/agent-studio). The original context demos are plain HTML, CSS and JavaScript; the Search summary demo preserves React InstantSearch and builds into the same static site.
 
 Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every push to `main` deploys it.
 
@@ -11,6 +11,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 | --- | --- | --- |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
+| Search summary | `/summary-card/` | Live |
 
 ## Layout
 
@@ -30,6 +31,10 @@ public/                     the deployable root — this is what Cloudflare Page
   assets/convs/             three seeded conversations, plus the manifest every figure derives from
   chat-with-book/           index.html + app.js + style.css
   infinite-conversation/    index.html + app.js + style.css
+  summary-card/             generated React/Vite output — do not edit by hand
+demos/summary-card/         React InstantSearch source for the Search summary demo
+package.json                build boundary for the React demo
+package-lock.json           pinned React demo dependencies
 scripts/                    node, zero dependencies — see § The shelf and § The search index
   fetch-books.js            download, strip and count the texts, from either source
   wikisource.js             wikitext → prose, for the one work not on Gutenberg
@@ -44,7 +49,7 @@ eslint.config.js            flat config, rules written out, zero dependencies
 .github/workflows/          ci.yml (lint + tests), deploy.yml (Cloudflare Pages)
 ```
 
-Each demo links `../shared/tokens.css` first, then any shared stylesheet it uses (`meter.css`), then its own `style.css`. A demo's stylesheet never redeclares a token; the landing page uses nothing but `tokens.css`.
+The two context demos link `../shared/tokens.css` first, then any shared stylesheet they use (`meter.css`), then their own `style.css`. The Search summary source lives under `demos/summary-card/` and uses its own React stylesheet; Vite emits its deployable files into `public/summary-card/`. The landing page uses nothing but `tokens.css`.
 
 ## The shelf
 
@@ -107,10 +112,14 @@ rate behind one is a placeholder rather than a published price, the tile says so
 cp public/shared/config.example.js public/shared/config.js
 $EDITOR public/shared/config.js
 
-# 2 · serve the deployable root (any static server works)
+# 2 · build the React InstantSearch demo
+npm ci
+npm run build:summary-card
+
+# 3 · serve the deployable root (any static server works)
 python3 -m http.server 8766 --bind 127.0.0.1 --directory public
 
-# 3 · open it
+# 4 · open it
 # http://127.0.0.1:8766/
 ```
 
@@ -121,6 +130,7 @@ Open a file over `http://`, not `file://` — the demos load their config and sh
 `public/shared/config.js` defines a single global, `window.DEMO_CONFIG`, read once at startup. It carries:
 
 - **`host`, `appId`, `apiKey`** — which Agent Studio deployment to call and with what credentials.
+- **`summaryCard`** — the Search summary demo's index, summary agent, and follow-up agent. The browser key must remain search-only.
 - **`models`** — the entries offered in the model picker: an agent id, a provider id, the model name, its context window, and a per-million-token price used by the cost meter.
 - **`budgets`, `defaultBudget`, `compactAtRatio`, `keepLastMessages`** — the working budget the meter fills against, and when auto-compaction fires.
 - Optional tuning for hierarchical folding — chunk size, fold depth, unfold limits. Everything has a default in `app.js`, so an older config keeps working.
@@ -131,9 +141,11 @@ Open a file over `http://`, not `file://` — the demos load their config and sh
 
 ## Checks
 
-Two gates, both runnable verbatim on a laptop with nothing installed:
+The build and three repository gates are runnable locally:
 
 ```bash
+npm ci
+npm run build:summary-card
 npx eslint public/ tests/ eslint.config.js   # flat config, rules written out by name
 node --test tests/*.test.js                  # node:test, no framework
 ```
@@ -146,8 +158,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR flow.
 
 ## Deploy
 
-The site is static: `public/` is the build output, there is no build command, and
-`.github/workflows/deploy.yml` publishes it to Cloudflare Pages on every push to `main`
+The site is static at deploy time: `public/` is the build output, and
+`.github/workflows/deploy.yml` builds the React demo before publishing it to Cloudflare Pages on every push to `main`
 (or on demand, via **Actions → Deploy → Run workflow**).
 
 `public/shared/config.js` is gitignored, so it is not in the repo and a plain checkout
@@ -196,7 +208,7 @@ npx wrangler@4 pages deploy public/ --project-name agent-studio-demos
 
 ## Adding a demo
 
-1. `mkdir public/<demo-slug>` and write an `index.html` that links `../shared/tokens.css`.
+1. For a plain demo, `mkdir public/<demo-slug>` and write an `index.html` that links `../shared/tokens.css`. For a React demo, put source under `demos/<demo-slug>/` and add a build script that emits into `public/<demo-slug>/`.
 2. Reuse the demo kit in `public/shared/` rather than vendoring copies — the meter and the
    bookshelf are already shared; [CONTRIBUTING.md](CONTRIBUTING.md#the-demo-kit) documents
    the API of each module.

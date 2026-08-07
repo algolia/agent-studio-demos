@@ -1,8 +1,8 @@
 # Deploy the static site to Cloudflare Pages on every push to main.
 #
-# `public/` is the deployable root and there is no build step, so the only work
-# here is writing the one file the repo deliberately does not carry:
-# public/shared/config.js, which holds the demo credentials.
+# `public/` is the deployable root. The React summary-card source is built into
+# it first; the workflow then writes the one file the repo deliberately does
+# not carry: public/shared/config.js, which holds the demo credentials.
 #
 # What must exist for this to pass:
 #   secret  CLOUDFLARE_API_TOKEN  — a Pages "Edit Cloudflare Workers" token
@@ -47,6 +47,13 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
+          cache: npm
+
+      - name: Install React demo dependencies
+        run: npm ci
+
+      - name: Build React InstantSearch demo
+        run: npm run build:summary-card
 
       - name: Write public/shared/config.js from the DEMO_CONFIG_JS variable
         env:
@@ -66,6 +73,10 @@ jobs:
                    const c = globalThis.window.DEMO_CONFIG;
                    if (!c || !c.host || !c.appId || !c.apiKey || !(c.models || []).length) {
                      throw new Error("DEMO_CONFIG_JS parsed but is missing host/appId/apiKey/models");
+                   }
+                   const s = c.summaryCard;
+                   if (!s || !s.indexName || !s.summaryAgentId || !s.followupAgentId) {
+                     throw new Error("DEMO_CONFIG_JS parsed but is missing summaryCard.indexName/summaryAgentId/followupAgentId");
                    }
                    console.log("config.js ok —", c.models.length, "model option(s)");'
 
