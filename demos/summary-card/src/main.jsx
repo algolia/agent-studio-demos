@@ -392,7 +392,7 @@ function createSummaryPrompt(query, hits) {
   }));
 
   return [
-    "Answer the user's question using the supplied Algolia hits when they are present. If the hits array is empty, use your configured Algolia Search tool to retrieve evidence before answering.",
+    "Answer the user's question using supplied Algolia hits only when their title, question, or content directly answers it; keyword or topic overlap alone is not enough. For a definition or overview question such as 'What is X?', skip the search tool only when at least one supplied hit explicitly defines X or clearly explains what X is. Hits about setup, troubleshooting, errors, provider profiles, API keys, versions, or another subtopic are insufficient for a definition question even when they mention X, so use your configured Algolia Search tool before answering. Your first search must contain only the user's original question. If that first search returns no hits or no directly useful evidence, make a separate second search with several related query variations in the tool's queries array before answering. Example: for 'How are refinement operations counted?', first search only that exact question, then if it is unhelpful make a second search with 'refinement operations', 'facet refinement filter operation count', and 'search operations caused by refinements'. Example: for 'What is Agent Studio?' with hits about provider setup, API keys, or agent versions, the hits are insufficient and you must search.",
     `User question: ${query.slice(0, 240)}`,
     "Retrieved hits (JSON):",
     JSON.stringify(compactHits),

@@ -105,13 +105,13 @@ h1 { margin: 0; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-
 
 .summary-card__rail { flex: 0 0 38px; background: var(--coral); background-image: radial-gradient(rgba(23,32,43,.45) 1px, transparent 1px); background-size: 8px 8px; }
 
-.summary-card__body { flex: 1; padding: 27px 32px 30px; }
+.summary-card__body { flex: 1; min-width: 0; padding: 27px 32px 30px; }
 
-.summary-card__heading { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+.summary-card__heading { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 20px; }
 
 .summary-card__label { margin: 0; color: var(--mint); }
 
-.summary-card__source { color: #9ca6ad; font-size: 11px; }
+.summary-card__source { min-width: 0; max-width: 100%; color: #9ca6ad; font-size: 11px; overflow-wrap: anywhere; text-align: right; }
 
 .summary-card__source--ai { color: var(--mint); }
 
@@ -151,7 +151,9 @@ h1 { margin: 0; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-
 
 .summary-card--chat-inline .ais-ChatMessage-leading { display: none; }
 
-.summary-card--chat-inline .ais-ChatMessage-tool { width: 100%; margin-top: 18px; }
+.summary-card--chat-inline .ais-ChatMessage-tool { width: 100%; min-width: 0; max-width: 100%; margin-top: 18px; }
+
+.summary-card--chat-inline .ais-Carousel { min-width: 0; max-width: 100%; }
 
 .summary-card--chat-inline .ais-ChatToolSearchIndexCarouselHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid #3b4650; }
 
@@ -165,7 +167,7 @@ h1 { margin: 0; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-
 
 .summary-card--chat-inline .ais-ChatToolSearchIndexCarouselHeaderScrollButtons button:hover { border-color: var(--mint); color: var(--mint); }
 
-.summary-card--chat-inline .ais-Carousel-list { display: grid; width: 100%; grid-auto-columns: calc((100% - 24px) / 3); grid-auto-flow: column; gap: 12px; margin: 0; padding: 0 0 8px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.summary-card--chat-inline .ais-Carousel-list { --summary-carousel-end-space: 20px; display: grid; width: 100%; grid-auto-columns: calc((100% - 24px + var(--summary-carousel-end-space)) / 3); grid-auto-flow: column; gap: 12px; margin: 0; padding: 0 var(--summary-carousel-end-space) 8px 0; overflow-x: auto; scroll-padding-inline-end: var(--summary-carousel-end-space); scroll-snap-type: x mandatory; scrollbar-width: none; }
 
 .summary-card--chat-inline .ais-Carousel-list::-webkit-scrollbar { display: none; }
 
@@ -381,7 +383,7 @@ h1 { margin: 0; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-
   .summary-card__rail { flex-basis: 22px; }
   .summary-card__body { padding: 22px 20px 24px; }
   .summary-card__heading { align-items: flex-start; flex-direction: column; gap: 8px; }
-  .summary-card--chat-inline .ais-Carousel-list { grid-auto-columns: min(270px, 82%); }
+  .summary-card--chat-inline .ais-Carousel-list { grid-auto-columns: min(270px, calc(82% + var(--summary-carousel-end-space))); }
   .summary-card__text, .summary-card__placeholder { font-size: 21px; }
   .results-heading { align-items: flex-start; flex-direction: column; gap: 18px; margin-top: 55px; }
   .ais-Hits-list { grid-template-columns: 1fr; }

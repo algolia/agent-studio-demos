@@ -5,10 +5,13 @@ Studio agents:
 
 1. InstantSearch retrieves the current results from the configured index.
 2. The summary agent receives a compact representation of those hits and writes
-   the inline overview and prompt suggestions. When the hit list is non-empty,
-   it answers from that supplied evidence without searching again. When the hit
-   list is empty, it uses its configured Algolia Search tool against the same
-   index before answering. The inline card renders any fallback hits as a
+   the inline overview and prompt suggestions. When the supplied hits directly
+   answer the question, it uses that evidence without searching again. When the
+   hit list is empty or the supplied evidence is incomplete, off-topic, or
+   insufficient, it uses its configured Algolia Search tool against the same
+   index before answering. If that first search returns no useful hits, the
+   agent makes one separate broader search with related query variations. The
+   inline card renders any fallback hits as a
    compact result carousel and labels them as AI-retrieved evidence, so they
    remain distinguishable from the direct InstantSearch results below. The
    follow-up side panel keeps its larger carousel.
@@ -31,9 +34,12 @@ summaryCard: {
 Use the existing top-level `appId`, `apiKey`, and `host` values. The browser key
 must be search-only. Both agents should be published and configured with prompt
 suggestions enabled. The summary agent should have an Algolia search tool bound
-to the same index and be instructed to use it only when no usable hits are
-supplied. The follow-up agent should also have an Algolia search tool bound to
-the same index.
+to the same index and be instructed to require direct answers from supplied hits:
+keyword overlap is not enough, and definition questions require an explicit
+definition or description. It should search when the supplied evidence is
+missing or insufficient, then make one separate broader search if the first
+search returns no useful hits. The follow-up agent should also have an Algolia
+search tool bound to the same index.
 
 ## Build and run
 
