@@ -115,6 +115,7 @@
   font: 800 28px var(--display); color: var(--ink-3);
 }
 .pcard-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.pcard-blur { width: 100%; height: 100%; display: block; }
 .pcard-body { padding: 8px 10px 10px; display: grid; gap: 2px; }
 .pcard-body p { margin: 0; }
 .pcard-title {

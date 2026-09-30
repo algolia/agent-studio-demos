@@ -21,62 +21,55 @@ import {
 } from "./configs.mjs";
 import { createSseParser, createTurn, ms } from "./stream.mjs";
 import { createFixtureFetch } from "./fixture.mjs";
+import { pick, imageCandidates, fieldsFrom, priceText, lineText } from "./fields.mjs";
+import { decode as decodeBlurhash } from "blurhash";
 
 const html = htm.bind(React.createElement);
 const { useState, useMemo, useRef, useEffect, useCallback } = React;
 
 /* ── Records → cards ──────────────────────────────────────────── */
 
-const pick = (item, names) => {
-  for (const n of names) {
-    const v = n.split(".").reduce((o, k) => (o == null ? o : o[k]), item);
-    if (v !== undefined && v !== null && v !== "") return v;
-  }
-  return undefined;
-};
-
-const FIELD_DEFAULTS = {
-  title: ["name", "title", "product_name", "label"],
-  image: ["image", "image_url", "imageUrl", "thumbnail", "images.0", "picture"],
-  price: ["price.value", "price", "salePrice", "sale_price", "price_usd"],
-  line: ["description", "short_description", "brand", "category", "categories.0"],
-  currency: ["price.currency", "currency", "currency_code"],
-};
-
-function fieldsFrom(cfg) {
-  const f = (cfg && cfg.fields) || {};
-  const out = {};
-  for (const k of Object.keys(FIELD_DEFAULTS)) {
-    out[k] = f[k] ? [].concat(f[k], FIELD_DEFAULTS[k]) : FIELD_DEFAULTS[k];
-  }
-  return out;
+/** a record's BlurHash, drawn small and stretched: its own colors, no network */
+function Blur({ hash }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const c = ref.current;
+    if (!c) return;
+    try {
+      const px = decodeBlurhash(hash, 32, 24);
+      const ctx = c.getContext("2d");
+      const img = ctx.createImageData(32, 24);
+      img.data.set(px);
+      ctx.putImageData(img, 0, 0);
+    } catch (_) { /* not a valid hash: the letter underneath shows */ }
+  }, [hash]);
+  return html`<canvas ref=${ref} width="32" height="24" class="pcard-blur" aria-hidden="true"></canvas>`;
 }
 
-function priceText(p, currency) {
-  if (p === undefined) return "";
-  if (typeof p !== "number") return String(p);
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "USD" }).format(p);
-  } catch (_) {
-    return `${p} ${currency || ""}`.trim();
-  }
-}
-
-function lineText(v) {
-  const s = Array.isArray(v) ? v.join(", ") : String(v || "");
-  return s.length > 90 ? s.slice(0, 88).trimEnd() + "…" : s;
-}
+let imageFailureLogged = false;
 
 function makeCard(fields) {
   return function ProductCard({ item }) {
     const title = pick(item, fields.title) || item.objectID;
-    const image = pick(item, fields.image);
-    const [broken, setBroken] = useState(false);
+    const images = imageCandidates(item, fields.image);
+    const blur = pick(item, fields.blurhash);
+    // on a failed load, try the record's next image before giving up
+    const [attempt, setAttempt] = useState(0);
+    const src = images[attempt];
     const why = item.__groupedToolResult && item.__groupedToolResult.why;
+    const failed = (e) => {
+      if (!imageFailureLogged) {
+        imageFailureLogged = true;
+        console.warn("main-demo: a product image failed to load; showing the record's next image or its blur", e.target.currentSrc);
+      }
+      setAttempt((n) => n + 1);
+    };
     return html`<article class="pcard">
-      <div class="pcard-img">${image && !broken
-        ? html`<img src=${String(image)} alt="" loading="lazy" onError=${() => setBroken(true)} />`
-        : html`<span aria-hidden="true">${String(title).slice(0, 1)}</span>`}</div>
+      <div class="pcard-img">${src
+        ? html`<img key=${src} src=${String(src)} alt="" loading="lazy" onError=${failed} />`
+        : blur
+          ? html`<${Blur} hash=${String(blur)} />`
+          : html`<span aria-hidden="true">${String(title).slice(0, 1)}</span>`}</div>
       <div class="pcard-body">
         <p class="pcard-title">${String(title)}</p>
         <p class="pcard-price">${priceText(pick(item, fields.price), pick(item, fields.currency))}</p>
