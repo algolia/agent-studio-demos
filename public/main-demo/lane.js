@@ -40,6 +40,7 @@ const FIELD_DEFAULTS = {
   image: ["image", "image_url", "imageUrl", "thumbnail", "images.0", "picture"],
   price: ["price.value", "price", "salePrice", "sale_price", "price_usd"],
   line: ["description", "short_description", "brand", "category", "categories.0"],
+  currency: ["price.currency", "currency", "currency_code"],
 };
 
 function fieldsFrom(cfg) {
@@ -51,10 +52,14 @@ function fieldsFrom(cfg) {
   return out;
 }
 
-function priceText(p) {
+function priceText(p, currency) {
   if (p === undefined) return "";
-  if (typeof p === "number") return `$${p % 1 ? p.toFixed(2) : p}`;
-  return String(p);
+  if (typeof p !== "number") return String(p);
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "USD" }).format(p);
+  } catch (_) {
+    return `${p} ${currency || ""}`.trim();
+  }
 }
 
 function lineText(v) {
@@ -66,14 +71,15 @@ function makeCard(fields) {
   return function ProductCard({ item }) {
     const title = pick(item, fields.title) || item.objectID;
     const image = pick(item, fields.image);
+    const [broken, setBroken] = useState(false);
     const why = item.__groupedToolResult && item.__groupedToolResult.why;
     return html`<article class="pcard">
-      <div class="pcard-img">${image
-        ? html`<img src=${String(image)} alt="" loading="lazy" />`
+      <div class="pcard-img">${image && !broken
+        ? html`<img src=${String(image)} alt="" loading="lazy" onError=${() => setBroken(true)} />`
         : html`<span aria-hidden="true">${String(title).slice(0, 1)}</span>`}</div>
       <div class="pcard-body">
         <p class="pcard-title">${String(title)}</p>
-        <p class="pcard-price">${priceText(pick(item, fields.price))}</p>
+        <p class="pcard-price">${priceText(pick(item, fields.price), pick(item, fields.currency))}</p>
         <p class="pcard-line">${why ? why : lineText(pick(item, fields.line))}</p>
       </div>
     </article>`;
@@ -147,7 +153,8 @@ function ConfigPanel({ toggles, onChange, resolution, disabled }) {
 
 function HitsPanel({ view, Card }) {
   const hits = (view && view.hits) || [];
-  if (!hits.length) return null;
+  if (!view || !view.hitsTool) return null;
+  if (!hits.length) return html`<p class="hits-h"><b>0</b> hits from <code>${view.hitsTool}</code></p>`;
   return html`<section class="hits" aria-label="Search hits">
     <p class="hits-h"><b>${hits.length}</b> hits from <code>${view.hitsTool}</code></p>
     <div class="hits-row">${hits.slice(0, 12).map((h) => html`<${Card} key=${h.objectID} item=${h} />`)}</div>
