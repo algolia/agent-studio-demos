@@ -216,7 +216,9 @@ function renderScore() {
     if (m.tip) th.title = m.tip;
     const lead = c.delta === null || deltaText(m, c) === "even" ? null : c.delta < 0 ? "b" : "a";
     const val = (x, k) => {
-      const shown = x === null ? (runs.length ? "…" : "—") : m.fmt(Math.round(x * 10) / 10);
+      const pending = race.running || !n;
+      const shown = x !== null ? m.fmt(Math.round(x * 10) / 10)
+        : m.usage && !pending ? "not streamed" : runs.length ? "…" : "—";
       const td = cell("td", shown, "score-v");
       if (lead === k) td.classList.add("is-win");
       return td;
