@@ -37,6 +37,12 @@ export function isPrefetchPart(evt) {
   return t === "search_prefetch" || t === "data_search_prefetch";
 }
 
+/** the agent's own search tool, in any of its names (native, per-index, MCP); memory search is not one */
+export function isSearchTool(name) {
+  const n = String(name || "").toLowerCase();
+  return n.includes("search") && !n.includes("memory");
+}
+
 /** the hits array of a tool output, or null */
 export function hitsOf(output) {
   if (!output || typeof output !== "object") return null;
@@ -70,6 +76,7 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
     httpStatus: null,
     cache: null,             // X-Cache, when the backend served a stored answer
     prefetch: null,          // { source: "header" | "stream" | "persisted-pair", detail }
+    prefetchPart: null,      // payload of a data-search_prefetch part, once the backend streams one
     tools: new Map(),        // toolCallId → { name, start, end, error, input }
     toolOrder: [],
     hits: [],                // latest search output
@@ -142,7 +149,10 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
           s.errors.push(evt.errorText || "stream error");
           break;
         default:
-          if (isPrefetchPart(evt) && !s.prefetch) s.prefetch = { source: "stream", detail: evt.data || null };
+          if (isPrefetchPart(evt)) {
+            if (!s.prefetch) s.prefetch = { source: "stream", detail: evt.data || null };
+            if (evt.data && typeof evt.data === "object") s.prefetchPart = evt.data;
+          }
       }
       // persisted_tool_pair streams the fabricated call; its id says what it is
       if (!s.prefetch && typeof evt.toolCallId === "string" && evt.toolCallId.startsWith("prefetch_")) {
@@ -165,6 +175,7 @@ export function viewOf(s) {
       id, name: r.name, start: r.start,
       end: r.end, duration: r.end === null ? null : r.end - r.start,
       error: r.error, prefetched: id.startsWith("prefetch_"),
+      search: !id.startsWith("prefetch_") && isSearchTool(r.name),
     };
   });
   const span = s.total !== null ? s.total
@@ -176,12 +187,32 @@ export function viewOf(s) {
     s.total !== null && { id: "total", label: "total", t: s.total },
   ].filter(Boolean);
   return {
-    status: s.status, span, marks, tools,
+    status: s.status, span, marks, tools, searches: tools.filter((x) => x.search).length,
     ttfb: s.ttfb, ttft: s.ttft, total: s.total,
-    prefetch: s.prefetch, cache: s.cache, errors: s.errors,
+    prefetch: s.prefetch, prefetchPart: s.prefetchPart, cache: s.cache, errors: s.errors,
     hits: s.hits, hitsTool: s.hitsTool, grouped: s.grouped,
     httpStatus: s.httpStatus,
   };
+}
+
+/**
+ * What prefetch did this turn, as far as the page can tell.
+ *
+ *   state: "off" | "waiting" | "used" | "searched" | "skipped"
+ *   searches: the model's own search calls
+ *   confirmed: true only when a data-search_prefetch part said so
+ *
+ * Until the backend streams that part, "used" and "searched" are read off
+ * the tool calls: a prefetch lane whose model never searched used the hits.
+ */
+export function prefetchVerdict(prefetchOn, view) {
+  const searches = view ? view.searches : 0;
+  const part = view && view.prefetchPart;
+  if (!prefetchOn) return { state: "off", searches, confirmed: false, part: null };
+  if (part && part.injected === false) return { state: "skipped", searches, confirmed: true, part };
+  if (searches > 0) return { state: "searched", searches, confirmed: Boolean(part), part };
+  if (!view || view.status !== "done") return { state: "waiting", searches, confirmed: false, part };
+  return { state: "used", searches, confirmed: Boolean(part), part };
 }
 
 /** "412 ms", "1.9 s" — one rule, so the strip and the report agree */

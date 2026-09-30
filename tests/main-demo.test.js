@@ -179,3 +179,40 @@ test("card fields: an array with empty entries yields its first usable image, th
     new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(79.99));
   assert.equal(f.pick(p, usd.image), "https://img.example/h.jpg");
 });
+
+test("search calls: the model's own are counted, the prefetched pair and grouped results are not", async () => {
+  const { isSearchTool } = await load("stream.mjs");
+  assert.ok(isSearchTool("algolia_search_index"));
+  assert.ok(isSearchTool("algolia_search_index_prod_ecom"));
+  assert.ok(!isSearchTool("algolia_grouped_results"));
+  assert.ok(!isSearchTool("algolia_memory_search"));
+  assert.equal((await replay("off")).searches, 1);
+  assert.equal((await replay("tool_pair")).searches, 0);
+  assert.equal((await replay("persisted_tool_pair")).searches, 0, "the prefetched pair is not the model's call");
+});
+
+test("prefetch verdict: off, used, searched again, and a stream part that says skipped", async () => {
+  const { prefetchVerdict, createTurn } = await load("stream.mjs");
+  const { fixtureEvents, prefetchMisses } = await load("fixture.mjs");
+  assert.equal(prefetchVerdict(false, await replay("off")).state, "off");
+  const used = prefetchVerdict(true, await replay("tool_pair"));
+  assert.equal(used.state, "used");
+  assert.equal(used.confirmed, false, "inferred from tool calls, not reported");
+
+  assert.ok(prefetchMisses("a gift for a coffee lover") && !prefetchMisses("rain jacket"));
+  const script = fixtureEvents({ prefetch: "tool_pair", missed: true });
+  const turn = createTurn();
+  for (const [t, e] of script) if (e !== "[DONE]") turn.observe(t, e);
+  turn.finish(script[script.length - 1][0]);
+  const again = prefetchVerdict(true, turn.view());
+  assert.equal(again.state, "searched");
+  assert.equal(again.searches, 1);
+
+  const waiting = createTurn();
+  assert.equal(prefetchVerdict(true, waiting.view()).state, "waiting");
+  waiting.observe(5, { type: "data-search_prefetch", data: { decision: "no_hits", injected: false, nbHits: 0 } });
+  const skipped = prefetchVerdict(true, waiting.view());
+  assert.equal(skipped.state, "skipped");
+  assert.ok(skipped.confirmed);
+  assert.equal(skipped.part.decision, "no_hits");
+});
