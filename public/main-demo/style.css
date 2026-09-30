@@ -168,6 +168,11 @@
 .hits-h { margin: 0; font-size: 13px; color: var(--ink-2); }
 .hits summary { cursor: pointer; }
 .hits[open] summary { margin-bottom: 8px; }
+.lane-note {
+  margin: 0; padding: 8px 12px; font-size: 13px; color: var(--ink-2); max-width: 65ch;
+  background: var(--surface-2); border: 1px dashed var(--line-strong); border-radius: 6px;
+}
+.lane-note b { font-family: var(--mono); color: var(--ink); }
 .hits-h b { font-family: var(--mono); }
 .hits-row {
   display: grid; grid-auto-flow: column; grid-auto-columns: 150px; gap: 10px;
@@ -226,7 +231,11 @@
   --ais-primary-color-rgb: 44, 42, 224;
   font-family: var(--body);
 }
-
+/* grouped results whose products never reached the page draw only their intro,
+   right above an answer that says it again; the lane note explains instead */
+.lane-chat .ais-ChatToolGroupedResults:not(:has(.ais-ChatToolGroupedResults-group, .ais-ChatToolGroupedResults-streaming)) {
+  display: none;
+}
 .lane-chat .ais-ChatInlineLayout, .lane-chat .ais-Chat-container {
   height: 480px; max-height: 70vh; width: 100%; max-width: 100%;
 }

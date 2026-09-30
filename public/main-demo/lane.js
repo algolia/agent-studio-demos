@@ -154,6 +154,15 @@ function PrefetchPart({ part }) {
     title=${[part.toolName, part.index].filter(Boolean).join(" · ")}>${bits.join(" · ") || "reported"}</span>`;
 }
 
+/** carousels hydrate from search results the page received; tool_pair keeps them server-side */
+function OrphanGroups({ view }) {
+  if (!view || view.status !== "done" || !view.grouped || view.hits.length) return null;
+  const picked = (view.grouped.groups || []).reduce((k, g) => k + ((g && g.results) || []).length, 0);
+  if (!picked) return null;
+  return html`<p class="lane-note">The model grouped <b>${picked}</b> prefetched products. This format keeps
+    those hits on the server, so the carousels have nothing to draw.</p>`;
+}
+
 /* ── The config panel ─────────────────────────────────────────── */
 
 function ConfigPanel({ toggles, onChange, resolution, disabled }) {
@@ -368,6 +377,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
           </${InstantSearch}>`
         : html`<${Missing} resolution=${resolution} />`}
     </div>
+    <${OrphanGroups} view=${view} />
     <${HitsPanel} view=${view} Card=${Card} />
     <${Wire} turn=${turn} />
   </div>`;
