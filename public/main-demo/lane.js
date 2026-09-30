@@ -102,6 +102,7 @@ function Timeline({ view, fixture }) {
       ${view.tools.map((x) => html`<li key=${x.id} class=${"is-tool" + (x.error ? " is-error" : "")}>
         <b>${x.duration === null ? "…" : ms(x.duration)}</b> <code>${x.name}</code></li>`)}
       <li class="is-total"><b>${view.total === null ? "…" : ms(view.total)}</b> total</li>
+      ${view.httpStatus >= 400 && html`<li class="is-error">HTTP ${view.httpStatus}</li>`}
       ${view.cache && html`<li class="is-cache">cache ${view.cache}</li>`}
       ${fixture && html`<li class="is-fixture">replayed fixture</li>`}
     </ul>
@@ -229,6 +230,14 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
       }
       tr.headers(now(), { status: res.status, get: (h) => res.headers.get(h) });
       redraw();
+      if (!res.ok) {
+        // an HTTP error is JSON, not SSE: keep its body for the wire drawer
+        const body = await res.clone().text().catch(() => "");
+        tr.observe(now(), { type: "http-error", status: res.status, body: body.slice(0, 500) });
+        tr.finish(now(), { error: `HTTP ${res.status}` });
+        redraw();
+        return res;
+      }
       if (!res.body) { tr.finish(now()); redraw(); return res; }
       const [mine, theirs] = res.body.tee();
       (async () => {

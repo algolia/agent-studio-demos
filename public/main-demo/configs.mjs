@@ -159,7 +159,9 @@ export function resolveVariant(toggles, variants, { commandPrefix } = {}) {
       }
     }
   }
-  return { status: "missing", key, command: provisionCommand([key], commandPrefix) };
+  // a manifest variant needs no --add: the plain run creates every one of them
+  const inManifest = MANIFEST.some((m) => configKey(m.toggles) === key);
+  return { status: "missing", key, command: provisionCommand(inManifest ? [] : [key], commandPrefix) };
 }
 
 /** the exact shell line that creates a missing variant */

@@ -96,6 +96,8 @@
 .tl-legend .is-tool::before { background: var(--accent); }
 .tl-legend .is-tool.is-error::before { background: var(--over); }
 .tl-legend .is-total::before { background: var(--ink); }
+.tl-legend .is-error { color: var(--over); }
+.tl-legend .is-error::before { background: var(--over); }
 .tl-legend .is-fixture { color: var(--crease); }
 .tl-legend .is-fixture::before { background: var(--crease); }
 .tl-legend code { font-size: 12px; overflow-wrap: anywhere; }
@@ -167,7 +169,7 @@
   background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; padding: 10px 12px;
 }
 .btn {
-  font: 600 15px var(--body); color: #fff; background: var(--accent); border: 0;
+  font: 600 15px var(--body); color: var(--surface); background: var(--accent); border: 0;
   border-radius: 6px; padding: 0 18px; cursor: pointer;
 }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 40px; }

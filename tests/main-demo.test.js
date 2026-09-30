@@ -66,7 +66,9 @@ test("resolution: exact agent, prefetch off by query parameter, or a command", a
 
   const miss = c.resolveVariant({ ...c.BASE_TOGGLES, memory: true }, table);
   assert.equal(miss.status, "missing");
-  assert.match(miss.command, /node tools\/main-demo-provision\.mjs --add 'prefetch=off,memory=1,guardrails=0,suggestions=0'$/);
+  assert.match(miss.command, /node tools\/main-demo-provision\.mjs$/, "a manifest variant needs no --add");
+  const combo = c.resolveVariant({ ...c.BASE_TOGGLES, memory: true, suggestions: true }, table);
+  assert.match(combo.command, /node tools\/main-demo-provision\.mjs --add 'prefetch=off,memory=1,guardrails=0,suggestions=1'$/);
   // a prefetch lane never borrows a prefetch-off agent
   assert.equal(c.resolveVariant({ ...c.BASE_TOGGLES, prefetch: "user_fold" }, table).status, "missing");
 });
