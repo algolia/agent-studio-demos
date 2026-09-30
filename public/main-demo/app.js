@@ -26,10 +26,15 @@ const el = {
 const params = new URLSearchParams(location.search);
 
 /* check-copy: off */
+// each one checked against the products index: its keywords find relevant hits.
+// The last two carry a constraint; as a raw sentence (what prefetch searches)
+// they find almost nothing, so that is where prefetch loses.
 const STARTERS = [
+  "A portable bluetooth speaker for the beach",
+  "A fitness tracker with a heart rate monitor",
+  "Noise cancelling headphones for long flights",
   "Compare three wireless headphones under $100",
-  "I need a gift for a coffee lover, budget $50",
-  "Waterproof jacket for a rainy commute",
+  "A video game for a 10 year old, under $30",
 ];
 /* check-copy: on */
 

@@ -57,7 +57,7 @@ const ANSWER = [
  *
  * `missed` plays the other outcome: the prefetched hits were poor, so the
  * model searched anyway and prefetch cost time instead of saving it. The
- * replay treats a gift question as one (see `prefetchMisses`).
+ * replay treats a question with a budget or an age as one (see `prefetchMisses`).
  */
 export function fixtureEvents({ prefetch = "off", query = "", missed = false } = {}) {
   const ev = [];
@@ -105,9 +105,12 @@ export function fixtureEvents({ prefetch = "off", query = "", missed = false } =
   return ev;
 }
 
-/** a vague question: the replay's stand-in for prefetched hits the model rejects */
+/**
+ * A question with a budget or an age in it: as a raw sentence it finds almost
+ * nothing in the products index, so the replay has the model search again.
+ */
 export function prefetchMisses(query) {
-  return /\bgift\b/i.test(String(query || ""));
+  return /\b(under|budget)\b|\byears? old\b/i.test(String(query || ""));
 }
 
 /** a fetch that answers every completions call with the script above */

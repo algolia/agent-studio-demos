@@ -201,7 +201,8 @@ test("search counts: passive for the prefetch, active for the model's own calls,
   assert.equal(used.confirmed, false, "inferred from the config, not reported");
   assert.equal(searchCounts(true, await replay("persisted_tool_pair")).confirmed, true, "the pair is on the wire");
 
-  assert.ok(prefetchMisses("a gift for a coffee lover") && !prefetchMisses("rain jacket"));
+  assert.ok(prefetchMisses("A video game for a 10 year old, under $30"));
+  assert.ok(!prefetchMisses("A portable bluetooth speaker for the beach"));
   const script = fixtureEvents({ prefetch: "tool_pair", missed: true });
   const turn = createTurn();
   for (const [t, e] of script) if (e !== "[DONE]") turn.observe(t, e);
