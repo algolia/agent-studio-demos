@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What is Agent Studio?</title>
+<meta name="description" content="A shopping assistant built on Agent Studio: search tool, grouped results, and a race between two agent setups on the same question.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/instantsearch.css@8.23.0/components/chat-min.css">
+<link rel="stylesheet" href="../shared/tokens.css">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:,">
+<script>
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
+    var dark = saved ? saved === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+
+<!-- No bundler: every package resolves from esm.sh at a pinned version.
+     react and react-dom are external to every other package, so the whole
+     page shares one React. -->
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19.1.1",
+    "react/": "https://esm.sh/react@19.1.1/",
+    "react-dom": "https://esm.sh/react-dom@19.1.1?external=react",
+    "react-dom/client": "https://esm.sh/react-dom@19.1.1/client?external=react",
+    "react-instantsearch": "https://esm.sh/react-instantsearch@7.50.1?external=react,react-dom",
+    "algoliasearch/lite": "https://esm.sh/algoliasearch@5.59.0/lite",
+    "htm": "https://esm.sh/htm@3.1.1"
+  }
+}
+</script>
+<script src="../shared/config.js" onerror="window.DEMO_CONFIG = window.DEMO_CONFIG || null"></script>
+</head>
+<body>
+<a class="skip" href="#lanes">Skip to the demo</a>
+
+<header class="hero wrap">
+  <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
+  <h1>What is Agent Studio?</h1>
+  <p class="lede">An agent that searches your index, picks the best matches and explains them&nbsp;— here as a shopping assistant.</p>
+</header>
+
+<main class="wrap" id="lanes-wrap">
+  <div class="modebar">
+    <div class="seg" role="tablist" aria-label="Mode">
+      <button type="button" role="tab" id="mode-chat" aria-selected="true" data-mode="chat">Chat</button>
+      <button type="button" role="tab" id="mode-race" aria-selected="false" data-mode="race">RAG race</button>
+    </div>
+    <p class="status" id="status" hidden></p>
+  </div>
+
+  <div class="lanes" id="lanes" data-mode="chat">
+    <section class="lane" id="lane-a" aria-label="Lane A"></section>
+    <section class="lane" id="lane-b" aria-label="Lane B" hidden></section>
+  </div>
+
+  <form class="race-input" id="race-form" hidden autocomplete="off">
+    <label class="sr-only" for="race-text">Ask both lanes</label>
+    <input id="race-text" type="text" placeholder="Ask both agents the same question">
+    <button type="submit" class="btn">Race</button>
+  </form>
+  <p class="chips" id="chips"></p>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
