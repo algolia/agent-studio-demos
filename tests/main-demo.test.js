@@ -318,4 +318,8 @@ test("edited configs: defaults pruned, hashed by content, resolved or named for 
   const off = c.customAgentBody(base, c.effectiveBlocks(c.BASE_TOGGLES, { sendUsage: true }));
   assert.equal(off.config.search_prefetch, false, "a disabled prefetch block is stored as false");
   assert.equal(off.config.sendUsage, true);
+  // what the backend stores reads back as the same hash
+  const stored = { ...body.config, enableAlgoliaMcp: true };
+  assert.equal(c.customKey(c.blocksFromConfig(stored)), c.customKey(blocks));
+  assert.equal(c.customKey(c.blocksFromConfig(off.config)), c.customKey(c.effectiveBlocks(c.BASE_TOGGLES, { sendUsage: true })));
 });

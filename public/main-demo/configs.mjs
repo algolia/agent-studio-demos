@@ -363,3 +363,15 @@ export function customAgentBody(base, blocks, name = customName(blocks)) {
   if (own.search_prefetch && own.search_prefetch.enabled === false) own.search_prefetch = false;
   return { ...baseTemplate(base), name, config: { ...config, ...own } };
 }
+
+/** a stored agent config read back as the blocks it was hashed from (the inverse of customAgentBody) */
+export function blocksFromConfig(config) {
+  const c = config || {};
+  const out = {};
+  for (const b of BLOCKS) {
+    if (b.scalar) { if (c[b.id] === true) out[b.id] = true; continue; }
+    const raw = b.id === "search_prefetch" ? (c.search_prefetch !== undefined ? c.search_prefetch : c.searchPrefetch) : c[b.id];
+    out[b.id] = blockFrom(b.id, blockValues(b.id, raw === false || raw === undefined ? { enabled: false } : raw === true ? { enabled: true } : raw));
+  }
+  return out;
+}
