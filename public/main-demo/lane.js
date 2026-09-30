@@ -109,7 +109,7 @@ function Timeline({ view, fixture }) {
     <ul class="tl-legend tl-tools">
       <li class="is-count"><b>${view.searches}</b> ${view.searches === 1 ? "search call" : "search calls"}</li>
       ${numbered.map((x) => html`<li key=${x.id} class=${"is-tool" + kind(x)}>
-        ${x.nth ? html`<span class="tl-nth">${x.nth}</span>` : ""}<b>${x.duration === null ? "…" : ms(x.duration)}</b> <code>${x.name}</code></li>`)}
+        <b>${x.duration === null ? "…" : ms(x.duration)}</b> <code>${x.name}</code></li>`)}
     </ul>
   </div>`;
 }

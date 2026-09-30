@@ -171,9 +171,11 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
 export function viewOf(s) {
   const tools = s.toolOrder.map((id) => {
     const r = s.tools.get(id);
+    // a call still open when the turn ended stops at the turn's end, never past it
+    const end = r.end === null ? (s.total !== null ? s.total : null) : Math.min(r.end, s.total ?? r.end);
     return {
-      id, name: r.name, start: r.start,
-      end: r.end, duration: r.end === null ? null : r.end - r.start,
+      id, name: r.name, start: r.start, open: r.end === null,
+      end, duration: end === null ? null : Math.max(0, end - r.start),
       error: r.error, prefetched: id.startsWith("prefetch_"),
       search: !id.startsWith("prefetch_") && isSearchTool(r.name),
     };

@@ -216,3 +216,18 @@ test("prefetch verdict: off, used, searched again, and a stream part that says s
   assert.ok(skipped.confirmed);
   assert.equal(skipped.part.decision, "no_hits");
 });
+
+test("no tool outlasts its turn: an open call closes at the turn's end", async () => {
+  const { createTurn } = await load("stream.mjs");
+  const turn = createTurn();
+  turn.headers(130, { status: 200, get: () => null });
+  turn.observe(788, { type: "tool-input-start", toolCallId: "c1", toolName: "algolia_search_index_products" });
+  turn.observe(2239, { type: "tool-output-available", toolCallId: "c1", output: { hits: [] } });
+  turn.observe(2865, { type: "tool-input-start", toolCallId: "c2", toolName: "algolia_grouped_results" });
+  turn.finish(5686);
+  const v = turn.view();
+  assert.equal(Math.round(v.tools[0].duration), 1451);
+  assert.equal(v.tools[1].duration, 5686 - 2865, "never answered: stops at the turn's end");
+  assert.ok(v.tools[1].open);
+  for (const x of v.tools) assert.ok(x.start + x.duration <= v.total, `${x.name} ends inside the turn`);
+});

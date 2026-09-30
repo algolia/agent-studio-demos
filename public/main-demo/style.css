@@ -147,15 +147,11 @@
 .tl-legend .is-ttft::before { background: var(--crease); }
 .tl-legend .is-tool::before { background: var(--ink-3); opacity: 0.5; }
 .tl-legend .is-tool.is-prefetch::before { background: var(--ok); opacity: 1; }
-.tl-legend .is-tool.is-search::before { display: none; }
+.tl-legend .is-tool.is-search::before { background: var(--accent); opacity: 1; }
 .tl-legend .is-tool.is-error::before { background: var(--over); opacity: 1; }
 .tl-tools { margin-top: 4px; }
 .tl-legend .is-count::before { display: none; }
 .tl-legend .is-count { color: var(--ink); font-weight: 500; }
-.tl-nth {
-  display: inline-grid; place-items: center; width: 16px; height: 16px; margin-right: 5px; border-radius: 3px;
-  background: var(--accent); color: var(--surface); font: 600 10px/1 var(--mono); vertical-align: 1px;
-}
 .tl-legend .is-total::before { background: var(--ink); }
 .tl-legend .is-error { color: var(--over); }
 .tl-legend .is-error::before { background: var(--over); }
