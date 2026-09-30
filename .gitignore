@@ -20,3 +20,6 @@ Thumbs.db
 # Cloudflare / wrangler
 .wrangler/
 node_modules/
+
+# Built by tools/main-demo-provision.mjs against one backend — local state, not source.
+public/main-demo/variants.json
