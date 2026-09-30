@@ -27,6 +27,30 @@
 .seg button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
 .status { margin: 0; font-size: 13px; color: var(--ink-3); flex: 1 1 280px; min-width: 0; overflow-wrap: anywhere; }
 
+/* ── Scoreboard ────────────────────────────────────────────────── */
+
+.score { margin: 0 0 14px; }
+.score table {
+  border-collapse: collapse; font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.score th, .score td { padding: 5px 28px 5px 0; text-align: left; font-weight: 400; white-space: nowrap; }
+.score thead th { font-size: 13px; color: var(--ink-2); font-weight: 600; border-bottom: 1px solid var(--line); }
+.score tbody tr + tr th, .score tbody tr + tr td { border-top: 1px solid var(--line); }
+.score .score-m { color: var(--ink-2); }
+.score th[title] { text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; cursor: help; }
+.score-v { font-family: var(--mono); color: var(--ink-2); }
+.score-v.is-win { color: var(--ink); font-weight: 600; }
+.score-d { color: var(--ink-3); font-size: 13px; padding-right: 0; }
+.score-d.is-win { color: var(--ok); font-weight: 500; }
+.score-pf { font-size: 11px; font-weight: 500; color: var(--ink-3); }
+.score-pf.is-on { color: var(--accent); }
+.score-note { margin: 4px 0 0; font-size: 12px; color: var(--ink-3); }
+@media (max-width: 480px) {
+  .score th, .score td { padding-right: 12px; font-size: 13px; }
+  .score-pf { display: none; }
+}
+
 /* ── Lanes ─────────────────────────────────────────────────────── */
 
 .lanes { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
