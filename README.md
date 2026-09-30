@@ -9,6 +9,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 
 | Demo | Path | Status |
 | --- | --- | --- |
+| What is Agent Studio? | `/main-demo/` | Local |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
 
@@ -30,6 +31,7 @@ public/                     the deployable root — this is what Cloudflare Page
   assets/convs/             three seeded conversations, plus the manifest every figure derives from
   chat-with-book/           index.html + app.js + style.css
   infinite-conversation/    index.html + app.js + style.css
+  main-demo/                 index.html + app.js + lane.js + style.css, and three .mjs modules
 scripts/                    node, zero dependencies — see § The shelf and § The search index
   fetch-books.js            download, strip and count the texts, from either source
   wikisource.js             wikitext → prose, for the one work not on Gutenberg
@@ -38,7 +40,8 @@ scripts/                    node, zero dependencies — see § The shelf and § 
   index-settings.json       the index settings, as reviewable data
   index-settings-languages.json  the per-language overlay on those settings
   measure-tokens.js         characters per token, per book, via /context/trim
-tools/                      node, zero dependencies — bakes the seeded conversations
+tools/                      node, zero dependencies — bakes the seeded conversations,
+                            and main-demo-provision.mjs creates the main demo's agents
 tests/                      node:test smoke tests — no framework, no install
 eslint.config.js            flat config, rules written out, zero dependencies
 .github/workflows/          ci.yml (lint + tests), deploy.yml (Cloudflare Pages)
@@ -128,6 +131,38 @@ Open a file over `http://`, not `file://` — the demos load their config and sh
 `config.example.js` documents every field. It is committed; `config.js` is in `.gitignore` at every depth and must never be committed.
 
 **These pages call the API directly from the browser** so the wire log can show you every request. That means the key is visible to anyone who opens devtools. Use a key scoped to exactly what the demo needs, and put a backend in front of it before shipping anything like this.
+
+## The main demo
+
+`/main-demo/` answers "What is Agent Studio?" with a shopping assistant: the
+InstantSearch [Chat widget](https://www.algolia.com/doc/api-reference/widgets/chat/react)
+bound to an agent with a search tool and the Grouped Results tool. **RAG race**
+mode runs two lanes side by side on one question, each with its own timeline
+(first byte, first token, every tool call, total).
+
+It is the one page here built on ES modules: React 19, React InstantSearch
+7.50.1 and `algoliasearch` 5.59.0 load from esm.sh through an import map, with
+pinned versions and no build step.
+
+A lane's toggles (search prefetch and its injection format, memory,
+guardrails, suggestions) select an **agent variant**; they never PATCH a live
+agent. Create the variants once:
+
+```bash
+MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs
+```
+
+The script copies `main-demo-base`, layers each variant's config on top, adopts
+any agent that already carries the variant's name, and writes
+`public/main-demo/variants.json` (gitignored). A combination outside the manifest
+is added with `--add 'prefetch=user_fold,memory=1,guardrails=0,suggestions=0'` —
+the page prints that exact line when a lane asks for a variant nobody created.
+Prefetch off on a prefetch agent is applied per request with
+`?searchPrefetch=false`, and the lane says so.
+
+Fill `mainDemo` in `public/shared/config.js` (see `config.example.js`). With no
+backend answering at `mainDemo.host`, or with `?fixture=1`, the lanes replay a
+fixture stream and label every number as a replay.
 
 ## Checks
 
