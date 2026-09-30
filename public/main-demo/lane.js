@@ -17,8 +17,11 @@ import { createRoot } from "react-dom/client";
 import htm from "htm";
 import { InstantSearch, Chat, ChatInlineLayout } from "react-instantsearch";
 import {
-  TOGGLES, PREFETCH_FORMATS, normalize, resolveVariant, completionQuery, agentName,
+  TOGGLES, PREFETCH_FORMATS, BLOCKS, normalize, resolveVariant, completionQuery, agentName,
+  blockValues, blockFrom, validateBlock, toggleBlocks, effectiveBlocks, isCustom, canonical,
+  resolveCustom, customKey, customName,
 } from "./configs.mjs";
+import { apiClient, ensureCustomAgent, loadLocal, saveLocal } from "./agents.mjs";
 import { createSseParser, createTurn, ms, searchCounts } from "./stream.mjs";
 import { createFixtureFetch } from "./fixture.mjs";
 import { pick, imageCandidates, fieldsFrom, priceText, lineText } from "./fields.mjs";
@@ -163,36 +166,137 @@ function OrphanGroups({ view }) {
 
 /* ── The config panel ─────────────────────────────────────────── */
 
-function ConfigPanel({ toggles, onChange, resolution, disabled }) {
-  const set = (k, v) => onChange(normalize({ ...toggles, [k]: v }));
+const BLOCK_OF = { prefetch: "search_prefetch", memory: "memory", guardrails: "guardrail", suggestions: "suggestions" };
+
+function Field({ f, value, error, onValue, disabled }) {
+  const id = useMemo(() => `f-${Math.random().toString(36).slice(2, 9)}`, []);
+  let input;
+  if (f.type === "bool") {
+    input = html`<input id=${id} type="checkbox" checked=${Boolean(value)} disabled=${disabled}
+      onChange=${(e) => onValue(e.target.checked)} />`;
+  } else if (f.type === "int") {
+    input = html`<input id=${id} type="number" min=${f.min} max=${f.max} step="1" value=${value ?? ""} disabled=${disabled}
+      onChange=${(e) => onValue(e.target.value === "" ? null : Number(e.target.value))} />`;
+  } else if (f.type === "enum") {
+    input = html`<select id=${id} value=${value} disabled=${disabled} onChange=${(e) => onValue(e.target.value)}>
+      ${f.options.map((o) => html`<option key=${o} value=${o}>${o}</option>`)}</select>`;
+  } else if (f.type === "instruction") {
+    const mode = value === true ? "default" : typeof value === "string" && value ? "custom" : "off";
+    input = html`<span class="fld-pair">
+      <select id=${id} value=${mode} disabled=${disabled}
+        onChange=${(e) => onValue(e.target.value === "default" ? true : e.target.value === "off" ? false : " ")}>
+        <option value="off">off</option><option value="default">default sentence</option><option value="custom">custom</option>
+      </select>
+      ${mode === "custom" && html`<input type="text" aria-label="Instruction text" value=${String(value).trim()} disabled=${disabled}
+        onChange=${(e) => onValue(e.target.value || " ")} />`}</span>`;
+  } else if (f.type === "json") {
+    input = html`<${JsonField} id=${id} value=${value} disabled=${disabled} onValue=${onValue} />`;
+  } else {
+    input = html`<input id=${id} type="text" value=${value ?? ""} placeholder=${f.hint || ""} disabled=${disabled}
+      onChange=${(e) => onValue(e.target.value === "" ? null : e.target.value)} />`;
+  }
+  return html`<div class=${"fld" + (error ? " is-bad" : "")}>
+    <label for=${id}>${f.label}</label>${input}
+    ${(error || (f.hint && f.type === "int")) && html`<span class="fld-hint">${error || f.hint}</span>`}
+  </div>`;
+}
+
+/** a JSON list typed as text; only a list that parses reaches the block */
+function JsonField({ id, value, onValue, disabled }) {
+  const [text, setText] = useState(() => JSON.stringify(value ?? [], null, 1));
+  return html`<textarea id=${id} rows="3" value=${text} disabled=${disabled} spellcheck="false"
+    onChange=${(e) => {
+      setText(e.target.value);
+      try { onValue(JSON.parse(e.target.value)); } catch (_) { onValue(undefined); }
+    }}></textarea>`;
+}
+
+/** every field of one block; Apply hands back the block in its stored form */
+function BlockEditor({ blockId, stored, edited, onApply, onReset, onClose, disabled }) {
+  const block = BLOCKS.find((b) => b.id === blockId);
+  const [values, setValues] = useState(() => blockValues(blockId, stored));
+  const errors = validateBlock(blockId, values);
+  const bad = Object.keys(errors).length > 0;
+  return html`<fieldset class="editor">
+    <legend>${block.label}</legend>
+    <div class="editor-grid">
+      ${block.fields.map((f) => html`<${Field} key=${f.path || "v"} f=${f} value=${values[f.path]} error=${errors[f.path]}
+        disabled=${disabled} onValue=${(v) => setValues({ ...values, [f.path]: v })} />`)}
+    </div>
+    <div class="editor-actions">
+      <button type="button" class="btn-quiet is-primary" disabled=${disabled || bad}
+        onClick=${() => onApply(blockFrom(blockId, values))}>Apply</button>
+      ${edited && html`<button type="button" class="btn-quiet" disabled=${disabled} onClick=${onReset}>Reset to toggle</button>`}
+      <button type="button" class="btn-quiet" onClick=${onClose}>Close</button>
+    </div>
+  </fieldset>`;
+}
+
+function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled, open, setOpen, editing, setEditing }) {
+  const blocks = effectiveBlocks(toggles, edits);
+  const enabledOf = (id) => (id === "sendUsage" ? Boolean(blocks.sendUsage) : Boolean(blocks[id] && blocks[id].enabled));
+  const flip = (tgId, id, on) => {
+    if (id === "sendUsage") return onEdits({ ...(edits || {}), sendUsage: on });
+    if (edits && edits[id]) return onEdits({ ...edits, [id]: { ...edits[id], enabled: on } });
+    if (tgId === "prefetch") return onToggles(normalize({ ...toggles, prefetch: on ? (toggles.lastFormat || "tool_pair") : "off" }));
+    return onToggles(normalize({ ...toggles, [tgId]: on }));
+  };
+  const setFormat = (fmt) => {
+    if (edits && edits.search_prefetch) {
+      const v = { ...blockValues("search_prefetch", edits.search_prefetch), injectionFormat: fmt };
+      return onEdits({ ...edits, search_prefetch: blockFrom("search_prefetch", v) });
+    }
+    return onToggles(normalize({ ...toggles, prefetch: fmt }));
+  };
   const entry = resolution.entry || {};
+  const custom = Boolean(resolution.custom || resolution.status === "custom");
   const how = resolution.status === "agent" ? html`agent <code>${entry.name || agentName(toggles)}</code>`
     : resolution.status === "query" ? html`<code>${entry.name}</code> + <code>?searchPrefetch=false</code>`
-      : html`no agent yet`;
-  return html`<details class="cfg">
-    <summary><span class="cfg-h">Config</span> <span class="cfg-how">${how}</span></summary>
+      : resolution.status === "custom" ? html`<code>${resolution.name}</code> not created yet`
+        : html`no agent yet`;
+  const rows = [...TOGGLES.map((tg) => ({ tg, id: BLOCK_OF[tg.id], label: tg.label })),
+    { tg: null, id: "sendUsage", label: "Stream token usage" }];
+  const sp = blocks.search_prefetch || {};
+  return html`<details class="cfg" open=${open} onToggle=${(e) => setOpen(e.target.open)}>
+    <summary><span class="cfg-h">Config</span>${custom && html` <span class="badge is-custom">edited</span>`}
+      <span class="cfg-how">${how}</span></summary>
     <div class="cfg-body">
-      ${TOGGLES.map((tg) => tg.kind === "prefetch"
-        ? html`<div class="cfg-row" key=${tg.id}>
-            <label class="sw"><input type="checkbox" disabled=${disabled}
-              checked=${toggles.prefetch !== "off"}
-              onChange=${(e) => set("prefetch", e.target.checked ? (toggles.lastFormat || "tool_pair") : "off")} />
-              <span>${tg.label}</span></label>
-            <select aria-label="Injection format" disabled=${disabled || toggles.prefetch === "off"}
-              value=${toggles.prefetch === "off" ? (toggles.lastFormat || "tool_pair") : toggles.prefetch}
-              onChange=${(e) => set("prefetch", e.target.value)}>
-              ${PREFETCH_FORMATS.map((f) => html`<option key=${f} value=${f}>${f}</option>`)}
-            </select>
-          </div>`
-        : html`<div class="cfg-row" key=${tg.id}>
-            <label class="sw"><input type="checkbox" disabled=${disabled} checked=${toggles[tg.id]}
-              onChange=${(e) => set(tg.id, e.target.checked)} /><span>${tg.label}</span></label>
-          </div>`)}
+      ${rows.map(({ tg, id, label }) => html`<div class="cfg-block" key=${id}>
+        <div class="cfg-row">
+          <label class="sw"><input type="checkbox" disabled=${disabled} checked=${enabledOf(id)}
+            onChange=${(e) => flip(tg && tg.id, id, e.target.checked)} /><span>${label}</span></label>
+          ${id === "search_prefetch" && html`<select aria-label="Injection format" disabled=${disabled || !enabledOf(id)}
+            value=${sp.enabled ? sp.injectionFormat || "tool_pair" : toggles.lastFormat || "tool_pair"}
+            onChange=${(e) => setFormat(e.target.value)}>
+            ${PREFETCH_FORMATS.map((f) => html`<option key=${f} value=${f}>${f}</option>`)}
+          </select>`}
+          ${edits && edits[id] !== undefined && id !== "sendUsage" && html`<span class="badge is-custom">edited</span>`}
+          ${id !== "sendUsage" && html`<button type="button" class="btn-link" aria-expanded=${editing === id}
+            onClick=${() => setEditing(editing === id ? null : id)}>${editing === id ? "Close" : "Edit"}</button>`}
+        </div>
+        ${editing === id && html`<${BlockEditor} key=${id + canonical(blocks[id] ?? null)} blockId=${id}
+          stored=${blocks[id]} edited=${Boolean(edits && edits[id])} disabled=${disabled}
+          onApply=${(b) => { onEdits({ ...(edits || {}), [id]: b }); setEditing(null); }}
+          onReset=${() => { const n = { ...edits }; delete n[id]; onEdits(n); setEditing(null); }}
+          onClose=${() => setEditing(null)} />`}
+      </div>`)}
       <p class="cfg-model">${entry.model
         ? html`<code>${entry.model}</code>${entry.provider ? html` · ${entry.provider}` : ""}`
-        : "model unknown"}</p>
+        : custom ? "model, tools and instructions copied from main-demo-base" : "model unknown"}</p>
     </div>
   </details>`;
+}
+
+/** an edited config with no agent yet: make it here, or copy the command */
+function CreateAgent({ resolution, state, onCreate }) {
+  return html`<div class="missing">
+    <p><b>No agent for this config yet.</b> The page creates <code>${resolution.name}</code> from
+      main-demo-base with these blocks, and never changes an agent a lane already runs.</p>
+    <button type="button" class="btn" disabled=${state.busy} onClick=${onCreate}>
+      ${state.busy ? "Creating…" : `Create ${resolution.name}`}</button>
+    ${state.error && html`<p class="missing-err" role="alert">${state.error}</p>`}
+    <details class="missing-cmd"><summary>Or from a shell</summary><pre><code>${resolution.command}</code></pre></details>
+  </div>`;
 }
 
 /* ── Hits, and the wire ───────────────────────────────────────── */
@@ -248,6 +352,11 @@ const STUB_CLIENT = {
 
 function LaneApp({ controller, label, cfg, variants, searchClient, initialToggles, fixture, onView }) {
   const [toggles, setToggles] = useState(() => normalize(initialToggles));
+  const [edits, setEdits] = useState(null);          // edited config blocks over the toggles, or null
+  const [local, setLocal] = useState(() => loadLocal());
+  const [cfgOpen, setCfgOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState({ busy: false, error: "" });
   const [turn, setTurn] = useState(null);
   const [epoch, setEpoch] = useState(0);   // bumped by clear(): a fresh chat, a fresh conversation
   const seq = useRef(0);                    // turns started in this lane, for the page's race runner
@@ -255,7 +364,15 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
   const chatRef = useRef(null);
   const fields = useMemo(() => fieldsFrom(cfg), [cfg]);
   const Card = useMemo(() => makeCard(fields), [fields]);
-  const resolution = useMemo(() => resolveVariant(toggles, variants), [toggles, variants]);
+  const custom = isCustom(toggles, edits);
+  const blocks = useMemo(() => effectiveBlocks(toggles, edits), [toggles, edits]);
+  const resolution = useMemo(() => {
+    if (!custom) return resolveVariant(toggles, variants);
+    if (fixture) return { status: "agent", key: customKey(blocks), agentId: "fixture", entry: { name: customName(blocks) }, custom: true };
+    return resolveCustom(blocks, variants, local);
+  }, [custom, toggles, variants, blocks, local, fixture]);
+  const sp = blocks.search_prefetch || {};
+  const prefetchFormat = sp.enabled ? sp.injectionFormat || "tool_pair" : "off";
 
   // one redraw per frame, however fast the events come
   const frame = useRef(0);
@@ -265,10 +382,10 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
   }, []);
 
   const transport = useMemo(() => {
-    if (resolution.status === "missing") return null;
+    if (resolution.status === "missing" || resolution.status === "custom") return null;
     const q = new URLSearchParams(completionQuery(resolution)).toString();
     const api = `${cfg.host}/1/agents/${resolution.agentId}/completions?${q}`;
-    const upstream = fixture ? createFixtureFetch({ prefetch: toggles.prefetch }) : window.fetch.bind(window);
+    const upstream = fixture ? createFixtureFetch({ prefetch: prefetchFormat }) : window.fetch.bind(window);
     const observed = async (url, init) => {
       let text = "";
       try {
@@ -331,7 +448,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
       },
       fetch: observed,
     };
-  }, [resolution.status, resolution.agentId, cfg, fixture, toggles.prefetch, redraw]);
+  }, [resolution.status, resolution.agentId, cfg, fixture, prefetchFormat, redraw]);
 
   // the page drives the lane through this object, never through React
   useEffect(() => {
@@ -351,9 +468,33 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     setToggles({ ...next, lastFormat });
     setTurn(null);
   };
+  const onEdits = (next) => {
+    // an edit equal to what the toggles already write is no edit
+    const plain = toggleBlocks(toggles);
+    const kept = {};
+    for (const [k, v] of Object.entries(next || {})) {
+      if (k === "sendUsage" ? v : canonical(v) !== canonical(plain[k])) kept[k] = v;
+    }
+    setEdits(Object.keys(kept).length ? kept : null);
+    setCreating({ busy: false, error: "" });
+    setTurn(null);
+  };
+  const create = async () => {
+    setCreating({ busy: true, error: "" });
+    try {
+      const call = apiClient({ host: cfg.host, appId: cfg.appId, apiKey: cfg.agentStudioApiKey });
+      const made = await ensureCustomAgent(call, blocks);
+      setLocal(saveLocal(resolution.key, { agentId: made.agentId, name: made.name, createdAt: new Date().toISOString() }));
+      setCreating({ busy: false, error: "" });
+    } catch (e) {
+      const why = e.status === 401 || e.status === 403 ? "This key cannot create agents: run the command below." : e.message;
+      setCreating({ busy: false, error: why });
+    }
+  };
+  const openEditor = (id) => { setCfgOpen(true); setEditing(id); };
   const busy = view && (view.status === "sending" || view.status === "streaming");
   const chatKey = `${resolution.status}:${resolution.agentId || resolution.key}:${fixture ? "fx" : "live"}:${epoch}`;
-  const prefetchOn = toggles.prefetch !== "off";
+  const prefetchOn = prefetchFormat !== "off";
   const counts = searchCounts(prefetchOn, view);
   const evidence = view && view.prefetch;
   useEffect(() => { if (onView) onView({ label, view, counts, prefetchOn, seq: seq.current }); });
@@ -362,14 +503,18 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     <header class="lane-h">
       <div class="lane-id">
         <p class="lane-label">${label}</p>
-        <span class=${"pf-pill" + (prefetchOn ? " is-on" : "")}
-          title=${evidence ? `${evidence.source}: ${String(evidence.detail || "")}` : ""}>
-          ${prefetchOn ? html`Prefetch on <code>${toggles.prefetch}</code>` : "Prefetch off"}</span>
+        <button type="button" class=${"pf-pill" + (prefetchOn ? " is-on" : "")} aria-haspopup="true"
+          title=${evidence ? `${evidence.source}: ${String(evidence.detail || "")}` : "Edit the prefetch block"}
+          onClick=${() => openEditor("search_prefetch")}>
+          ${prefetchOn ? html`Prefetch on <code>${prefetchFormat}</code>` : "Prefetch off"}
+          ${edits && edits.search_prefetch && html`<span class="pf-edited">edited</span>`}</button>
         ${resolution.status === "query" && html`<span class="badge is-query">off per request</span>`}
       </div>
       <${Searches} counts=${counts} view=${view} prefetchOn=${prefetchOn} />
     </header>
-    <${ConfigPanel} toggles=${toggles} onChange=${onToggles} resolution=${resolution} disabled=${busy} />
+    <${ConfigPanel} toggles=${toggles} edits=${edits} onToggles=${onToggles} onEdits=${onEdits}
+      resolution=${resolution} disabled=${busy} open=${cfgOpen} setOpen=${setCfgOpen}
+      editing=${editing} setEditing=${setEditing} />
     <${Timeline} view=${view} fixture=${fixture} />
     <div class="lane-chat">
       ${transport
@@ -382,7 +527,9 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
                 prompt: { textareaPlaceholder: "Ask about a product" },
               }} />
           </${InstantSearch}>`
-        : html`<${Missing} resolution=${resolution} />`}
+        : resolution.status === "custom"
+          ? html`<${CreateAgent} resolution=${resolution} state=${creating} onCreate=${create} />`
+          : html`<${Missing} resolution=${resolution} />`}
     </div>
     <${OrphanGroups} view=${view} />
     <${HitsPanel} view=${view} Card=${Card} />
