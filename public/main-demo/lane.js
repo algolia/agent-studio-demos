@@ -249,6 +249,8 @@ const STUB_CLIENT = {
 function LaneApp({ controller, label, cfg, variants, searchClient, initialToggles, fixture, onView }) {
   const [toggles, setToggles] = useState(() => normalize(initialToggles));
   const [turn, setTurn] = useState(null);
+  const [epoch, setEpoch] = useState(0);   // bumped by clear(): a fresh chat, a fresh conversation
+  const seq = useRef(0);                    // turns started in this lane, for the page's race runner
   const [, setTick] = useState(0);
   const chatRef = useRef(null);
   const fields = useMemo(() => fieldsFrom(cfg), [cfg]);
@@ -277,6 +279,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
       const t0 = performance.now();
       const now = () => performance.now() - t0;
       const tr = createTurn({ text });
+      seq.current += 1;
       setTurn(tr);
       let res;
       try {
@@ -338,7 +341,8 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
       return true;
     };
     controller.ready = () => Boolean(chatRef.current);
-    return () => { controller.send = () => false; controller.ready = () => false; };
+    controller.clear = () => { chatRef.current = null; setTurn(null); setEpoch((n) => n + 1); };
+    return () => { controller.send = () => false; controller.ready = () => false; controller.clear = () => {}; };
   });
 
   const view = turn ? turn.view() : null;
@@ -348,11 +352,11 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     setTurn(null);
   };
   const busy = view && (view.status === "sending" || view.status === "streaming");
-  const chatKey = `${resolution.status}:${resolution.agentId || resolution.key}:${fixture ? "fx" : "live"}`;
+  const chatKey = `${resolution.status}:${resolution.agentId || resolution.key}:${fixture ? "fx" : "live"}:${epoch}`;
   const prefetchOn = toggles.prefetch !== "off";
   const counts = searchCounts(prefetchOn, view);
   const evidence = view && view.prefetch;
-  useEffect(() => { if (onView) onView({ label, view, counts, prefetchOn }); });
+  useEffect(() => { if (onView) onView({ label, view, counts, prefetchOn, seq: seq.current }); });
 
   return html`<div class=${"lane-inner" + (prefetchOn ? " has-prefetch" : "")}>
     <header class="lane-h">
@@ -388,11 +392,12 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
 
 /**
  * Mount one lane. Returns the controller the page drives:
- *   { send(text) → boolean, ready() → boolean, unmount() }
- * `onView({ label, view, counts, prefetchOn })` runs after every redraw.
+ *   { send(text) → boolean, ready() → boolean, clear(), unmount() }
+ * `onView({ label, view, counts, prefetchOn, seq })` runs after every redraw;
+ * `seq` counts the turns this lane has started.
  */
 export function mountLane(el, { label, cfg, variants, searchClient, initialToggles, fixture, onView }) {
-  const controller = { send: () => false, ready: () => false };
+  const controller = { send: () => false, ready: () => false, clear: () => {} };
   const root = createRoot(el);
   root.render(html`<${LaneApp} controller=${controller} label=${label} cfg=${cfg} variants=${variants}
     searchClient=${searchClient} initialToggles=${initialToggles} fixture=${fixture} onView=${onView} />`);

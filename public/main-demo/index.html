@@ -67,10 +67,23 @@
     <section class="lane" id="lane-b" aria-label="Lane B" hidden></section>
   </div>
 
-  <form class="race-input" id="race-form" hidden autocomplete="off">
-    <label class="sr-only" for="race-text">Ask both lanes</label>
-    <input id="race-text" type="text" placeholder="Ask both agents the same question">
-    <button type="submit" class="btn">Race</button>
+  <form class="race-bar" id="race-form" hidden autocomplete="off">
+    <div class="race-row">
+      <label class="sr-only" for="race-text">Ask both lanes</label>
+      <input id="race-text" type="text" placeholder="Ask both agents the same question">
+      <button type="submit" class="btn" id="race-go">Race</button>
+    </div>
+    <div class="race-row race-ctl">
+      <div class="seg seg-sm" role="group" aria-label="Runs per race">
+        <button type="button" data-times="1" aria-pressed="true">×1</button>
+        <button type="button" data-times="2" aria-pressed="false">×2</button>
+        <button type="button" data-times="3" aria-pressed="false">×3</button>
+        <button type="button" data-times="5" aria-pressed="false">×5</button>
+      </div>
+      <button type="button" class="btn-quiet" id="race-rerun" disabled>Rerun ×1</button>
+      <button type="button" class="btn-quiet" id="race-clear">Clear both</button>
+      <p class="race-state" id="race-state" aria-live="polite"></p>
+    </div>
   </form>
   <p class="chips" id="chips"></p>
 </main>

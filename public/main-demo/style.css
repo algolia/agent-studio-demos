@@ -34,7 +34,8 @@
   border-collapse: collapse; font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
-.score th, .score td { padding: 5px 28px 5px 0; text-align: left; font-weight: 400; white-space: nowrap; }
+.score { overflow-x: auto; }
+.score th, .score td { padding: 5px 24px 5px 0; text-align: left; font-weight: 400; white-space: nowrap; }
 .score thead th { font-size: 13px; color: var(--ink-2); font-weight: 600; border-bottom: 1px solid var(--line); }
 .score tbody tr + tr th, .score tbody tr + tr td { border-top: 1px solid var(--line); }
 .score .score-m { color: var(--ink-2); }
@@ -46,6 +47,17 @@
 .score-pf { font-size: 11px; font-weight: 500; color: var(--ink-3); }
 .score-pf.is-on { color: var(--accent); }
 .score-note { margin: 4px 0 0; font-size: 12px; color: var(--ink-2); }
+.score-w { color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.score-strip { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: -1px; }
+.score-strip .run { width: 8px; height: 12px; border-radius: 2px; background: var(--line); }
+.score-strip .run.is-b { background: var(--ok); }
+.score-strip .run.is-a { background: var(--warn); }
+.score-strip .run.is-even { background: var(--line-strong); }
+.score .is-placeholder th, .score-note-cell { color: var(--ink-3); font-size: 13px; }
+.score-note-cell code { font-size: 12px; }
+.score-bench { margin: 4px 0 0; font-size: 12px; color: var(--ink-2); max-width: 75ch; }
+.score-bench summary { cursor: pointer; color: var(--ink-2); }
+.score-bench p { margin: 4px 0 0; }
 @media (max-width: 480px) {
   .score th, .score td { padding-right: 12px; font-size: 13px; }
   .score-pf { display: none; }
@@ -224,15 +236,22 @@
 
 /* ── Race input and starters ───────────────────────────────────── */
 
-.race-input {
-  position: sticky; bottom: 0; z-index: 5; display: flex; gap: 8px;
-  margin: 16px 0 0; padding: 10px 0; background: var(--paper);
+/* the race's controls, always in reach: one question, both lanes, N runs */
+.race-bar {
+  position: sticky; bottom: 0; z-index: 5; display: grid; gap: 8px;
+  margin: 16px 0 0; padding: 10px 0 12px; background: var(--paper); border-top: 1px solid var(--line);
 }
-.race-input[hidden] { display: none; }
-.race-input input {
+.race-bar[hidden] { display: none; }
+.race-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.race-row input {
   flex: 1; min-width: 0; font: 15px var(--body); color: var(--ink);
   background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; padding: 10px 12px;
 }
+.race-row .btn { align-self: stretch; min-width: 76px; }
+.seg-sm button { padding: 4px 10px; font: 500 13px var(--mono); }
+.seg-sm button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.btn-quiet:disabled { color: var(--ink-3); cursor: default; }
+.race-state { margin: 0; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .btn {
   font: 600 15px var(--body); color: var(--surface); background: var(--accent); border: 0;
   border-radius: 6px; padding: 0 18px; cursor: pointer;
@@ -282,6 +301,8 @@
   height: 480px; max-height: 70vh; width: 100%; max-width: 100%;
 }
 .lanes[data-mode="race"] .lane-chat .ais-ChatPrompt { display: none; }
+.lanes[data-mode="race"] .lane-chat .ais-ChatHeader-clear,
+.lanes[data-mode="race"] .lane-chat .ais-ChatMessage-action[title="Regenerate"] { display: none; }
 .lane-chat .ais-Carousel-item { width: 150px; }
 .lane-chat .ais-ChatToolGroupedResults-groupTitle { font-family: var(--display); font-weight: 600; }
 .lane-chat .ais-ChatToolGroupedResults-groupWhy { color: var(--ink-3); font-size: 13px; }
