@@ -43,6 +43,23 @@ export function isSearchTool(name) {
   return n.includes("search") && !n.includes("memory");
 }
 
+/**
+ * Token usage, wherever the backend puts it. Today: `data-total-usage`,
+ * streamed when the agent config says `sendUsage: true`. The other two
+ * spellings are the hook for a future `data-usage` part or usage carried in
+ * message metadata. Returns { inputTokens, outputTokens } or null.
+ */
+export function usageOf(evt) {
+  const t = String((evt && evt.type) || "");
+  const raw = t === "data-total-usage" || t === "data-usage"
+    ? evt.data && (evt.data.usage || evt.data)
+    : evt && evt.messageMetadata && evt.messageMetadata.usage;
+  if (!raw || typeof raw !== "object") return null;
+  const n = (v) => (Number.isFinite(v) ? v : null);
+  const out = { inputTokens: n(raw.inputTokens), outputTokens: n(raw.outputTokens) };
+  return out.inputTokens === null && out.outputTokens === null ? null : out;
+}
+
 /** the hits array of a tool output, or null */
 export function hitsOf(output) {
   if (!output || typeof output !== "object") return null;
@@ -77,6 +94,10 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
     cache: null,             // X-Cache, when the backend served a stored answer
     prefetch: null,          // { source: "header" | "stream" | "persisted-pair", detail }
     prefetchPart: null,      // payload of a data-search_prefetch part, once the backend streams one
+    modelCalls: 0,           // start-step events: one per LLM call
+    toolCalls: 0,            // tool-input-start events: calls the model itself wrote
+    toolErrors: 0,           // tool-input-error events: calls the model wrote wrong, each one a wasted step
+    usage: null,             // { inputTokens, outputTokens }, when the agent streams usage (see usageOf)
     tools: new Map(),        // toolCallId → { name, start, end, error, input }
     toolOrder: [],
     hits: [],                // latest search output
@@ -112,13 +133,19 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
     },
     observe(t, evt) {
       if (s.events.length < 600) s.events.push({ t, evt });
+      const u = usageOf(evt);
+      if (u) s.usage = u;
       switch (evt.type) {
+        case "start-step":
+          s.modelCalls += 1;
+          break;
         case "text-delta":
           if (s.ttft === null) s.ttft = t;
           s.answer += evt.delta || "";
           break;
         case "tool-input-start":
           tool(evt.toolCallId, evt.toolName, t);
+          if (!String(evt.toolCallId || "").startsWith("prefetch_")) s.toolCalls += 1;
           break;
         case "tool-input-available": {
           const rec = tool(evt.toolCallId, evt.toolName, t);
@@ -135,6 +162,7 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
         }
         case "tool-output-error":
         case "tool-input-error": {
+          if (evt.type === "tool-input-error") s.toolErrors += 1;
           const rec = tool(evt.toolCallId, evt.toolName, t);
           rec.end = t;
           rec.error = evt.errorText || "tool error";
@@ -192,29 +220,31 @@ export function viewOf(s) {
     status: s.status, span, marks, tools, searches: tools.filter((x) => x.search).length,
     ttfb: s.ttfb, ttft: s.ttft, total: s.total,
     prefetch: s.prefetch, prefetchPart: s.prefetchPart, cache: s.cache, errors: s.errors,
+    modelCalls: s.modelCalls, toolCalls: s.toolCalls, toolErrors: s.toolErrors, usage: s.usage,
     hits: s.hits, hitsTool: s.hitsTool, grouped: s.grouped,
     httpStatus: s.httpStatus,
   };
 }
 
 /**
- * What prefetch did this turn, as far as the page can tell.
+ * The turn's searches, split by who ran them.
  *
- *   state: "off" | "waiting" | "used" | "searched" | "skipped"
- *   searches: the model's own search calls
- *   confirmed: true only when a data-search_prefetch part said so
+ *   passive: the prefetch, run by the platform before the model's first call
+ *   active:  search calls the model wrote itself
+ *   confirmed: the backend said the prefetch ran (a data-search_prefetch part,
+ *              or the persisted pair on the wire); otherwise it is inferred
+ *              from the lane's config
  *
- * Until the backend streams that part, "used" and "searched" are read off
- * the tool calls: a prefetch lane whose model never searched used the hits.
+ * A prefetch the backend gated (too few informative tokens, say) never ran:
+ * its part carries no latency, and the passive count is 0.
  */
-export function prefetchVerdict(prefetchOn, view) {
-  const searches = view ? view.searches : 0;
+export function searchCounts(prefetchOn, view) {
+  const active = view ? view.searches : 0;
   const part = view && view.prefetchPart;
-  if (!prefetchOn) return { state: "off", searches, confirmed: false, part: null };
-  if (part && part.injected === false) return { state: "skipped", searches, confirmed: true, part };
-  if (searches > 0) return { state: "searched", searches, confirmed: Boolean(part), part };
-  if (!view || view.status !== "done") return { state: "waiting", searches, confirmed: false, part };
-  return { state: "used", searches, confirmed: Boolean(part), part };
+  const onWire = Boolean(view && view.prefetch && view.prefetch.source === "persisted-pair");
+  if (!prefetchOn) return { passive: 0, active, confirmed: false, part: null };
+  if (part) return { passive: Number.isFinite(part.latencyMs) ? 1 : 0, active, confirmed: true, part };
+  return { passive: 1, active, confirmed: onWire, part: null };
 }
 
 /** "412 ms", "1.9 s" — one rule, so the strip and the report agree */

@@ -191,30 +191,45 @@ test("search calls: the model's own are counted, the prefetched pair and grouped
   assert.equal((await replay("persisted_tool_pair")).searches, 0, "the prefetched pair is not the model's call");
 });
 
-test("prefetch verdict: off, used, searched again, and a stream part that says skipped", async () => {
-  const { prefetchVerdict, createTurn } = await load("stream.mjs");
+test("search counts: passive for the prefetch, active for the model's own calls, gated means 0", async () => {
+  const { searchCounts, createTurn } = await load("stream.mjs");
   const { fixtureEvents, prefetchMisses } = await load("fixture.mjs");
-  assert.equal(prefetchVerdict(false, await replay("off")).state, "off");
-  const used = prefetchVerdict(true, await replay("tool_pair"));
-  assert.equal(used.state, "used");
-  assert.equal(used.confirmed, false, "inferred from tool calls, not reported");
+  assert.deepEqual(searchCounts(false, await replay("off")), { passive: 0, active: 1, confirmed: false, part: null });
+  const used = searchCounts(true, await replay("tool_pair"));
+  assert.equal(used.passive, 1);
+  assert.equal(used.active, 0);
+  assert.equal(used.confirmed, false, "inferred from the config, not reported");
+  assert.equal(searchCounts(true, await replay("persisted_tool_pair")).confirmed, true, "the pair is on the wire");
 
   assert.ok(prefetchMisses("a gift for a coffee lover") && !prefetchMisses("rain jacket"));
   const script = fixtureEvents({ prefetch: "tool_pair", missed: true });
   const turn = createTurn();
   for (const [t, e] of script) if (e !== "[DONE]") turn.observe(t, e);
   turn.finish(script[script.length - 1][0]);
-  const again = prefetchVerdict(true, turn.view());
-  assert.equal(again.state, "searched");
-  assert.equal(again.searches, 1);
+  assert.deepEqual([searchCounts(true, turn.view()).passive, searchCounts(true, turn.view()).active], [1, 1]);
 
-  const waiting = createTurn();
-  assert.equal(prefetchVerdict(true, waiting.view()).state, "waiting");
-  waiting.observe(5, { type: "data-search_prefetch", data: { decision: "no_hits", injected: false, nbHits: 0 } });
-  const skipped = prefetchVerdict(true, waiting.view());
-  assert.equal(skipped.state, "skipped");
-  assert.ok(skipped.confirmed);
-  assert.equal(skipped.part.decision, "no_hits");
+  const gated = createTurn();
+  gated.observe(5, { type: "data-search_prefetch", data: { decision: "too_few_tokens", injected: false, latencyMs: null } });
+  assert.equal(searchCounts(true, gated.view()).passive, 0);
+  const ran = createTurn();
+  ran.observe(5, { type: "data-search_prefetch", data: { decision: "injected", injected: true, latencyMs: 44, nbHits: 7 } });
+  assert.deepEqual([searchCounts(true, ran.view()).passive, searchCounts(true, ran.view()).confirmed], [1, true]);
+});
+
+test("model work: LLM steps, the model's tool calls, its tool-input errors, and usage when streamed", async () => {
+  const { createTurn, usageOf } = await load("stream.mjs");
+  const base = await replay("off");
+  const pf = await replay("tool_pair");
+  assert.deepEqual([base.modelCalls, base.toolCalls, base.toolErrors], [3, 2, 0]);
+  assert.deepEqual([pf.modelCalls, pf.toolCalls], [2, 1], "prefetch saves a step and a call");
+  assert.equal((await replay("persisted_tool_pair")).toolCalls, 1, "the prefetched pair is not the model's call");
+  const t = createTurn();
+  t.observe(1, { type: "tool-input-error", toolCallId: "x", toolName: "algolia_search_index", errorText: "bad args" });
+  t.observe(2, { type: "data-total-usage", data: { usage: { inputTokens: 1200, outputTokens: 80 } }, transient: true });
+  assert.equal(t.view().toolErrors, 1);
+  assert.deepEqual(t.view().usage, { inputTokens: 1200, outputTokens: 80 });
+  assert.equal(base.usage, null, "no usage unless the agent streams it");
+  assert.deepEqual(usageOf({ type: "finish", messageMetadata: { usage: { inputTokens: 5 } } }), { inputTokens: 5, outputTokens: null });
 });
 
 test("no tool outlasts its turn: an open call closes at the turn's end", async () => {

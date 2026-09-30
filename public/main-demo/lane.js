@@ -19,7 +19,7 @@ import { InstantSearch, Chat, ChatInlineLayout } from "react-instantsearch";
 import {
   TOGGLES, PREFETCH_FORMATS, normalize, resolveVariant, completionQuery, agentName,
 } from "./configs.mjs";
-import { createSseParser, createTurn, ms, prefetchVerdict } from "./stream.mjs";
+import { createSseParser, createTurn, ms, searchCounts } from "./stream.mjs";
 import { createFixtureFetch } from "./fixture.mjs";
 import { pick, imageCandidates, fieldsFrom, priceText, lineText } from "./fields.mjs";
 import { decode as decodeBlurhash } from "blurhash";
@@ -92,7 +92,7 @@ function Timeline({ view, fixture }) {
   const numbered = view.tools.map((x) => ({ ...x, nth: x.search ? ++n : 0 }));
   return html`<div class=${"tl is-" + view.status}>
     <div class="tl-track" role="img"
-      aria-label=${`first byte ${ms(view.ttfb)}, first token ${ms(view.ttft)}, ${view.searches} search calls, full paint ${ms(view.total)}`}>
+      aria-label=${`first byte ${ms(view.ttfb)}, first token ${ms(view.ttft)}, ${view.modelCalls} model calls, full paint ${ms(view.total)}`}>
       ${numbered.map((x) => html`<span key=${x.id} class=${"tl-tool" + kind(x)}
         style=${{ left: pct(x.start), width: `max(3px, ${pct((x.end ?? view.span) - x.start)})` }}
         title=${`${x.name} ${ms(x.duration)}`}>${x.nth ? html`<i>${x.nth}</i>` : ""}</span>`)}
@@ -107,7 +107,9 @@ function Timeline({ view, fixture }) {
       ${fixture && html`<li class="is-fixture">replayed fixture</li>`}
     </ul>
     <ul class="tl-legend tl-tools">
-      <li class="is-count"><b>${view.searches}</b> ${view.searches === 1 ? "search call" : "search calls"}</li>
+      <li class="is-count"><b>${view.modelCalls}</b> model calls</li>
+      <li class="is-count"><b>${view.toolCalls}</b> tool calls</li>
+      ${view.toolErrors > 0 && html`<li class="is-count is-error"><b>${view.toolErrors}</b> tool errors</li>`}
       ${numbered.map((x) => html`<li key=${x.id} class=${"is-tool" + kind(x)}>
         <b>${x.duration === null ? "…" : ms(x.duration)}</b> <code>${x.name}</code></li>`)}
     </ul>
@@ -116,25 +118,21 @@ function Timeline({ view, fixture }) {
 
 /* ── Prefetch: which lane has it, and what it did ─────────────── */
 
-const INFERRED_TIP = "Read off the model's tool calls. The backend does not stream its prefetch decision yet.";
+const INFERRED_TIP = "Read off this lane's config. The backend does not stream its prefetch decision yet.";
 
-/** what the page learned about prefetch this turn, in one line */
-function Verdict({ verdict, view }) {
-  const { state, searches, confirmed, part } = verdict;
-  if (!view && state !== "off") return html`<p class="verdict is-idle">Searches before the model's first call</p>`;
-  if (!view) return html`<p class="verdict is-idle">The model runs its own search</p>`;
-  const times = (k) => `×${k}`;
-  const line = {
-    off: html`Model searched <b>${times(searches)}</b>`,
-    waiting: html`Waiting for the model…`,
-    used: html`Used prefetched hits · <b>0</b> own searches`,
-    searched: html`Model searched again <b>${times(searches)}</b>`,
-    skipped: html`Prefetch skipped${part && part.decision ? html` · <code>${String(part.decision)}</code>` : ""}`,
-  }[state];
-  return html`<p class=${"verdict is-" + state}>
-    <span>${line}</span>
-    ${state !== "off" && state !== "waiting" && !confirmed && html`<span class="verdict-src" title=${INFERRED_TIP}>inferred</span>`}
+/** who searched this turn: the platform before the model (passive), or the model itself (active) */
+function Searches({ counts, view, prefetchOn }) {
+  if (!view) {
+    return html`<p class="searches is-idle">${prefetchOn
+      ? "Searches once before the model's first call, then lets the model search more"
+      : "The model runs every search itself"}</p>`;
+  }
+  const { passive, active, confirmed, part } = counts;
+  return html`<p class="searches">
+    <span class=${"sc is-passive" + (passive ? " is-on" : "")}>Passive search <b>×${passive}</b></span>
+    ${prefetchOn && !confirmed && html`<span class="sc-src" title=${INFERRED_TIP}>inferred</span>`}
     <${PrefetchPart} part=${part} />
+    <span class="sc is-active">Active searches <b>×${active}</b></span>
   </p>`;
 }
 
@@ -150,8 +148,8 @@ function PrefetchPart({ part }) {
     Number.isFinite(part.latencyMs) && ms(part.latencyMs),
     part.injectionFormat && String(part.injectionFormat),
   ].filter(Boolean);
-  return html`<span class="verdict-src is-confirmed"
-    title=${[part.toolName, part.index].filter(Boolean).join(" · ")}>${bits.join(" · ") || "reported"}</span>`;
+  return html`<span class="sc-src is-confirmed"
+    title=${[part.decision, part.toolName, part.index].filter(Boolean).join(" · ")}>${bits.join(" · ") || "reported"}</span>`;
 }
 
 /** carousels hydrate from search results the page received; tool_pair keeps them server-side */
@@ -352,9 +350,9 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
   const busy = view && (view.status === "sending" || view.status === "streaming");
   const chatKey = `${resolution.status}:${resolution.agentId || resolution.key}:${fixture ? "fx" : "live"}`;
   const prefetchOn = toggles.prefetch !== "off";
-  const verdict = prefetchVerdict(prefetchOn, view);
+  const counts = searchCounts(prefetchOn, view);
   const evidence = view && view.prefetch;
-  useEffect(() => { if (onView) onView({ label, view, verdict, prefetchOn }); });
+  useEffect(() => { if (onView) onView({ label, view, counts, prefetchOn }); });
 
   return html`<div class=${"lane-inner" + (prefetchOn ? " has-prefetch" : "")}>
     <header class="lane-h">
@@ -365,7 +363,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
           ${prefetchOn ? html`Prefetch on <code>${toggles.prefetch}</code>` : "Prefetch off"}</span>
         ${resolution.status === "query" && html`<span class="badge is-query">off per request</span>`}
       </div>
-      <${Verdict} verdict=${verdict} view=${view} />
+      <${Searches} counts=${counts} view=${view} prefetchOn=${prefetchOn} />
     </header>
     <${ConfigPanel} toggles=${toggles} onChange=${onToggles} resolution=${resolution} disabled=${busy} />
     <${Timeline} view=${view} fixture=${fixture} />
@@ -391,7 +389,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
 /**
  * Mount one lane. Returns the controller the page drives:
  *   { send(text) → boolean, ready() → boolean, unmount() }
- * `onView({ label, view, verdict, prefetchOn })` runs after every redraw.
+ * `onView({ label, view, counts, prefetchOn })` runs after every redraw.
  */
 export function mountLane(el, { label, cfg, variants, searchClient, initialToggles, fixture, onView }) {
   const controller = { send: () => false, ready: () => false };
