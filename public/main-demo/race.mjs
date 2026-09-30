@@ -27,7 +27,7 @@ export function summarize(view) {
 }
 
 const count = (n) => String(n);
-const tokens = (n) => (n >= 10000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+const tokens = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
 
 /* check-copy: off */
 export const METRICS = [

@@ -218,7 +218,7 @@ function renderScore() {
     const val = (x, k) => {
       const pending = race.running || !n;
       const shown = x !== null ? m.fmt(Math.round(x * 10) / 10)
-        : m.usage && !pending ? "not streamed" : runs.length ? "…" : "—";
+        : m.usage && !pending ? "not streamed" : !pending ? "none" : runs.length ? "…" : "—";
       const td = cell("td", shown, "score-v");
       if (lead === k) td.classList.add("is-win");
       return td;
@@ -244,7 +244,7 @@ function renderScore() {
   table.append(body);
   const note = cell("p", undefined, "score-note");
   note.append(!runs.length ? "Race both lanes on a question to compare them."
-    : n ? `${n} ${n === 1 ? "run" : "runs"}, medians. Each run sends the question to both lanes at the same moment, in a fresh conversation.`
+    : n ? `${n === 1 ? "1 run." : `${n} runs, medians.`} Each run sends the question to both lanes at the same moment, in a fresh conversation.`
       : "First run in progress.");
   const bench = cell("details", undefined, "score-bench");
   bench.append(cell("summary", "What 100 runs showed"), cell("p", BENCH.join(" ")));
