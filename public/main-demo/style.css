@@ -165,7 +165,9 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.hits-h { margin: 0 0 6px; font-size: 13px; color: var(--ink-2); }
+.hits-h { margin: 0; font-size: 13px; color: var(--ink-2); }
+.hits summary { cursor: pointer; }
+.hits[open] summary { margin-bottom: 8px; }
 .hits-h b { font-family: var(--mono); }
 .hits-row {
   display: grid; grid-auto-flow: column; grid-auto-columns: 150px; gap: 10px;

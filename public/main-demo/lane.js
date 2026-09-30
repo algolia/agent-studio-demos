@@ -194,10 +194,10 @@ function HitsPanel({ view, Card }) {
   const hits = (view && view.hits) || [];
   if (!view || !view.hitsTool) return null;
   if (!hits.length) return html`<p class="hits-h"><b>0</b> hits from <code>${view.hitsTool}</code></p>`;
-  return html`<section class="hits" aria-label="Search hits">
-    <p class="hits-h"><b>${hits.length}</b> hits from <code>${view.hitsTool}</code></p>
+  return html`<details class="hits">
+    <summary class="hits-h"><b>${hits.length}</b> hits from <code>${view.hitsTool}</code></summary>
     <div class="hits-row">${hits.slice(0, 12).map((h) => html`<${Card} key=${h.objectID} item=${h} />`)}</div>
-  </section>`;
+  </details>`;
 }
 
 function Wire({ turn }) {
