@@ -3,7 +3,8 @@
    main-demo-provision.mjs — one agent per toggle set, created once.
 
      MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… \
-       node tools/main-demo-provision.mjs [--add 'prefetch=user_fold,memory=1,…'] [--dry-run]
+       node tools/main-demo-provision.mjs [--add 'prefetch=user_fold,memory=1,…']
+         [--config '{"search_prefetch":{…},…}'] [--sync-instructions] [--dry-run]
 
    Reads the variant manifest from public/main-demo/configs.mjs (the same
    module the page uses), lists the agents on HOST, and for each variant:
@@ -11,6 +12,15 @@
      - an agent with the variant's name exists → adopt it, untouched;
      - none does → copy main-demo-base (model, provider, tools, prompt),
        layer the variant's config on top, create it and publish it.
+
+   --config takes the blocks of an edited config (what the page's Create
+   button would send) and creates or adopts main-demo-<hash>. Every agent
+   already named main-demo-<hash> is adopted and keyed by its config.
+
+   --sync-instructions copies main-demo-base's instructions and system
+   prompt to every other main-demo-* agent that differs, then republishes
+   it. It never writes main-demo-base, and it is the only write this script
+   makes to an existing agent.
 
    Then writes public/main-demo/variants.json (gitignored): config key →
    agent id. Idempotent: a second run creates nothing.
@@ -25,6 +35,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
   MANIFEST, configKey, parseKey, agentName, agentConfigPatch, togglesFromAgentConfig,
+  baseTemplate, customAgentBody, customKey, customName, blocksFromConfig,
 } from "../public/main-demo/configs.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -32,11 +43,13 @@ const DEFAULT_OUT = path.join(HERE, "..", "public", "main-demo", "variants.json"
 const BASE_NAME = "main-demo-base";
 
 function parseArgs(argv) {
-  const out = { add: [], dryRun: false, out: DEFAULT_OUT, base: BASE_NAME };
+  const out = { add: [], configs: [], sync: false, dryRun: false, out: DEFAULT_OUT, base: BASE_NAME };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--add") out.add.push(argv[++i]);
     else if (a === "--dry-run") out.dryRun = true;
+    else if (a === "--config") out.configs.push(JSON.parse(argv[++i]));
+    else if (a === "--sync-instructions") out.sync = true;
     else if (a === "--out") out.out = path.resolve(argv[++i]);
     else if (a === "--base") out.base = argv[++i];
     else if (a === "--help" || a === "-h") out.help = true;
@@ -105,19 +118,11 @@ async function providerLabels(call) {
   }
 }
 
-/** the parts of the base agent a variant copies */
-function template(base) {
-  const keep = ["instructions", "systemPrompt", "providerId", "model", "tools", "description"];
-  const t = {};
-  for (const k of keep) if (base[k] !== undefined && base[k] !== null) t[k] = base[k];
-  return t;
-}
-
 function variantBody(base, toggles) {
   const config = { ...(base.config || {}) };
   delete config.searchPrefetch;
   delete config.search_prefetch;
-  return { ...template(base), name: agentName(toggles), config: { ...config, ...agentConfigPatch(toggles) } };
+  return { ...baseTemplate(base), name: agentName(toggles), config: { ...config, ...agentConfigPatch(toggles) } };
 }
 
 async function existingFormat(file) {
@@ -133,7 +138,8 @@ async function existingFormat(file) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
-    console.log("usage: MAIN_DEMO_HOST=… APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs [--add KEY]… [--dry-run] [--out FILE]");
+    console.log("usage: MAIN_DEMO_HOST=… APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs"
+      + " [--add KEY]… [--config JSON]… [--sync-instructions] [--dry-run] [--out FILE]");
     return;
   }
   const e = env();
@@ -180,6 +186,49 @@ async function main() {
     const full = await call("GET", `/1/agents/${created.id}`);
     record(full, "created");
     console.log(`create ${name}`);
+  }
+
+  const publish = async (id) => {
+    try {
+      await call("POST", `/1/agents/${id}/publish`);
+    } catch (err) {
+      if (err.status !== 409) console.log(`       publish: ${err.message}`);
+    }
+  };
+
+  // edited configs: the ones asked for, and every main-demo-<hash> already there
+  const customs = new Map(args.configs.map((b) => [customKey(b), b]));
+  for (const a of agents) {
+    if (!/^main-demo-[0-9a-f]{8}$/.test(a.name)) continue;
+    const full = a.config ? a : await call("GET", `/1/agents/${a.id}`);
+    const blocks = blocksFromConfig(full.config);
+    if (customName(blocks) !== a.name) { console.log(`skip   ${a.name}  (its config hashes to ${customName(blocks)})`); continue; }
+    variants[customKey(blocks)] = { agentId: a.id, name: a.name, model: a.model || null, status: "adopted" };
+    customs.delete(customKey(blocks));
+    console.log(`adopt  ${a.name}`);
+  }
+  for (const [key, blocks] of customs) {
+    const name = customName(blocks);
+    if (args.dryRun) { console.log(`create ${name}  (dry run: skipped)`); continue; }
+    const created = await call("POST", "/1/agents", customAgentBody(base, blocks, name));
+    await publish(created.id);
+    variants[key] = { agentId: created.id, name, model: created.model || null, status: "created" };
+    console.log(`create ${name}`);
+  }
+
+  if (args.sync) {
+    for (const a of agents) {
+      if (!a.name.startsWith("main-demo-") || a.name === args.base || a.id === base.id) continue;
+      const full = await call("GET", `/1/agents/${a.id}`);
+      if (full.instructions === base.instructions && full.systemPrompt === base.systemPrompt) {
+        console.log(`same   ${a.name}`);
+        continue;
+      }
+      if (args.dryRun) { console.log(`sync   ${a.name}  (dry run: skipped)`); continue; }
+      await call("PATCH", `/1/agents/${a.id}`, { instructions: base.instructions, systemPrompt: base.systemPrompt });
+      await publish(a.id);
+      console.log(`sync   ${a.name}  (instructions from ${args.base})`);
+    }
   }
 
   const doc = { generatedAt: new Date().toISOString(), host: e.host, variants };
