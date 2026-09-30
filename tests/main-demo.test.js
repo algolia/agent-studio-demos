@@ -58,6 +58,7 @@ test("resolution: exact agent, prefetch off by query parameter, or a command", a
   assert.equal(q.status, "query");
   assert.equal(q.agentId, "pf-id");
   assert.equal(c.completionQuery(q).searchPrefetch, "false");
+  assert.equal(c.completionQuery(q).cache, "false", "a race never reads the completion cache");
 
   const exact = c.resolveVariant(c.BASE_TOGGLES, { ...table, [base]: { agentId: "base-id" } });
   assert.equal(exact.status, "agent");

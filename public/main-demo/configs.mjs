@@ -173,7 +173,8 @@ export function provisionCommand(keys, prefix) {
 
 /** query parameters the completions URL carries for a resolution */
 export function completionQuery(resolution) {
-  const q = { compatibilityMode: "ai-sdk-5", stream: "true" };
+  // cache=false: a race against a stored answer measures the cache, not the agent
+  const q = { compatibilityMode: "ai-sdk-5", stream: "true", cache: "false" };
   if (resolution && resolution.status === "query") q.searchPrefetch = "false";
   return q;
 }
