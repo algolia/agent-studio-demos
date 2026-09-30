@@ -277,3 +277,45 @@ test("race: medians, paired deltas and a tally across repeated runs", async () =
   assert.equal(summarize({ status: "error", total: 5, modelCalls: 1, toolCalls: 0, toolErrors: 0, ttft: null }).total, null,
     "a failed turn has no full paint");
 });
+
+test("edited configs: defaults pruned, hashed by content, resolved or named for creation", async () => {
+  const c = await load("configs.mjs");
+  const pf = { ...c.BASE_TOGGLES, prefetch: "tool_pair" };
+  assert.deepEqual(c.toggleBlocks(pf).search_prefetch, { enabled: true }, "tool_pair is the default format");
+  assert.equal(c.isCustom(pf, null), false);
+  // applying the editor without a change is no edit
+  const same = c.blockFrom("search_prefetch", c.blockValues("search_prefetch", { enabled: true, injectionFormat: "tool_pair" }));
+  assert.equal(c.isCustom(pf, { search_prefetch: same }), false);
+
+  const v = c.blockValues("search_prefetch", c.toggleBlocks(pf).search_prefetch);
+  assert.equal(v.conversationWindow, 1);
+  v.conversationWindow = 3;
+  v.instruction = true;
+  const edited = { search_prefetch: c.blockFrom("search_prefetch", v) };
+  assert.deepEqual(edited.search_prefetch, { enabled: true, conversationWindow: 3, instruction: true });
+  assert.ok(c.isCustom(pf, edited));
+  const blocks = c.effectiveBlocks(pf, edited);
+  assert.match(c.customName(blocks), /^main-demo-[0-9a-f]{8}$/);
+  assert.equal(c.hashConfig(blocks), c.hashConfig(JSON.parse(JSON.stringify(blocks))), "stable");
+  assert.equal(c.canonical({ b: 1, a: [2, { d: 1, c: 0 }] }), '{"a":[2,{"c":0,"d":1}],"b":1}');
+
+  assert.deepEqual(c.validateBlock("search_prefetch", { ...v, conversationWindow: 9 }), { conversationWindow: "1 to 5" });
+  assert.deepEqual(c.validateBlock("search_prefetch", v), {});
+
+  const miss = c.resolveCustom(blocks, {}, {});
+  assert.equal(miss.status, "custom");
+  assert.match(miss.command, /--config '\{/);
+  const local = { [c.customKey(blocks)]: { agentId: "id-1", name: c.customName(blocks) } };
+  assert.equal(c.resolveCustom(blocks, {}, local).agentId, "id-1");
+
+  const base = { name: "main-demo-base", instructions: "new prompt", model: "m", providerId: "p", tools: [1], config: { searchPrefetch: true, x: 1 }, id: "no" };
+  const body = c.customAgentBody(base, blocks);
+  assert.equal(body.instructions, "new prompt", "instructions come from base at creation");
+  assert.equal(body.id, undefined);
+  assert.equal(body.config.searchPrefetch, undefined);
+  assert.deepEqual(body.config.search_prefetch, edited.search_prefetch);
+  assert.equal(body.config.x, 1);
+  const off = c.customAgentBody(base, c.effectiveBlocks(c.BASE_TOGGLES, { sendUsage: true }));
+  assert.equal(off.config.search_prefetch, false, "a disabled prefetch block is stored as false");
+  assert.equal(off.config.sendUsage, true);
+});

@@ -178,3 +178,188 @@ export function completionQuery(resolution) {
   if (resolution && resolution.status === "query") q.searchPrefetch = "false";
   return q;
 }
+
+/* ── Edited configs: one agent per content hash ─────────────────
+   A lane may edit the blocks a toggle set writes. The edited config names
+   its own agent, main-demo-<hash of the config>, created once from
+   main-demo-base and never PATCHed: two lanes with the same config share
+   it, and no edit can change an agent another lane is running. */
+
+/* check-copy: off */
+/** the editable fields of each config block, with the backend's defaults and bounds */
+export const BLOCKS = [
+  { id: "search_prefetch", label: "Search prefetch", fields: [
+    { path: "enabled", label: "Enabled", type: "bool", def: true },
+    { path: "injectionFormat", label: "Injection format", type: "enum", options: PREFETCH_FORMATS, def: "tool_pair" },
+    { path: "indexName", label: "Index", type: "text", def: null, hint: "empty: the agent's first search tool" },
+    { path: "conversationWindow", label: "Conversation window", type: "int", min: 1, max: 5, def: 1,
+      hint: "latest user turns in the query" },
+    { path: "minInformativeTokens", label: "Min informative tokens", type: "int", min: 0, max: 10, def: 2,
+      hint: "shorter queries skip prefetch" },
+    { path: "requireHits", label: "Require hits", type: "bool", def: true },
+    { path: "instruction", label: "Instruction", type: "instruction", def: false },
+  ] },
+  { id: "memory", label: "Memory", fields: [
+    { path: "enabled", label: "Enabled", type: "bool", def: false },
+    { path: "model", label: "Model", type: "text", def: null, hint: "empty: the agent's model" },
+    { path: "tools", label: "Memory tools", type: "bool", def: true },
+    { path: "preload", label: "Preload", type: "bool", def: true },
+    { path: "preflight", label: "Preflight", type: "bool", def: true },
+  ] },
+  { id: "guardrail", label: "Guardrails", fields: [
+    { path: "enabled", label: "Enabled", type: "bool", def: false },
+    { path: "required", label: "Required", type: "bool", def: false },
+    { path: "model", label: "Model", type: "text", def: null, hint: "empty: the agent's model" },
+    { path: "scope", label: "Scope", type: "text", def: null },
+    { path: "noViolationExamples", label: "No-violation examples", type: "text", def: null },
+    { path: "categories", label: "Categories", type: "json", def: [] },
+  ] },
+  { id: "suggestions", label: "Suggestions", fields: [
+    { path: "enabled", label: "Enabled", type: "bool", def: false },
+    { path: "model", label: "Model", type: "text", def: null, hint: "empty: the agent's model" },
+    { path: "systemPrompt", label: "System prompt", type: "text", def: null },
+    { path: "generation.maxCount", label: "Max count", type: "int", min: 1, max: 5, def: 3 },
+    { path: "generation.maxWords", label: "Max words", type: "int", min: 5, max: 15, def: 8 },
+    { path: "generation.timeoutSeconds", label: "Timeout (s)", type: "int", min: 1, max: 30, def: 10 },
+    { path: "generation.retryAttempts", label: "Retries", type: "int", min: 0, max: 3, def: 1 },
+    { path: "context.maxMessages", label: "Context messages", type: "int", min: 1, max: 50, def: 10 },
+    { path: "context.includeToolOutputs", label: "Include tool outputs", type: "bool", def: false },
+  ] },
+  { id: "sendUsage", label: "Stream token usage", scalar: true, fields: [
+    { path: "", label: "sendUsage", type: "bool", def: false },
+  ] },
+];
+/* check-copy: on */
+
+const getPath = (o, p) => (p ? p.split(".").reduce((x, k) => (x && typeof x === "object" ? x[k] : undefined), o) : o);
+
+function setPath(o, p, v) {
+  const keys = p.split(".");
+  let x = o;
+  for (const k of keys.slice(0, -1)) x = x[k] && typeof x[k] === "object" ? x[k] : (x[k] = {});
+  x[keys[keys.length - 1]] = v;
+  return o;
+}
+
+/** a block as the editor shows it: every field present, stored values over defaults */
+export function blockValues(blockId, stored) {
+  const b = BLOCKS.find((x) => x.id === blockId);
+  if (b.scalar) return { "": stored === undefined ? b.fields[0].def : Boolean(stored) };
+  const src = stored === true ? { enabled: true } : stored === false || !stored ? { enabled: false } : stored;
+  const out = {};
+  for (const f of b.fields) {
+    const v = getPath(src, f.path);
+    out[f.path] = v === undefined ? f.def : v;
+  }
+  return out;
+}
+
+/** the problems with a block's values, by field path; empty when the backend would accept it */
+export function validateBlock(blockId, values) {
+  const b = BLOCKS.find((x) => x.id === blockId);
+  const errors = {};
+  for (const f of b.fields) {
+    const v = values[f.path];
+    if (f.type === "int" && (!Number.isInteger(v) || v < f.min || v > f.max)) errors[f.path] = `${f.min} to ${f.max}`;
+    if (f.type === "enum" && !f.options.includes(v)) errors[f.path] = "not an option";
+    if (f.type === "json" && !Array.isArray(v)) errors[f.path] = "a JSON list";
+  }
+  return errors;
+}
+
+/** editor values back to the stored block, fields equal to their default left out */
+export function blockFrom(blockId, values) {
+  const b = BLOCKS.find((x) => x.id === blockId);
+  if (b.scalar) return Boolean(values[""]);
+  const out = {};
+  for (const f of b.fields) {
+    const v = values[f.path];
+    const empty = v === null || v === undefined || v === "";
+    if (f.path === "enabled") { setPath(out, f.path, Boolean(v)); continue; }
+    if (empty || JSON.stringify(v) === JSON.stringify(f.def)) continue;
+    setPath(out, f.path, v);
+  }
+  return out;
+}
+
+/** JSON with sorted keys: the same config always hashes the same */
+export function canonical(v) {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  if (v && typeof v === "object") {
+    return `{${Object.keys(v).sort().filter((k) => v[k] !== undefined).map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(v);
+}
+
+/** FNV-1a, 32 bits, as 8 hex digits: short enough for an agent name, stable across runtimes */
+export function hashConfig(blocks) {
+  let h = 0x811c9dc5;
+  const s = canonical(blocks);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** what a toggle set writes, each block in its stored (default-pruned) form */
+export function toggleBlocks(toggles) {
+  const p = agentConfigPatch(toggles);
+  const out = {};
+  for (const b of BLOCKS) {
+    if (b.scalar) continue;
+    const raw = p[b.id];
+    out[b.id] = blockFrom(b.id, blockValues(b.id, raw === false ? { enabled: false } : raw));
+  }
+  return out;
+}
+
+/** the whole config a lane asks for: its toggles' blocks, with its edits laid over them */
+export function effectiveBlocks(toggles, edits) {
+  const out = toggleBlocks(toggles);
+  for (const [k, v] of Object.entries(edits || {})) out[k] = v;
+  if (out.sendUsage === false) delete out.sendUsage;
+  return out;
+}
+
+/** edits that change nothing are no edits: the lane stays on its manifest variant */
+export function isCustom(toggles, edits) {
+  return canonical(effectiveBlocks(toggles, edits)) !== canonical(effectiveBlocks(toggles, null));
+}
+
+export const customKey = (blocks) => `custom=${hashConfig(blocks)}`;
+export const customName = (blocks) => `main-demo-${hashConfig(blocks)}`;
+
+/**
+ * Resolve an edited config: an agent the page or the script already made
+ * for this hash, or `{ status: "custom" }` with the name to create and the
+ * command that creates it.
+ */
+export function resolveCustom(blocks, variants, local, { commandPrefix } = {}) {
+  const key = customKey(blocks);
+  const hit = (variants && variants[key]) || (local && local[key]);
+  if (hit && hit.agentId) return { status: "agent", key, agentId: hit.agentId, entry: hit, custom: true };
+  const env = commandPrefix || "MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY";
+  return {
+    status: "custom", key, name: customName(blocks), blocks,
+    command: `${env} node tools/main-demo-provision.mjs --config '${canonical(blocks)}'`,
+  };
+}
+
+/** the parts of the base agent a variant copies, instructions included, at creation time */
+export function baseTemplate(base) {
+  const keep = ["instructions", "systemPrompt", "providerId", "model", "tools", "description"];
+  const t = {};
+  for (const k of keep) if (base[k] !== undefined && base[k] !== null) t[k] = base[k];
+  return t;
+}
+
+/** the create body for an agent with these config blocks over main-demo-base */
+export function customAgentBody(base, blocks, name = customName(blocks)) {
+  const config = { ...(base.config || {}) };
+  delete config.searchPrefetch;
+  delete config.search_prefetch;
+  const own = { ...blocks };
+  if (own.search_prefetch && own.search_prefetch.enabled === false) own.search_prefetch = false;
+  return { ...baseTemplate(base), name, config: { ...config, ...own } };
+}
