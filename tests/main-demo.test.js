@@ -246,3 +246,33 @@ test("no tool outlasts its turn: an open call closes at the turn's end", async (
   assert.ok(v.tools[1].open);
   for (const x of v.tools) assert.ok(x.start + x.duration <= v.total, `${x.name} ends inside the turn`);
 });
+
+test("race: medians, paired deltas and a tally across repeated runs", async () => {
+  const r = await load("race.mjs");
+  const run = (a, b) => ({ a: { ok: true, ...a }, b: { ok: true, ...b } });
+  const runs = [
+    run({ modelCalls: 3, total: 11000 }, { modelCalls: 2, total: 8000 }),
+    run({ modelCalls: 3, total: 9000 }, { modelCalls: 3, total: 9100 }),
+    run({ modelCalls: 2, total: 7000 }, { modelCalls: 3, total: 9500 }),
+  ];
+  const calls = r.compare(r.METRICS.find((m) => m.id === "modelCalls"), runs);
+  assert.deepEqual([calls.a, calls.b, calls.delta, calls.n], [3, 3, 0, 3]);
+  assert.deepEqual(calls.tally, { a: 1, b: 1, even: 1 });
+  assert.equal(r.deltaText(r.METRICS[0], calls), "even");
+
+  const paint = r.compare(r.METRICS.find((m) => m.id === "total"), runs);
+  assert.deepEqual(paint.tally, { a: 1, b: 1, even: 1 }, "100 ms on 9 s is within 5%");
+  assert.equal(paint.delta, 100);
+  assert.equal(r.median([4, 1, 3, 2]), 2.5);
+  assert.equal(r.median([null, undefined]), null);
+
+  const one = r.compare(r.METRICS[0], [run({ modelCalls: 3 }, { modelCalls: 2 })]);
+  assert.equal(r.deltaText(r.METRICS[0], one), "B 1 call fewer");
+  const none = r.compare(r.METRICS.find((m) => m.id === "inputTokens"), runs);
+  assert.equal(none.n, 0, "no usage streamed: nothing to pair");
+  assert.equal(r.deltaText(r.METRICS[5], none), "");
+
+  const { summarize } = r;
+  assert.equal(summarize({ status: "error", total: 5, modelCalls: 1, toolCalls: 0, toolErrors: 0, ttft: null }).total, null,
+    "a failed turn has no full paint");
+});
