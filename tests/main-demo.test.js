@@ -148,3 +148,34 @@ test("config.example.js documents every mainDemo field the page reads", () => {
     assert.ok(typeof md[f] === "string" && md[f], `mainDemo.${f} is missing`);
   }
 });
+
+test("card fields: an array with empty entries yields its first usable image, then the rest", async () => {
+  const f = await load("fields.mjs");
+  const fields = f.fieldsFrom({ fields: { title: "name", image: "image_urls.0", price: "price.value", line: "brand" } });
+  const hit = {
+    objectID: "1", name: "Leather jacket", brand: "Bully",
+    image_urls: ["https://res.cloudinary.com/x/X_0.jpg", "", ""],
+    price: { value: 448.75, currency: "EUR" },
+  };
+  assert.equal(f.pick(hit, fields.image), "https://res.cloudinary.com/x/X_0.jpg");
+  assert.deepEqual(f.imageCandidates(hit, fields.image), ["https://res.cloudinary.com/x/X_0.jpg"]);
+
+  const firstEmpty = { ...hit, image_urls: ["", "https://res.cloudinary.com/x/X_1.jpg", "https://res.cloudinary.com/x/X_2.jpg"] };
+  assert.equal(f.pick(firstEmpty, fields.image), "https://res.cloudinary.com/x/X_1.jpg");
+  assert.deepEqual(f.imageCandidates(firstEmpty, fields.image),
+    ["https://res.cloudinary.com/x/X_1.jpg", "https://res.cloudinary.com/x/X_2.jpg"]);
+
+  assert.equal(f.pick({ ...hit, image_urls: ["", "", ""] }, fields.image), undefined);
+  assert.equal(f.pick(hit, fields.title), "Leather jacket");
+  assert.equal(f.pick(hit, fields.price), 448.75);
+  assert.equal(f.pick(hit, fields.currency), "EUR");
+  assert.equal(f.pick({ image_blurred: "LNSPX]M{" }, fields.blurhash), "LNSPX]M{");
+  assert.match(f.priceText(448.75, "EUR"), /448\.75/);
+  // the products index: a bare number, no currency field, meant as USD
+  const usd = f.fieldsFrom({ fields: { title: "title", image: "largeImage", price: "price", line: "brand" } });
+  const p = { title: "Headphones", largeImage: "https://img.example/h.jpg", price: 79.99, brand: "Acme" };
+  assert.equal(f.pick(p, usd.currency), undefined);
+  assert.equal(f.priceText(f.pick(p, usd.price), f.pick(p, usd.currency)),
+    new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(79.99));
+  assert.equal(f.pick(p, usd.image), "https://img.example/h.jpg");
+});
