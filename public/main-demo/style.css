@@ -275,6 +275,8 @@
 .lane-chat .ais-ChatInlineLayout .ais-Chat-container {
   box-shadow: none; border: 1px solid var(--line); border-radius: 6px;
 }
+.lane-empty { height: 100%; display: grid; place-items: center; padding: 24px; text-align: center; }
+.lane-empty p { margin: 0; color: var(--ink-3); font-size: 14px; max-width: 32ch; }
 /* grouped results whose products never reached the page draw only their intro,
    right above an answer that says it again; the lane note explains instead */
 .lane-chat .ais-ChatToolGroupedResults:not(:has(.ais-ChatToolGroupedResults-group, .ais-ChatToolGroupedResults-streaming)) {

@@ -232,6 +232,11 @@ function Missing({ resolution }) {
   </div>`;
 }
 
+/** the chat before its first question: where to start, not a blank panel */
+function EmptyChat() {
+  return html`<div class="lane-empty"><p>No question yet. Pick one below, or type your own.</p></div>`;
+}
+
 /* ── The lane ─────────────────────────────────────────────────── */
 
 const STUB_CLIENT = {
@@ -369,7 +374,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
         ? html`<${InstantSearch} key=${chatKey} searchClient=${searchClient || STUB_CLIENT}
               indexName=${cfg.indexName || "products"} future=${{ preserveSharedStateOnUnmount: true }}>
             <${Chat} ref=${chatRef} transport=${transport} layoutComponent=${ChatInlineLayout}
-              persistence=${false} itemComponent=${Card}
+              persistence=${false} itemComponent=${Card} emptyComponent=${EmptyChat}
               translations=${{
                 header: { title: (resolution.entry && resolution.entry.name) || label },
                 prompt: { textareaPlaceholder: "Ask about a product" },
