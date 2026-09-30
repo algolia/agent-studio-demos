@@ -39,16 +39,38 @@
   box-shadow: var(--shadow); min-width: 0;
 }
 .lane-inner { display: flex; flex-direction: column; gap: 10px; padding: 14px; min-width: 0; }
-.lane-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.lane-h { display: grid; gap: 4px; }
+.lane-id { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .lane-label { margin: 0; font-family: var(--display); font-weight: 600; font-size: 18px; }
-.lane-badges { margin: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* the one thing that differs between the lanes, said before anything else */
+.pf-pill {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  font: 500 13px var(--body); padding: 2px 10px; border-radius: 999px;
+  border: 1px solid var(--line-strong); color: var(--ink-3);
+}
+.pf-pill.is-on { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
+.pf-pill code { font-size: 11px; font-weight: 400; }
+
+.verdict {
+  margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px;
+  font-size: 14px; color: var(--ink-2); min-height: 22px;
+}
+.verdict b { font-family: var(--mono); font-weight: 600; color: var(--ink); }
+.verdict.is-idle, .verdict.is-waiting { color: var(--ink-3); }
+.verdict.is-used, .verdict.is-used b { color: var(--ok); }
+.verdict.is-searched, .verdict.is-searched b, .verdict.is-skipped { color: var(--warn); }
+.verdict-src {
+  font: 11px var(--mono); padding: 0 6px; border-radius: 999px; cursor: help;
+  border: 1px dashed var(--line-strong); color: var(--ink-3);
+}
+.verdict-src.is-confirmed { border-style: solid; border-color: var(--ok); color: var(--ok); cursor: default; }
+
 .badge {
   font: 500 12px var(--mono); padding: 2px 8px; border-radius: 999px;
   border: 1px solid var(--line-strong); color: var(--ink-2);
 }
-.badge.is-prefetch { border-color: var(--ok); color: var(--ok); }
 .badge.is-query { border-color: var(--warn); color: var(--warn); }
-.badge.is-fixture { border-color: var(--crease); color: var(--crease); }
 
 /* ── Config panel ──────────────────────────────────────────────── */
 
@@ -72,12 +94,18 @@
 /* ── Timeline strip ────────────────────────────────────────────── */
 
 .tl-track {
-  position: relative; height: 18px; border-radius: 4px;
+  position: relative; height: 20px; border-radius: 4px;
   background: var(--surface-2); border: 1px solid var(--line); overflow: hidden;
 }
-.tl-tool { position: absolute; top: 3px; bottom: 3px; border-radius: 2px; background: var(--accent); opacity: 0.75; }
-.tl-tool.is-prefetch { background: var(--ok); }
-.tl-tool.is-error { background: var(--over); }
+.tl-tool {
+  position: absolute; top: 3px; bottom: 3px; border-radius: 2px; background: var(--ink-3); opacity: 0.4;
+  display: grid; place-items: center; overflow: hidden;
+}
+.tl-tool i { font: 600 10px/1 var(--mono); font-style: normal; color: var(--surface); }
+/* the model's own searches carry the colour: the count prefetch should bring to zero */
+.tl-tool.is-search { background: var(--accent); opacity: 1; }
+.tl-tool.is-prefetch { background: var(--ok); opacity: 0.8; }
+.tl-tool.is-error { background: var(--over); opacity: 1; }
 .tl-mark { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink-3); }
 .tl-mark.is-ttfb { background: var(--warn); }
 .tl-mark.is-ttft { background: var(--crease); }
@@ -93,8 +121,17 @@
 }
 .tl-legend .is-ttfb::before { background: var(--warn); }
 .tl-legend .is-ttft::before { background: var(--crease); }
-.tl-legend .is-tool::before { background: var(--accent); }
-.tl-legend .is-tool.is-error::before { background: var(--over); }
+.tl-legend .is-tool::before { background: var(--ink-3); opacity: 0.5; }
+.tl-legend .is-tool.is-prefetch::before { background: var(--ok); opacity: 1; }
+.tl-legend .is-tool.is-search::before { display: none; }
+.tl-legend .is-tool.is-error::before { background: var(--over); opacity: 1; }
+.tl-tools { margin-top: 4px; }
+.tl-legend .is-count::before { display: none; }
+.tl-legend .is-count { color: var(--ink); font-weight: 500; }
+.tl-nth {
+  display: inline-grid; place-items: center; width: 16px; height: 16px; margin-right: 5px; border-radius: 3px;
+  background: var(--accent); color: var(--surface); font: 600 10px/1 var(--mono); vertical-align: 1px;
+}
 .tl-legend .is-total::before { background: var(--ink); }
 .tl-legend .is-error { color: var(--over); }
 .tl-legend .is-error::before { background: var(--over); }
@@ -187,6 +224,7 @@
   --ais-primary-color-rgb: 44, 42, 224;
   font-family: var(--body);
 }
+
 .lane-chat .ais-ChatInlineLayout, .lane-chat .ais-Chat-container {
   height: 480px; max-height: 70vh; width: 100%; max-width: 100%;
 }

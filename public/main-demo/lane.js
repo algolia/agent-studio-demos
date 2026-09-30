@@ -19,7 +19,7 @@ import { InstantSearch, Chat, ChatInlineLayout } from "react-instantsearch";
 import {
   TOGGLES, PREFETCH_FORMATS, normalize, resolveVariant, completionQuery, agentName,
 } from "./configs.mjs";
-import { createSseParser, createTurn, ms } from "./stream.mjs";
+import { createSseParser, createTurn, ms, prefetchVerdict } from "./stream.mjs";
 import { createFixtureFetch } from "./fixture.mjs";
 import { pick, imageCandidates, fieldsFrom, priceText, lineText } from "./fields.mjs";
 import { decode as decodeBlurhash } from "blurhash";
@@ -87,25 +87,71 @@ function Timeline({ view, fixture }) {
       <p class="tl-legend">Timings appear here after the first message.</p></div>`;
   }
   const pct = (t) => `${Math.min(100, Math.max(0, (t / view.span) * 100))}%`;
+  const kind = (x) => (x.error ? " is-error" : x.prefetched ? " is-prefetch" : x.search ? " is-search" : " is-other");
+  let n = 0;
+  const numbered = view.tools.map((x) => ({ ...x, nth: x.search ? ++n : 0 }));
   return html`<div class=${"tl is-" + view.status}>
-    <div class="tl-track" role="img" aria-label=${`first byte ${ms(view.ttfb)}, first token ${ms(view.ttft)}, total ${ms(view.total)}`}>
-      ${view.tools.map((x) => html`<span key=${x.id}
-        class=${"tl-tool" + (x.error ? " is-error" : "") + (x.prefetched ? " is-prefetch" : "")}
+    <div class="tl-track" role="img"
+      aria-label=${`first byte ${ms(view.ttfb)}, first token ${ms(view.ttft)}, ${view.searches} search calls, full paint ${ms(view.total)}`}>
+      ${numbered.map((x) => html`<span key=${x.id} class=${"tl-tool" + kind(x)}
         style=${{ left: pct(x.start), width: `max(3px, ${pct((x.end ?? view.span) - x.start)})` }}
-        title=${`${x.name} ${ms(x.duration)}`}></span>`)}
+        title=${`${x.name} ${ms(x.duration)}`}>${x.nth ? html`<i>${x.nth}</i>` : ""}</span>`)}
       ${view.marks.map((m) => html`<span key=${m.id} class=${"tl-mark is-" + m.id} style=${{ left: pct(m.t) }}></span>`)}
     </div>
     <ul class="tl-legend">
       <li class="is-ttfb"><b>${ms(view.ttfb)}</b> first byte</li>
       <li class="is-ttft"><b>${ms(view.ttft)}</b> first token</li>
-      ${view.tools.map((x) => html`<li key=${x.id} class=${"is-tool" + (x.error ? " is-error" : "")}>
-        <b>${x.duration === null ? "…" : ms(x.duration)}</b> <code>${x.name}</code></li>`)}
-      <li class="is-total"><b>${view.total === null ? "…" : ms(view.total)}</b> total</li>
+      <li class="is-total"><b>${view.total === null ? "…" : ms(view.total)}</b> full paint</li>
       ${view.httpStatus >= 400 && html`<li class="is-error">HTTP ${view.httpStatus}</li>`}
       ${view.cache && html`<li class="is-cache">cache ${view.cache}</li>`}
       ${fixture && html`<li class="is-fixture">replayed fixture</li>`}
     </ul>
+    <ul class="tl-legend tl-tools">
+      <li class="is-count"><b>${view.searches}</b> ${view.searches === 1 ? "search call" : "search calls"}</li>
+      ${numbered.map((x) => html`<li key=${x.id} class=${"is-tool" + kind(x)}>
+        ${x.nth ? html`<span class="tl-nth">${x.nth}</span>` : ""}<b>${x.duration === null ? "…" : ms(x.duration)}</b> <code>${x.name}</code></li>`)}
+    </ul>
   </div>`;
+}
+
+/* ── Prefetch: which lane has it, and what it did ─────────────── */
+
+const INFERRED_TIP = "Read off the model's tool calls. The backend does not stream its prefetch decision yet.";
+
+/** what the page learned about prefetch this turn, in one line */
+function Verdict({ verdict, view }) {
+  const { state, searches, confirmed, part } = verdict;
+  if (!view && state !== "off") return html`<p class="verdict is-idle">Searches before the model's first call</p>`;
+  if (!view) return html`<p class="verdict is-idle">The model runs its own search</p>`;
+  const times = (k) => `×${k}`;
+  const line = {
+    off: html`Model searched <b>${times(searches)}</b>`,
+    waiting: html`Waiting for the model…`,
+    used: html`Used prefetched hits · <b>0</b> own searches`,
+    searched: html`Model searched again <b>${times(searches)}</b>`,
+    skipped: html`Prefetch skipped${part && part.decision ? html` · <code>${String(part.decision)}</code>` : ""}`,
+  }[state];
+  return html`<p class=${"verdict is-" + state}>
+    <span>${line}</span>
+    ${state !== "off" && state !== "waiting" && !confirmed && html`<span class="verdict-src" title=${INFERRED_TIP}>inferred</span>`}
+    <${PrefetchPart} part=${part} />
+  </p>`;
+}
+
+/**
+ * The backend's own account of the prefetch, from a `data-search_prefetch`
+ * part: { decision, nbHits, latencyMs, injectionFormat, injected, toolName, index }.
+ * Draws nothing until that part exists.
+ */
+function PrefetchPart({ part }) {
+  if (!part) return null;
+  const bits = [
+    Number.isFinite(part.nbHits) && `${part.nbHits}\u00a0hits`,
+    Number.isFinite(part.latencyMs) && ms(part.latencyMs),
+    part.injectionFormat && String(part.injectionFormat),
+  ].filter(Boolean);
+  return html`<span class="verdict-src is-confirmed"
+    title=${[part.toolName, part.index].filter(Boolean).join(" · ")}>${bits.join(" · ") || "reported"}</span>`;
 }
 
 /* ── The config panel ─────────────────────────────────────────── */
@@ -188,7 +234,7 @@ const STUB_CLIENT = {
   }),
 };
 
-function LaneApp({ controller, label, cfg, variants, searchClient, initialToggles, fixture }) {
+function LaneApp({ controller, label, cfg, variants, searchClient, initialToggles, fixture, onView }) {
   const [toggles, setToggles] = useState(() => normalize(initialToggles));
   const [turn, setTurn] = useState(null);
   const [, setTick] = useState(0);
@@ -291,16 +337,21 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
   };
   const busy = view && (view.status === "sending" || view.status === "streaming");
   const chatKey = `${resolution.status}:${resolution.agentId || resolution.key}:${fixture ? "fx" : "live"}`;
-  const badge = view && view.prefetch;
+  const prefetchOn = toggles.prefetch !== "off";
+  const verdict = prefetchVerdict(prefetchOn, view);
+  const evidence = view && view.prefetch;
+  useEffect(() => { if (onView) onView({ label, view, verdict, prefetchOn }); });
 
-  return html`<div class="lane-inner">
+  return html`<div class=${"lane-inner" + (prefetchOn ? " has-prefetch" : "")}>
     <header class="lane-h">
-      <p class="lane-label">${label}</p>
-      <p class="lane-badges">
-        ${badge && html`<span class="badge is-prefetch" title=${String(badge.detail || "")}>prefetch · ${badge.source}</span>`}
-        ${resolution.status === "query" && html`<span class="badge is-query">prefetch off per request</span>`}
-        ${fixture && html`<span class="badge is-fixture">fixture</span>`}
-      </p>
+      <div class="lane-id">
+        <p class="lane-label">${label}</p>
+        <span class=${"pf-pill" + (prefetchOn ? " is-on" : "")}
+          title=${evidence ? `${evidence.source}: ${String(evidence.detail || "")}` : ""}>
+          ${prefetchOn ? html`Prefetch on <code>${toggles.prefetch}</code>` : "Prefetch off"}</span>
+        ${resolution.status === "query" && html`<span class="badge is-query">off per request</span>`}
+      </div>
+      <${Verdict} verdict=${verdict} view=${view} />
     </header>
     <${ConfigPanel} toggles=${toggles} onChange=${onToggles} resolution=${resolution} disabled=${busy} />
     <${Timeline} view=${view} fixture=${fixture} />
@@ -325,12 +376,13 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
 /**
  * Mount one lane. Returns the controller the page drives:
  *   { send(text) → boolean, ready() → boolean, unmount() }
+ * `onView({ label, view, verdict, prefetchOn })` runs after every redraw.
  */
-export function mountLane(el, { label, cfg, variants, searchClient, initialToggles, fixture }) {
+export function mountLane(el, { label, cfg, variants, searchClient, initialToggles, fixture, onView }) {
   const controller = { send: () => false, ready: () => false };
   const root = createRoot(el);
   root.render(html`<${LaneApp} controller=${controller} label=${label} cfg=${cfg} variants=${variants}
-    searchClient=${searchClient} initialToggles=${initialToggles} fixture=${fixture} />`);
+    searchClient=${searchClient} initialToggles=${initialToggles} fixture=${fixture} onView=${onView} />`);
   controller.unmount = () => root.unmount();
   return controller;
 }
