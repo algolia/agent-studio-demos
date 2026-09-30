@@ -24,9 +24,9 @@ const params = new URLSearchParams(location.search);
 
 /* check-copy: off */
 const STARTERS = [
-  "Compare three running shoes under $100",
-  "I need a gift for a coffee lover, budget $50",
-  "What's good for a rainy commute?",
+  "Compare three pairs of sneakers under €150",
+  "A black handbag for work, budget €300",
+  "Warm jacket for a rainy commute, men",
 ];
 /* check-copy: on */
 
