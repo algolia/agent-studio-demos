@@ -195,6 +195,27 @@ module.exports = [
     rules: recommended,
   },
   {
+    // main-demo is the one page built on ES modules: React and the Chat widget
+    // arrive through an import map, so its files import rather than read
+    // globals. The .mjs modules are shared with tools/main-demo-provision.mjs,
+    // which is why they may touch both lists.
+    files: ["public/main-demo/**/*.js", "public/main-demo/**/*.mjs", "tools/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...browserGlobals,
+        ...nodeGlobals,
+        ReadableStream: "readonly",
+        Response: "readonly",
+        Headers: "readonly",
+        URL: "readonly",
+        AbortController: "readonly",
+      },
+    },
+    rules: recommended,
+  },
+  {
     // The conversation generator: Node, CommonJS, and never loaded by a page.
     files: ["tools/**/*.js"],
     languageOptions: {

@@ -170,4 +170,25 @@ window.DEMO_CONFIG = {
   },
 
   repoUrl: "https://github.com/algolia/agent-studio-demos",
+
+  // ── main-demo ("What is Agent Studio?") ───────────────────────────
+  // Its own block, because it talks to a different backend and index than the
+  // book demos. Agent ids are not here: tools/main-demo-provision.mjs writes
+  // them to public/main-demo/variants.json, one agent per toggle set.
+  mainDemo: {
+    // Agent Studio API. A local backend by default; the page replays a fixture
+    // when nothing answers here.
+    host: "http://127.0.0.1:8000",
+    appId: "YOUR_APP_ID",
+    // Search-only key for the InstantSearch client. Omit it and the lanes run
+    // on a stub client: the Chat widget still hydrates from the agent's stream.
+    searchApiKey: "YOUR_SEARCH_ONLY_API_KEY",
+    // Sent on /completions. The agent's search tool searches with this key,
+    // so it needs search on indexName — and nothing more.
+    agentStudioApiKey: "YOUR_AGENT_STUDIO_API_KEY",
+    indexName: "YOUR_PRODUCTS_INDEX",
+    // Optional: record attributes the product cards read, tried before the
+    // defaults (name/title, image, price, description).
+    // fields: { title: "name", image: "image", price: "price.value", line: "brand" },
+  },
 };
