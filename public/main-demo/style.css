@@ -227,9 +227,29 @@
 /* ── The Chat widget, inside a lane ────────────────────────────── */
 
 .lane-chat { min-width: 0; }
-.lane-chat .ais-Chat, .lane-chat .ais-ChatInlineLayout {
-  --ais-primary-color-rgb: 44, 42, 224;
-  font-family: var(--body);
+/* the widget speaks rgb triples; these are the site tokens, spelled that way */
+.lane-chat {
+  --ais-text-color-rgb: 20, 22, 42;          /* --ink */
+  --ais-muted-color-rgb: 61, 65, 96;         /* --ink-2 */
+  --ais-background-color-rgb: 252, 252, 254; /* --surface */
+  --ais-border-color-rgb: 182, 187, 207;     /* --line-strong */
+  --ais-primary-color-rgb: 44, 42, 224;      /* --accent */
+  --ais-button-text-color-rgb: 252, 252, 254;
+  --ais-shadow-color-rgb: 20, 22, 42;
+}
+:root[data-theme="dark"] .lane-chat {
+  --ais-text-color-rgb: 236, 238, 251;
+  --ais-muted-color-rgb: 179, 184, 214;
+  --ais-background-color-rgb: 22, 24, 43;
+  --ais-border-color-rgb: 63, 67, 100;
+  --ais-primary-color-rgb: 156, 155, 255;
+  --ais-button-text-color-rgb: 13, 14, 28;
+  --ais-shadow-color-rgb: 0, 0, 0;
+}
+.lane-chat .ais-Chat, .lane-chat .ais-ChatInlineLayout { font-family: var(--body); }
+/* a panel inside the lane, not a second card on top of it */
+.lane-chat .ais-ChatInlineLayout .ais-Chat-container {
+  box-shadow: none; border: 1px solid var(--line); border-radius: 6px;
 }
 /* grouped results whose products never reached the page draw only their intro,
    right above an answer that says it again; the lane note explains instead */
