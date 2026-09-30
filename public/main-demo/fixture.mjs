@@ -54,8 +54,12 @@ const ANSWER = [
  * persisted_tool_pair streams that search to the client (its call id starts
  * with `prefetch_`); tool_pair and user_fold keep it server-side, so the
  * client sees no search at all — the same as the real backend.
+ *
+ * `missed` plays the other outcome: the prefetched hits were poor, so the
+ * model searched anyway and prefetch cost time instead of saving it. The
+ * replay treats a gift question as one (see `prefetchMisses`).
  */
-export function fixtureEvents({ prefetch = "off", query = "" } = {}) {
+export function fixtureEvents({ prefetch = "off", query = "", missed = false } = {}) {
   const ev = [];
   let t = 160;
   const at = (dt, e) => { t += dt; ev.push([t, e]); };
@@ -67,8 +71,9 @@ export function fixtureEvents({ prefetch = "off", query = "" } = {}) {
     at(0, { type: "tool-output-available", toolCallId: id,
       output: { hits: FIXTURE_HITS, nbHits: FIXTURE_HITS.length } });
   }
-  at(10, { type: "start-step" });
-  if (prefetch === "off") {
+  // the prefetched search runs before the model's first call, and costs its time either way
+  at(prefetch === "off" ? 10 : 60, { type: "start-step" });
+  if (prefetch === "off" || missed) {
     at(620, { type: "tool-input-start", toolCallId: "fx-call-search", toolName: "algolia_search_index" });
     at(60, { type: "tool-input-delta", toolCallId: "fx-call-search", inputTextDelta: "{\"query\":" });
     at(40, { type: "tool-input-available", toolCallId: "fx-call-search", toolName: "algolia_search_index",
@@ -78,9 +83,15 @@ export function fixtureEvents({ prefetch = "off", query = "" } = {}) {
     at(10, { type: "finish-step" });
     at(10, { type: "start-step" });
   }
-  const groupStart = prefetch === "off" ? 700 : 540;
+  const groupStart = prefetch === "off" || missed ? 700 : 540;
   at(groupStart, { type: "tool-input-start", toolCallId: "fx-call-group", toolName: "algolia_grouped_results" });
-  at(420, { type: "tool-input-available", toolCallId: "fx-call-group", toolName: "algolia_grouped_results",
+  // the model writes this payload token by token, and the widget draws it as it grows
+  const raw = JSON.stringify({ intro: INTRO, groups: GROUPS });
+  const step = Math.ceil(raw.length / 6);
+  for (let i = 0; i < raw.length; i += step) {
+    at(60, { type: "tool-input-delta", toolCallId: "fx-call-group", inputTextDelta: raw.slice(i, i + step) });
+  }
+  at(60, { type: "tool-input-available", toolCallId: "fx-call-group", toolName: "algolia_grouped_results",
     input: { intro: INTRO, groups: GROUPS } });
   at(30, { type: "tool-output-available", toolCallId: "fx-call-group", output: { status: "success" } });
   at(10, { type: "finish-step" });
@@ -94,6 +105,11 @@ export function fixtureEvents({ prefetch = "off", query = "" } = {}) {
   return ev;
 }
 
+/** a vague question: the replay's stand-in for prefetched hits the model rejects */
+export function prefetchMisses(query) {
+  return /\bgift\b/i.test(String(query || ""));
+}
+
 /** a fetch that answers every completions call with the script above */
 export function createFixtureFetch({ prefetch = "off" } = {}) {
   return async function fixtureFetch(url, init = {}) {
@@ -103,7 +119,7 @@ export function createFixtureFetch({ prefetch = "off" } = {}) {
       const last = (body.messages || []).filter((m) => m.role === "user").pop();
       query = last ? (last.parts || []).filter((p) => p.type === "text").map((p) => p.text).join(" ") : "";
     } catch (_) { /* no body */ }
-    const script = fixtureEvents({ prefetch, query });
+    const script = fixtureEvents({ prefetch, query, missed: prefetch !== "off" && prefetchMisses(query) });
     const signal = init.signal;
     const enc = new TextEncoder();
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
