@@ -12,7 +12,9 @@
      - four request shapes are allowed (see ROUTES), all others throw before
        fetch; nothing here creates, edits or deletes anything on your app
      - cache, memory and analytics are off on every completion, so a run
-       neither reuses answers nor writes into your conversation history
+       never reuses an answer, never feeds agent memory and stays out of your
+       search analytics; the conversations themselves are still kept under
+       the agent's own retention setting, like any other completion
 
    The core is pure and takes `fetch` as an argument, so
    tests/guardrail-live.test.js runs it against a fake server.
@@ -81,9 +83,9 @@
         error = "stream error";
       }
     }
-    if (blocked) return { verdict: "blocked", category: blocked.category, error: null };
-    if (error) return { verdict: null, category: "", error };
-    return { verdict: "allowed", category: "", error: null };
+    if (blocked) return { verdict: "blocked", category: blocked.category, stage: blocked.type, error: null };
+    if (error) return { verdict: null, category: "", stage: "", error };
+    return { verdict: "allowed", category: "", stage: "", error: null };
   }
 
   /** a status code → a sentence, never the response body (it may echo input) */
@@ -142,9 +144,9 @@
       .map((r) => ({
         message: cases[r.index].message, expected: r.expected, agent: label(r.agentId), agent_id: r.agentId,
         verdict: r.verdict || "", correct: r.verdict ? String(r.verdict === r.expected) : "",
-        category: r.category || "", ms: Math.round(r.ms), error: r.error || "",
+        category: r.category || "", stage: r.stage || "", ms: Math.round(r.ms), error: r.error || "",
       }));
-    return global.GuardrailCsv.toCsv(rows, ["message", "expected", "agent", "agent_id", "verdict", "correct", "category", "ms", "error"]);
+    return global.GuardrailCsv.toCsv(rows, ["message", "expected", "agent", "agent_id", "verdict", "correct", "category", "stage", "ms", "error"]);
   }
 
   /** per agent: the error split with intervals, plus median time to a verdict */

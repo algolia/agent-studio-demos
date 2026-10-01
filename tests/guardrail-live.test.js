@@ -73,8 +73,8 @@ test("completions run with cache, memory and analytics off", () => {
 });
 
 test("a violation event means blocked, a plain answer means allowed", () => {
-  assert.deepEqual(L.readVerdict(violation), { verdict: "blocked", category: "off_topic", error: null });
-  assert.deepEqual(L.readVerdict(answer), { verdict: "allowed", category: "", error: null });
+  assert.deepEqual(L.readVerdict(violation), { verdict: "blocked", category: "off_topic", stage: "input", error: null });
+  assert.deepEqual(L.readVerdict(answer), { verdict: "allowed", category: "", stage: "", error: null });
 });
 
 test("a guardrail error is a failed call, never a verdict", () => {
@@ -116,7 +116,7 @@ test("a whole race, end to end: every agent sees every case, then stats and CSV"
 
   const csv = L.resultsCsv(cases, [AGENT, AGENT2], results);
   const rows = globalThis.GuardrailCsv.parse(csv);
-  assert.deepEqual(rows[0], ["message", "expected", "agent", "agent_id", "verdict", "correct", "category", "ms", "error"]);
+  assert.deepEqual(rows[0], ["message", "expected", "agent", "agent_id", "verdict", "correct", "category", "stage", "ms", "error"]);
   assert.equal(rows.length, 9);
   assert.equal(csv.includes(CREDS.apiKey), false);
 });
