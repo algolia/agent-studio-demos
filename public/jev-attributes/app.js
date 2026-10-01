@@ -320,7 +320,7 @@ function renderEngines() {
         renderVendor();
         renderModel();
       },
-    }, h("b", null, e.label), h("span", null, WHERE[e.where]), need && h("i.eng-need", { "aria-label": "needs a key" }, "key")));
+    }, h("b", null, e.label), h("span", null, WHERE[e.where]), need && (app.relay === "off" ? h("i.eng-need", { "aria-label": "needs the relay" }, "relay") : h("i.eng-need", { "aria-label": "needs a key" }, "key"))));
   }
 }
 
