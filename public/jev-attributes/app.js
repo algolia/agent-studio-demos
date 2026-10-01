@@ -66,12 +66,14 @@ const SHORT = {
   "Military and Security": "Military", "Space": "Space", "Terrorism": "Terror", "Transnational Issues": "Transn",
 };
 const RELAY_SRC = "https://github.com/algolia/agent-studio-demos/blob/main/functions/relay/%5B%5Bpath%5D%5D.js";
+const README_RUN = "https://github.com/algolia/agent-studio-demos#run-it-two-modes";
 const WHERE = { vendor: "outside vendor", enablers: "Enablers", browser: "this browser" };
 
 /* ── mode, keys, engines ──────────────────────────────────────── */
 
 const app = {
   mode: null, // "local" | "public"
+  relay: null, // "on" | "off": PUBLIC mode only, probed at startup
   search: null,
   post: relayTransport("/relay"),
   keys: createKeyStore(),
@@ -95,6 +97,7 @@ async function detectMode() {
     return;
   }
   app.mode = "public";
+  app.relay = await relayState();
   await new Promise((ok) => {
     const s = document.createElement("script");
     s.src = "../shared/config.js";
@@ -107,6 +110,21 @@ async function detectMode() {
     ? createBrowserSearch(cfg)
     : async () => { throw new Error("This site has no Factbook search key yet."); };
 }
+
+/**
+ * Is this site's relay forwarding? A POST without a key answers 401 when it
+ * is on; the Pages Function answers 404 while RELAY_ENABLED is unset, and a
+ * host with no Function at all answers 404 or 405. Only 401 counts as on.
+ */
+async function relayState() {
+  const r = await fetch("/relay/typesafe/systemone", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(3000),
+  }).catch(() => null);
+  return r && r.status === 401 ? "on" : "off";
+}
+
+/** the keys a run may send: none while the relay is off, so nothing is posted to a dead route */
+const visitorKeys = () => (app.relay === "off" ? {} : app.keys.all());
 
 function embedder() {
   if (!app.embedder) app.embedder = createEmbedder((st) => { app.embedState = st; renderModel(); }, { device: fromUrl.get("device"), prime: sectionDocs() });
@@ -146,7 +164,7 @@ async function ask(question) {
   startTick();
   try {
     await run({
-      question, depth: app.depth, engines: ids, post: app.post, keys: app.keys.all(), local: app.mode === "local",
+      question, depth: app.depth, engines: ids, post: app.post, keys: visitorKeys(), local: app.mode === "local",
       search: app.search, embedder: ids.includes("embed") ? embedder() : null, signal: ctl.signal,
       emit: (e) => { if (state === s) { apply(s, e); scheduleRender(); } },
     });
@@ -225,6 +243,12 @@ function renderMode() {
     el.mode.append(h("p.mode-pill", { title: "The proxy on this machine adds the maintainer's keys to every call." }, h("b", null, "Local"), " · keys stay on this machine"));
     return;
   }
+  if (app.relay === "off") {
+    // no key fields while nothing would forward them: a pasted key would only sit in the browser
+    el.mode.append(h("p.mode-h", null, h("b", null, "Relay off."), " This site asks for no keys yet. Search runs; the engines need the relay. ",
+      h("a", { href: README_RUN, target: "_blank", rel: "noopener" }, "Run it locally"), " to try them."));
+    return;
+  }
   const row = (name, label, help) => {
     const v = app.keys.get(name);
     const exp = name === "enablers" ? jwtExpiry(v) : null;
@@ -285,10 +309,10 @@ function renderEngines() {
   el.engines.append(h("span.engines-l", null, "Engines"));
   for (const e of ENGINES) {
     const on = app.engines.has(e.id);
-    const need = app.mode === "public" ? missingKey(e.id, { local: false, keys: app.keys.all() }) : null;
+    const need = app.mode === "public" ? missingKey(e.id, { local: false, keys: visitorKeys() }) : null;
     el.engines.append(h("button.eng", {
       type: "button", "aria-pressed": String(on), "data-engine": e.id,
-      title: need ? `Needs your ${need === "jev" ? "Jev key" : "Enablers token"}.` : null,
+      title: need ? (app.relay === "off" ? "Needs the relay, which is off on this site." : `Needs your ${need === "jev" ? "Jev key" : "Enablers token"}.`) : null,
       onclick: () => {
         if (app.engines.has(e.id)) app.engines.delete(e.id); else app.engines.add(e.id);
         saveEngines();
@@ -447,7 +471,7 @@ function laneView(node, id, s, span, now) {
   node.append(h("ul.times", null, times));
   const ans = h("div.answer");
   if (L.error) ans.append(h("p.is-error", null, L.error));
-  else if (L.skip) ans.append(h("p.answer-empty", null, `Add your ${L.skip === "jev" ? "Jev key" : "Enablers token"} above.`));
+  else if (L.skip) ans.append(h("p.answer-empty", null, app.relay === "off" ? "Needs the relay, off on this site." : `Add your ${L.skip === "jev" ? "Jev key" : "Enablers token"} above.`));
   else if (L.text) ans.innerHTML = window.renderMarkdown ? window.renderMarkdown(L.text) : "";
   else ans.append(h("p.answer-empty", null, idle ? "The answer appears here." : "…"));
   node.append(ans);
