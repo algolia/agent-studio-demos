@@ -1,0 +1,82 @@
+{
+  "about": "Synthetic questions about public CIA World Factbook data, written for the attribute-selection study. Each need lists the sections that can answer it: a question is covered when every need has at least one of its sections kept. Labels are the author's; none of these is a demo scenario or a criteria example.",
+  "questions": [
+    { "q": "What happened in Ireland's history before it became a republic?", "needs": [["Introduction"]] },
+    { "q": "Give me a short history of Vietnam.", "needs": [["Introduction"]] },
+    { "q": "How did Singapore end up as its own country?", "needs": [["Introduction", "Government"]] },
+    { "q": "What empire did Portugal once rule?", "needs": [["Introduction"]] },
+
+    { "q": "Is Mongolia landlocked?", "needs": [["Geography"]] },
+    { "q": "What is the highest point in Nepal?", "needs": [["Geography"]] },
+    { "q": "How big is Canada in square kilometers?", "needs": [["Geography"]] },
+    { "q": "What natural disasters hit the Philippines?", "needs": [["Geography"]] },
+    { "q": "What is the weather like in Iceland?", "needs": [["Geography", "Environment"]] },
+
+    { "q": "How many people live in Nigeria?", "needs": [["People and Society"]] },
+    { "q": "What religion do most people in Indonesia follow?", "needs": [["People and Society"]] },
+    { "q": "How long do people live on average in Japan?", "needs": [["People and Society"]] },
+    { "q": "Can most adults in Mali read and write?", "needs": [["People and Society"]] },
+    { "q": "What is the median age in Germany?", "needs": [["People and Society"]] },
+
+    { "q": "How polluted is the air in Bangladesh?", "needs": [["Environment"]] },
+    { "q": "How much carbon dioxide does Australia emit?", "needs": [["Environment", "Energy"]] },
+    { "q": "What environmental treaties has Brazil signed?", "needs": [["Environment"]] },
+    { "q": "How much fresh water does Egypt have?", "needs": [["Environment"]] },
+
+    { "q": "Who is the head of state of Ghana?", "needs": [["Government"]] },
+    { "q": "What colors are on the flag of Kenya?", "needs": [["Government"]] },
+    { "q": "When did Namibia become independent?", "needs": [["Government", "Introduction"]] },
+    { "q": "At what age can people vote in Austria?", "needs": [["Government"]] },
+    { "q": "What kind of government does Thailand have?", "needs": [["Government"]] },
+
+    { "q": "How fast is the economy of Vietnam growing?", "needs": [["Economy"]] },
+    { "q": "What is the unemployment rate in Spain?", "needs": [["Economy"]] },
+    { "q": "Who buys the most goods from Mexico?", "needs": [["Economy"]] },
+    { "q": "How high is inflation in Argentina?", "needs": [["Economy"]] },
+    { "q": "What crops does Ethiopia grow?", "needs": [["Economy"]] },
+
+    { "q": "Does Norway sell oil abroad?", "needs": [["Energy", "Economy"]] },
+    { "q": "Where does France get its electricity from?", "needs": [["Energy"]] },
+    { "q": "How much natural gas is under Qatar?", "needs": [["Energy"]] },
+    { "q": "What share of people in Chad have electricity?", "needs": [["Energy"]] },
+
+    { "q": "How many people in Kenya use the internet?", "needs": [["Communications"]] },
+    { "q": "What is the internet domain of Tuvalu?", "needs": [["Communications"]] },
+    { "q": "How many mobile phones are there in India?", "needs": [["Communications"]] },
+    { "q": "Which TV and radio stations does Cuba have?", "needs": [["Communications"]] },
+
+    { "q": "Can you take a train across Argentina?", "needs": [["Transportation"]] },
+    { "q": "What are the main seaports of the Netherlands?", "needs": [["Transportation"]] },
+    { "q": "How many ships fly the flag of Panama?", "needs": [["Transportation"]] },
+    { "q": "How many runways are paved in Peru?", "needs": [["Transportation"]] },
+
+    { "q": "How many soldiers does Turkey have?", "needs": [["Military and Security"]] },
+    { "q": "Is military service compulsory in Israel?", "needs": [["Military and Security"]] },
+    { "q": "What share of GDP does Russia spend on defense?", "needs": [["Military and Security"]] },
+    { "q": "What weapons does Poland buy?", "needs": [["Military and Security"]] },
+
+    { "q": "Has India sent a mission to the Moon?", "needs": [["Space"]] },
+    { "q": "Where does China launch its rockets from?", "needs": [["Space"]] },
+    { "q": "Does Brazil run a space agency?", "needs": [["Space"]] },
+
+    { "q": "Which armed groups carry out attacks in Nigeria?", "needs": [["Terrorism"]] },
+    { "q": "Is ISIS active in Iraq?", "needs": [["Terrorism"]] },
+    { "q": "What extremist organizations operate in Somalia?", "needs": [["Terrorism"]] },
+
+    { "q": "Is Colombia a source of cocaine?", "needs": [["Transnational Issues"]] },
+    { "q": "How many refugees does Lebanon host?", "needs": [["Transnational Issues"]] },
+    { "q": "Which territories does Morocco dispute with its neighbors?", "needs": [["Transnational Issues"]] },
+    { "q": "Is human trafficking a problem in Thailand?", "needs": [["Transnational Issues"]] },
+
+    { "q": "Compare the population and the GDP of Egypt.", "needs": [["People and Society"], ["Economy"]] },
+    { "q": "Is Chile's long coastline matched by a big fishing industry?", "needs": [["Geography"], ["Economy"]] },
+    { "q": "What language is spoken in Brazil and what is its capital?", "needs": [["People and Society"], ["Government"]] },
+    { "q": "How many airports and how many internet users does Fiji have?", "needs": [["Transportation"], ["Communications"]] },
+    { "q": "Does Iran's oil production pay for its military?", "needs": [["Energy"], ["Military and Security"]] },
+    { "q": "How many refugees live in Turkey, and how big is its population?", "needs": [["Transnational Issues"], ["People and Society"]] },
+    { "q": "Is Saudi Arabia rich because of oil exports?", "needs": [["Economy"], ["Energy", "Economy"]] },
+    { "q": "Which countries border Hungary, and who leads its government?", "needs": [["Geography"], ["Government"]] },
+    { "q": "How hot does it get in Kuwait and how much power does it use?", "needs": [["Geography", "Environment"], ["Energy"]] },
+    { "q": "What is the life expectancy and the health spending in Cuba?", "needs": [["People and Society"]] }
+  ]
+}
