@@ -123,7 +123,7 @@
       const bad = mine.filter((r) => r.verdict && r.verdict !== r.expected).length;
       const fail = mine.filter((r) => !r.verdict).length;
       const w = (x) => (100 * x / total).toFixed(2);
-      return `<div class="lane"><div class="lane-h"><b>agent ${k + 1}</b> <span class="cid">${esc(id.slice(0, 8))}…</span>` +
+      return `<div class="lane"><div class="lane-h"><b>agent ${k + 1}</b> <span class="cid">· id ${esc(id.slice(0, 8))}…</span>` +
         `<span class="note">${mine.length}/${total}</span></div>` +
         `<div class="lane-t"><div class="ok" style="width:${w(ok)}%"></div><div class="bad" style="width:${w(bad)}%"></div><div class="fail" style="width:${w(fail)}%"></div></div></div>`;
     }).join("") + '<div class="legend"><span style="--c:var(--ok)">right</span><span style="--c:var(--over)">wrong</span><span style="--c:var(--ink-3)">failed call</span></div>';
@@ -131,7 +131,7 @@
 
   function summary(agents, results) {
     const rows = L.summarize(agents, results).map((s, k) =>
-      `<tr><td data-label="agent"><b>agent ${k + 1}</b> <span class="cid">${esc(s.agentId.slice(0, 8))}…</span></td>` +
+      `<tr><td data-label="agent"><b>agent ${k + 1}</b> <span class="cid">· id ${esc(s.agentId.slice(0, 8))}…</span></td>` +
       `<td class="num" data-label="scored · failed">${s.n} · ${s.failed}</td>` +
       `<td class="num" data-label="balanced acc.">${p1(s.balanced)}</td>` +
       `<td class="num" data-label="over-refusal · 95% CI">${p1(s.overRefusal.rate)} <span class="note">n\u00a0=\u00a0${s.overRefusal.n} · ${ci(s.overRefusal)}</span></td>` +
@@ -142,6 +142,8 @@
       `<div class="scroll"><table class="reflow"><thead><tr><th>agent</th><th class="num">scored · failed</th><th class="num">balanced acc.</th>` +
       `<th class="num">over-refusal · 95% CI</th><th class="num">leak · 95% CI</th><th class="num">p50 time</th></tr></thead><tbody>${rows}</tbody></table></div>` +
       (errs.length ? `<p class="err">Failed calls: ${errs.map(esc).join(" · ")}</p>` : "") +
+      (results.length && results.every((r) => r.verdict !== "blocked")
+        ? '<p class="err">No message was blocked. Check that the guardrail is on for these agents.</p>' : "") +
       '<p class="note">Time runs to the verdict: an allowed message waits for the full answer.</p>';
   }
 
@@ -203,8 +205,8 @@
         const res = await L.call(f, creds, "GET", `/1/agents/${id}`);
         if (!res.ok) { parts.push(`<li>${esc(id.slice(0, 8))}…: ${esc(L.statusText(res.status))}</li>`); continue; }
         const a = await res.json();
-        const g = a.config && a.config.guardrail;
-        parts.push(`<li><b>${esc(a.name)}</b> · model ${esc(a.model || "–")} · input guardrail ${g ? "on" : "off"}</li>`);
+        const on = !!(a.config && a.config.guardrail && a.config.guardrail.enabled);
+        parts.push(`<li><b>${esc(a.name)}</b> · model ${esc(a.model || "–")} · guardrail ${on ? "on" : "<b>off</b>: every message will pass"}</li>`);
       } catch (e) { parts.push(`<li>${esc(id.slice(0, 8))}…: request failed</li>`); }
     }
     try {

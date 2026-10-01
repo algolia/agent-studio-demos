@@ -83,6 +83,7 @@
       <li>Use a new key with the search ACL only and a short life. Delete it after.</li>
       <li>Synthetic or public messages only. Never paste personal data.</li>
       <li>Each allowed message runs your agent in full, on your provider, so it uses tokens.</li>
+      <li>Runs are saved like any chat, under your agent’s retention setting.</li>
     </ul>
 
     <h2>1 · Your app</h2>
@@ -91,7 +92,7 @@
         <select id="lv-region"><option value="eu">EU</option><option value="us">US</option></select>
       </label>
       <label>Application ID <input id="lv-app" type="text" spellcheck="false" autocomplete="off"></label>
-      <label>API key <input id="lv-key" type="password" spellcheck="false" autocomplete="new-password"></label>
+      <label>API key <input id="lv-key" type="password" spellcheck="false" autocomplete="off"></label>
       <label class="wide">Agent IDs, one per model, up to four
         <textarea id="lv-agents" rows="3" spellcheck="false" placeholder="one agent ID per line"></textarea>
       </label>
