@@ -11,6 +11,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 | --- | --- | --- |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
+| Guardrail battle | `/guardrail-battle/` | Local |
 
 ## Layout
 
@@ -30,6 +31,7 @@ public/                     the deployable root — this is what Cloudflare Page
   assets/convs/             three seeded conversations, plus the manifest every figure derives from
   chat-with-book/           index.html + app.js + style.css
   infinite-conversation/    index.html + app.js + style.css
+  guardrail-battle/         index.html + app.js + style.css, and data/ with frozen results
 scripts/                    node, zero dependencies — see § The shelf and § The search index
   fetch-books.js            download, strip and count the texts, from either source
   wikisource.js             wikitext → prose, for the one work not on Gutenberg
