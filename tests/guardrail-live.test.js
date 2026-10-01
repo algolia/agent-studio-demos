@@ -39,19 +39,96 @@ function fakeServer({ status = 200 } = {}) {
   return { calls, fetchImpl };
 }
 
-test("only the four allowed request shapes are possible", () => {
+test("only the listed request shapes are possible, and there is no PATCH at all", () => {
   assert.ok(L.routeAllowed("POST", `/1/agents/${AGENT}/completions`));
   assert.ok(L.routeAllowed("GET", `/1/agents/${AGENT}`));
+  assert.ok(L.routeAllowed("GET", "/1/agents"));
   assert.ok(L.routeAllowed("GET", "/1/providers"));
   assert.ok(L.routeAllowed("GET", `/1/providers/${AGENT}/models`));
   for (const [m, p] of [
-    ["PATCH", `/1/agents/${AGENT}`], ["DELETE", `/1/agents/${AGENT}`], ["POST", "/1/agents"],
-    ["POST", "/1/providers"], ["PATCH", `/1/providers/${AGENT}`], ["POST", `/1/agents/${AGENT}/publish`],
-    ["GET", "/1/agents"], ["GET", `/1/agents/${AGENT}/../../secret-keys`], ["POST", `/1/agents/not-a-uuid/completions`],
+    ["PATCH", `/1/agents/${AGENT}`], ["PUT", `/1/agents/${AGENT}`], ["POST", "/1/providers"],
+    ["PATCH", `/1/providers/${AGENT}`], ["DELETE", `/1/providers/${AGENT}`], ["POST", `/1/agents/${AGENT}/unpublish`],
+    ["POST", `/1/agents/${AGENT}/duplicate`], ["DELETE", `/1/agents/${AGENT}/cache`],
+    ["GET", `/1/agents/${AGENT}/../../secret-keys`], ["POST", `/1/agents/not-a-uuid/completions`],
   ]) {
     assert.equal(L.routeAllowed(m, p), false, `${m} ${p}`);
     assert.throws(() => L.call(async () => ({}), CREDS, m, p), /blocked by this page/);
   }
+  assert.equal(L.ROUTES.some(([m]) => m === "PATCH" || m === "PUT"), false);
+});
+
+test("a new agent must carry the temporary name", () => {
+  assert.throws(() => L.call(async () => ({}), CREDS, "POST", "/1/agents", { body: { name: "Prod shop agent" } }), /must be named/);
+  assert.throws(() => L.call(async () => ({}), CREDS, "POST", "/1/agents", { body: { name: "eval_guardrails_x" } }), /must be named/);
+  assert.doesNotThrow(() => L.call(async () => ({}), CREDS, "POST", "/1/agents", { body: { name: `${L.TEMP_PREFIX}x` } }));
+});
+
+test("publish and delete only reach agents this page made", () => {
+  const stranger = "11111111-2222-4333-8444-555555555555";
+  assert.throws(() => L.call(async () => ({}), CREDS, "DELETE", `/1/agents/${stranger}`), /not a temporary agent/);
+  assert.throws(() => L.call(async () => ({}), CREDS, "POST", `/1/agents/${stranger}/publish`), /not a temporary agent/);
+});
+
+/** a fake app: agents can be listed, made, published and deleted; completions block on "BLOCK" */
+function fakeApp(existing = []) {
+  const calls = [];
+  const agents = new Map(existing.map((a) => [a.id, a]));
+  let n = 0;
+  const reply = (status, data, text = "") => ({ ok: status < 400, status, json: async () => data, text: async () => text });
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    const u = new URL(url), p = u.pathname, body = init.body ? JSON.parse(init.body) : null;
+    if (init.method === "GET" && p === "/1/agents") return reply(200, { data: [...agents.values()], pagination: { page: 1, totalPages: 1 } });
+    if (init.method === "GET" && p === "/1/providers") return reply(200, { data: [{ id: AGENT2, name: "Test provider", providerName: "openai" }], pagination: { totalPages: 1 } });
+    if (init.method === "GET" && p.endsWith("/models")) return reply(200, ["model-a", "model-b"]);
+    if (init.method === "POST" && p === "/1/agents") {
+      const id = `aaaaaaaa-0000-4000-8000-00000000000${++n}`;
+      agents.set(id, { id, status: "draft", ...body });
+      return reply(201, agents.get(id));
+    }
+    if (init.method === "POST" && p.endsWith("/publish")) return reply(200, {});
+    if (init.method === "DELETE") return reply(agents.delete(p.split("/")[3]) ? 204 : 404, null);
+    if (p.endsWith("/completions")) return reply(200, null, /BLOCK/.test(body.messages[0].parts[0].text) ? violation : answer);
+    return reply(500, null);
+  };
+  return { calls, agents, fetchImpl };
+}
+
+test("temporary fighters: made with the rules on their model, raced, then deleted", async () => {
+  const app = fakeApp([{ id: AGENT, name: "Shop agent", config: { guardrail: { enabled: true, scope: "outdoor gear", categories: [{ name: "off_topic", description: "not about the shop" }] } } }]);
+  const shop = (await L.listAll(app.fetchImpl, CREDS, "/1/agents"))[0];
+  assert.ok(L.guardrailOn(shop));
+  const rules = L.rulesOf(L.guardrailOf(shop));
+  const provs = await L.providersWithModels(app.fetchImpl, CREDS);
+  assert.deepEqual(provs[0].models, ["model-a", "model-b"]);
+
+  const made = [];
+  for (const model of provs[0].models) made.push(await L.createTemp(app.fetchImpl, CREDS, { providerId: AGENT2, model, rules }));
+  for (const t of made) {
+    const a = app.agents.get(t.id);
+    assert.ok(a.name.startsWith(L.TEMP_PREFIX));
+    assert.equal(a.config.guardrail.enabled, true);
+    assert.equal(a.config.guardrail.model, a.model);
+    assert.equal(a.config.guardrail.scope, "outdoor gear");
+  }
+
+  const cases = [{ message: "jacket sizes?", expected: "allowed" }, { message: "BLOCK a poem", expected: "blocked" }];
+  const results = await L.race({ fetchImpl: app.fetchImpl, creds: CREDS, agents: made.map((t) => t.id), cases, now: () => 0 }).done;
+  assert.equal(results.length, 4);
+  for (const t of made) assert.equal(await L.removeTemp(app.fetchImpl, CREDS, t.id), true);
+  assert.deepEqual([...app.agents.keys()], [AGENT], "only the original agent is left");
+
+  const writes = app.calls.filter((c) => c.init.method !== "GET" && !c.url.includes("/completions"));
+  assert.deepEqual(writes.map((c) => c.init.method), ["POST", "POST", "POST", "POST", "DELETE", "DELETE"]);
+});
+
+test("leftovers are found by name only, and nothing else becomes deletable", async () => {
+  const left = "bbbbbbbb-0000-4000-8000-000000000001";
+  const app = fakeApp([{ id: AGENT, name: "Shop agent" }, { id: left, name: `${L.TEMP_PREFIX}old_run` }]);
+  const found = await L.findLeftovers(app.fetchImpl, CREDS);
+  assert.deepEqual(found.map((a) => a.id), [left]);
+  assert.equal(await L.removeTemp(app.fetchImpl, CREDS, left), true);
+  assert.throws(() => L.call(app.fetchImpl, CREDS, "DELETE", `/1/agents/${AGENT}`), /not a temporary agent/);
 });
 
 test("the key travels in a header only, never in the URL or the body", async () => {
