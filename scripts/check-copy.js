@@ -66,7 +66,7 @@ const PAGES = ["index.html", "chat-with-book/index.html", "infinite-conversation
 const JS_FILES = [
   "chat-with-book/app.js", "infinite-conversation/app.js",
   "shared/meter.js", "shared/books.js", "shared/compactor.js", "shared/md.js",
-  "guardrail-battle/app.js", "guardrail-battle/live.js", "guardrail-battle/live-ui.js",
+  "guardrail-battle/app.js", "guardrail-battle/live.js", "guardrail-battle/live-ui.js", "guardrail-battle/race-charts.js",
 ];
 
 /* ── Text extraction ──────────────────────────────────────────── */
