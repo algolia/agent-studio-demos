@@ -9,7 +9,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 
 | Demo | Path | Status |
 | --- | --- | --- |
-| Jev picks the attributes | `/jev-attributes/` | Local (needs its proxy) |
+| Jev picks the attributes | `/jev-attributes/` | Local; public with your own keys once the relay is on |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
 
@@ -41,6 +41,7 @@ scripts/                    node, zero dependencies — see § The shelf and § 
   measure-tokens.js         characters per token, per book, via /context/trim
 tools/                      node, zero dependencies — bakes the seeded conversations
 tests/                      node:test smoke tests — no framework, no install
+functions/relay/            the jev-attributes relay, a Cloudflare Pages Function (off unless RELAY_ENABLED=1)
 eslint.config.js            flat config, rules written out, zero dependencies
 .github/workflows/          ci.yml (lint + tests), deploy.yml (Cloudflare Pages)
 ```
@@ -132,15 +133,34 @@ Open a file over `http://`, not `file://` — the demos load their config and sh
 
 ## Jev picks the attributes
 
-`/jev-attributes/` asks one question two ways. Algolia finds the countries the
-question names. Both lanes send the same model the same hits and the same system
-prompt: **FULL** sends each record whole, **JEV-FILTERED** sends only the
-attributes Jev kept. Jev is TypeSafe's typed-question model (`jev-1.13.0`, `POST
-/v1/systemone`): one request carries 13 yes/no (`noul`) questions, "does
-answering need the *Geography* section?", one per section, and every section at
-P(yes) ≥ 0.5 is kept. At depth **Fields**, a second request asks the same of
-each field inside the kept sections. Token counts are the LLM API's own
+`/jev-attributes/` asks one question several ways. Algolia finds the countries
+the question names. A **decision engine** reads the question and keeps the
+record sections (or, at depth **Fields**, the fields) it needs; the same LLM
+then answers from what was kept. The **FULL RECORD** lane sends each record
+whole. Every lane sends the same model the same hits and the same system
+prompt; only the attributes differ. Token counts are the LLM API's own
 `usage`, never estimated.
+
+### The engines
+
+Pick any of them; they run side by side, one lane each.
+
+| Engine | Where it runs | How it decides |
+| --- | --- | --- |
+| **Jev** | TypeSafe, outside vendor (`jev-1.13.0`, `POST /v1/systemone`) | 13 `noul` questions in one request, one per section, kept at P(yes) ≥ 0.5, plus a `main` choice that is always kept and reports a confidence |
+| **Laya** | Enablers, inside Algolia (`laya-auto`, same API shape, CPU-served) | the same questions in a compact shape: Laya keeps ~512 tokens per question |
+| **Embeddings** | this browser (transformers.js 4.3.0 from jsDelivr, `Xenova/all-MiniLM-L6-v2` q8, 23 MB, WebGPU or WASM, in a worker) | cosine between the question and each section description; within 0.06 of the best, at most 3 |
+| **Keywords** | this browser | BM25 between the question (minus its country names) and each section description; at least half the best score, at most 3; no match keeps everything |
+| **LLM picker** | Enablers `small` | asked for `{"keep": [...]}` from the listed sections |
+
+The Jev request follows the SystemOne levers: the state is an object
+(`{question, sections: {id: description}}`), each question points into it by
+backtick path (`` `sections.economy` ``), and the criteria are contrastive
+(what a section covers, what it is not for, examples) where sections get
+confused: Economy, Energy and Transnational Issues; Geography and Environment.
+The embedding model downloads once into the browser's cache; the page shows
+the progress and the size, and only starts the download by itself when the
+files are already cached.
 
 ### Why the Factbook
 
@@ -179,48 +199,164 @@ node scripts/index-factbook.mjs --push        # settings, then records
   the proxy keeps the hits that match the most words, on the name, with the
   fewest typos. Searches send `analytics: false`.
 
-### Run it
+### Run it: two modes
 
 ```bash
-vault login -method=oidc                      # Enablers token for the LLM, once a day
-node tools/jev-attributes/server.mjs          # → http://127.0.0.1:8795/jev-attributes/
+vault login -method=oidc                              # Enablers token, once a day
+node tools/jev-attributes/server.mjs                  # LOCAL  → http://127.0.0.1:8795/jev-attributes/
+PORT=8796 node tools/jev-attributes/server.mjs --public   # PUBLIC, as deployed
 ```
 
-The proxy (`tools/jev-attributes/`) holds every key: Algolia from
+**LOCAL** is the maintainer's machine. The server holds every key: Algolia from
 `~/.local/state/prefetch.env` (`ESCI_APP`, `ESCI_READ`; `ESCI_WRITE` for the
-indexer only), Jev from `JEV_API_KEY` in the agentic-evals `.env`, Enablers from
-the Vault login (tier `enablers`, alias `medium`, `max_tokens` 16384). It never
-serves `shared/config.js`. The page needs the proxy, so it is local only:
-Cloudflare Pages serves static files. `?q=…&depth=fields` opens a run directly.
+indexer only), Jev from `JEV_API_KEY` in the agentic-evals `.env`, Enablers
+minted from the Vault login (tier `enablers`, answers on `medium`,
+`max_tokens` 16384). It answers `/api/status` (how the page knows it is
+local), searches for the page at `/api/search`, and adds the owner's key to
+any `/relay/*` call that carries none. It never serves `shared/config.js`.
 
-**Data rule.** Jev is an external vendor: only public or synthetic text may go
-to it. The page says so above the question box.
+**PUBLIC** is the deployed page. Visitors paste their own Jev key and their own
+Enablers token (Algolia staff:
+`vault read -field=token identity/oidc/token/enablers`; the page reads the
+token's expiry locally and shows it). The keys stay in the browser: in memory
+by default, or, if the visitor picks it, in `sessionStorage` or
+`localStorage` (`public/jev-attributes/byok.mjs`, every call wrapped). A lane
+whose key is missing is skipped, never sent. `--public` runs the server the
+way Pages would: no key of its own, no `/api`, `shared/config.js` served.
 
-### Measured (2026-10-01, one run each, `medium` = gemma-4-31b-it-nvfp4)
+`?q=…&depth=fields&engines=jev,keyword` opens a run directly.
 
-Input tokens are the API's. Jev is the time of its request(s). Lanes run at the
-same time on a shared gateway with a fresh cache salt each (no prefix-cache
-hits), so the latency columns are single noisy samples, not a benchmark.
+### Why there is a relay: CORS, measured 2026-10-01
 
-| Question | Full in | Sections in | Saving | Jev | Fields in | Saving | Jev (2 calls) |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Peru's GDP growth | 10,647 | 2,101 | −80% | 350 ms | 331 | −97% | 484 ms |
-| Which countries border Austria? | 9,886 | 931 | −91% | 296 ms | 353 | −96% | 465 ms |
-| Compare Japan and Germany military spending | 23,014 | 5,870 | −74% | 210 ms | 756 | −97% | 430 ms |
-| What languages are spoken in Switzerland? | 9,935 | 1,950 | −80% | 251 ms | 320 | −97% | 468 ms |
-| Population over 65 in Italy | 11,452 | 1,866 | −84% | 232 ms | 353 | −97% | 531 ms |
-| Main exports of Chile | 10,547 | 2,045 | −81% | 220 ms | 239 | −98% | 519 ms |
-| What is the capital of Burma? | 10,169 | 2,303 | −77% | 222 ms | 241 | −98% | 439 ms |
-| How many airports does Kenya have? | 10,088 | 306 | −97% | 206 ms | 137 | −99% | 426 ms |
+| Endpoint | Preflight from a browser origin | `fetch` from the page |
+| --- | --- | --- |
+| `api.typesafe.ai/v1/systemone` | 400 "Disallowed CORS origin" for every origin tried (`agent-studio-demos.pages.dev`, `127.0.0.1`, `localhost`, `typesafe.ai`, `null`) | blocked |
+| `inference-staging.api.enablers.algolia.net/v1/*` (Laya) | 401, no CORS headers (auth runs before CORS) | blocked |
+| `inference-eu.api.enablers.algolia.net/v1/chat/completions` | 401, no CORS headers | blocked |
+| `<app>-dsn.algolia.net` (search) | 200, `Access-Control-Allow-Origin: *` | works |
 
-Jev kept the section a reader would pick in all eight (Economy + Military and
-Security for the Japan/Germany comparison). Answers: the page's check found
-every figure and name of the full answer in the filtered one in 15 of 16 runs;
-the miss is wording (the filtered Burma answer says "Burmese capital", not
-"Burma"). Read side by side, the answers agree; the other differences are
-wording too ("top five export commodities" vs "main export commodities"). The page's check is a text
-match on figures and capitalized names, not a fact check, and says so.
-First token, full vs filtered at depth Fields: 1.4–3.7 s vs 0.25–1.4 s.
+So search runs in the browser, and the three vendor calls go through
+`functions/relay/[[path]].js`, a Cloudflare Pages Function on the site's own
+origin. It is stateless and small enough to audit:
+
+- three routes with fixed upstream URLs, POST only; anything else is 404 or 405
+- same-origin callers only; a request without `Authorization: Bearer …` is
+  refused, and no key is ever added (the local server's injection is in
+  `server.mjs`, not in the relay)
+- forwards `Content-Type` and `Authorization` only: no cookies, no client IP
+  headers; the body is capped at 512 KB and streamed back as the vendor sent it
+- no logging, no KV, no cache: there is no `console` in the file (eslint has no
+  `console` global there, and a test greps for it), and every response is
+  `Cache-Control: no-store`
+- **inert until the Pages project sets `RELAY_ENABLED=1`**, so merging and
+  deploying does not open it
+
+What the relay cannot promise: Cloudflare terminates TLS for it, as it does for
+the static site, so the key passes through Cloudflare's edge in a header.
+Workers logs are off unless the project enables them; keep them off.
+
+### Search in public mode: a secured key
+
+```bash
+node scripts/factbook-secured-key.mjs     # appends a jevAttributes block to public/shared/config.js
+```
+
+The page holds a **secured** API key: an HMAC-SHA256 of
+`restrictIndices=demo_factbook,esci_demo_factbook&analytics=false&clickAnalytics=false`,
+keyed with the search-only parent `ESCI_READ`, generated on the maintainer's
+machine with no API call. The parent never reaches a browser. The script checks
+the key before writing it: on 2026-10-01 `esci_demo_factbook` answered 200,
+`demo_factbook` 403 (the parent is scoped to `esci_*`) and an index outside the
+restriction 403. It writes the block to the gitignored `config.js` (creating
+it if absent, refusing to write twice); for the deploy, refresh the
+`DEMO_CONFIG_JS` variable from that file. Widening the parent to
+`demo_factbook` needs no new code: both names are in the restriction and the
+page tries `demo_factbook` first.
+
+**Data rule.** Jev is an outside vendor: only public or synthetic text may go
+to it. It receives the question and the section and field descriptions, never
+a record. The page says so above the question box, and names the vendor.
+
+### Measured: every engine on three scenarios (2026-10-01, LOCAL, one run each)
+
+Answers on `medium` (gemma-4-31b-it-nvfp4). Input tokens are the API's.
+*Engine* is the engine's time to decide, from the browser (the embedding
+model already loaded, WASM in headless Chromium). *Done* is the question to
+the lane's last token. All six lanes stream at once through one gateway with a
+fresh cache salt each, so *Done* is a single noisy sample, not a benchmark.
+*Agrees* is the page's text match: figures and names of the full answer that
+the lane's answer also states.
+
+Depth **Sections**:
+
+| Question | Lane | Kept | Input tokens | Saved | Engine | Done | Agrees |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Peru's GDP growth | Full record | 13 of 13 | 10,647 | | | 3.36 s | |
+| | Jev | Economy | 2,101 | −80% | 306 ms | 1.71 s | 4 of 4 |
+| | Laya | Economy | 2,101 | −80% | 2.67 s | 4.07 s | 4 of 4 |
+| | Embeddings | Economy | 2,101 | −80% | 22 ms | 4.35 s | 4 of 4 |
+| | Keywords | Economy | 2,101 | −80% | 6 ms | 1.79 s | 4 of 4 |
+| | LLM picker | Economy | 2,101 | −80% | 356 ms | 3.32 s | 4 of 4 |
+| Which countries border Austria? | Full record | 13 of 13 | 9,886 | | | 2.83 s | |
+| | Jev | Geography | 931 | −91% | 332 ms | 1.97 s | 17 of 17 |
+| | Laya | Geography | 931 | −91% | 2.36 s | 4.05 s | 17 of 17 |
+| | Embeddings | Introduction, Geography | 1,119 | −89% | 55 ms | 4.59 s | 17 of 17 |
+| | Keywords | Geography | 931 | −91% | 5 ms | 1.80 s | 17 of 17 |
+| | LLM picker | Geography | 931 | −91% | 191 ms | 2.89 s | 17 of 17 |
+| Compare Japan and Germany military spending | Full record | 13 of 13 | 23,014 | | | 7.34 s | |
+| | Jev | Military and Security | 1,941 | −92% | 268 ms | 3.80 s | 10 of 10 |
+| | Laya | Military and Security | 1,941 | −92% | 2.76 s | 6.45 s | 10 of 10 |
+| | Embeddings | Military and Security | 1,941 | −92% | 41 ms | 6.16 s | 10 of 10 |
+| | Keywords | Military and Security | 1,941 | −92% | 4 ms | 3.05 s | 10 of 10 |
+| | LLM picker | Military and Security | 1,941 | −92% | 326 ms | 3.80 s | 10 of 10 |
+
+Depth **Fields** (a second pass inside the kept sections):
+
+| Question | Lane | Fields kept | Input tokens | Saved | Engine | Agrees |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| Peru's GDP growth | Jev | 1 of 32 (Real GDP growth rate) | 192 | −98% | 580 ms | 4 of 4 |
+| | Laya | 1 of 32 (Real GDP growth rate) | 192 | −98% | 4.28 s | 4 of 4 |
+| | Embeddings | 3 of 32 | 356 | −97% | 632 ms | 4 of 4 |
+| | Keywords | 2 of 32 | 225 | −98% | 9 ms | 4 of 4 |
+| | LLM picker | 1 of 32 (Real GDP growth rate) | 192 | −98% | 402 ms | 4 of 4 |
+| Which countries border Austria? | Jev | 1 of 20 (Land boundaries) | 194 | −98% | 564 ms | 9 of 9 |
+| | Laya | 2 of 20 | 207 | −98% | 3.62 s | 9 of 9 |
+| | Embeddings | 2 of 21 | 207 | −98% | 346 ms | 9 of 9 |
+| | Keywords | 20 of 20 (no field name says "border") | 931 | −91% | 7 ms | 9 of 9 |
+| | LLM picker | 1 of 20 (Land boundaries) | 194 | −98% | 357 ms | 9 of 9 |
+| Compare Japan and Germany military spending | Jev | 1 of 7 (Military expenditures) | 362 | −98% | 693 ms | 10 of 10 |
+| | Laya | 3 of 7 | 1,320 | −94% | 2.90 s | 10 of 10 |
+| | Embeddings | 1 of 7 (Military expenditures) | 362 | −98% | 286 ms | 10 of 10 |
+| | Keywords | 6 of 7 | 1,874 | −92% | 11 ms | 10 of 10 |
+| | LLM picker | 1 of 7 (Military expenditures) | 362 | −98% | 451 ms | 10 of 10 |
+
+The full record is the same as at depth Sections (10,647, 9,886 and 23,014
+input tokens). On these three every engine kept what a reader would, and every
+answer stated every figure of the full one: the scenarios are easy on
+purpose. The harder comparison is the study below.
+
+### Which engine keeps the right sections? (64 questions)
+
+`node tools/jev-attributes/study.mjs` scores the section stage on 64 synthetic
+questions labelled by hand (`study-questions.json`); a question is covered when
+each thing it needs has a section kept. 95% bootstrap CIs, 10k resamples; every
+row is in `study-results.json`.
+
+| Engine | Covered | Sections kept | p50 |
+| --- | --- | ---: | ---: |
+| Jev, levered request | 100% (64 of 64) | 1.25 | 260 ms |
+| Jev, v1 request | 96.9% [92.2, 100] | 1.31 | 239 ms |
+| LLM picker (`small`) | 98.4% [95.3, 100] | 1.19 | 155 ms |
+| Keywords | 90.6% [82.8, 96.9], by keeping all 13 on 22 questions | 5.31 | 2 ms |
+| Embeddings | 87.5% [78.1, 95.3] | 1.34 | 30 ms |
+| Laya, compact request | 70.3% [59.4, 81.3] | 1.09 | 2.2 s |
+| Laya, Jev's levered request | 37.5% [26.6, 50.0] | 1.13 | 8.9 s |
+
+Levered vs v1 Jev is +3.1 pp [0.0, 7.8], not significant at this n. Laya's
+usage is ~512 tokens per question whatever the state holds, so the levered
+state reaches it cut short; Jev bills the state once per request. Write-ups:
+conversational-ai `docs/systemone/jev/attribute_selection_2026-10-01.md` and
+`docs/systemone/laya/attribute_selection_2026-10-01.md`.
 
 ## Checks
 
@@ -279,6 +415,13 @@ model are present, so a truncated variable fails with a readable message instead
 blank page.
 
 Whatever key you configure ends up readable in the browser. Scope it accordingly.
+
+**Functions.** `wrangler pages deploy public/` also compiles `functions/` from
+the directory it runs in (the repo root, in CI), so the jev-attributes relay
+ships with every deploy. It answers 404 until the Pages project has the
+environment variable `RELAY_ENABLED=1` (Dashboard → Pages → agent-studio-demos →
+Settings → Variables). Turn it on only when the public mode should work; turn
+Workers logs off for the project if they are on.
 
 You can still deploy by hand from a working copy — `config.js` is uploaded even though it
 is untracked:
