@@ -113,27 +113,36 @@
     return null;
   }
 
-  async function dropTemps({ keepalive = false } = {}) {
-    if (!creds || !temps.size) return { gone: 0, left: 0 };
-    let gone = 0;
-    for (const id of [...temps]) {
-      try {
-        if (await L.removeTemp(f, creds, id, { keepalive })) { temps.delete(id); gone++; }
-      } catch (e) { /* stays in temps; the cleanup button retries */ }
-    }
-    return { gone, left: temps.size };
+  /**
+   * Delete every temporary agent at once (a closing tab only lets the first
+   * awaited request out). `c` is the run's own copy of the keys, so a mid-run
+   * "Forget" still cleans up; with no keys at all, the count is reported left.
+   */
+  async function dropTemps(c = creds, { keepalive = false } = {}) {
+    if (!temps.size) return { gone: 0, left: 0 };
+    if (!c) return { gone: 0, left: temps.size };
+    const ids = [...temps];
+    const ok = await Promise.all(ids.map((id) => L.removeTemp(f, c, id, { keepalive }).catch(() => false)));
+    ids.forEach((id, k) => { if (ok[k]) temps.delete(id); });
+    return { gone: ok.filter(Boolean).length, left: temps.size };
   }
+  const leftText = (r) => (r.left ? ` ${r.left} left: use Clean up.` : "");
 
+  let runCreds = null;
   function forget() {
     if (running) running.stop();
     creds = null;
     $("#lv-key").value = "";
     $("#lv-app").value = "";
-    $("#lv-conn").textContent = "Keys cleared from this tab.";
+    $("#lv-conn").textContent = runCreds
+      ? "Keys cleared. The run stops, deletes its temporary agents, then drops its copy."
+      : "Keys cleared from this tab.";
   }
   $("#lv-forget").addEventListener("click", forget);
-  window.addEventListener("pagehide", () => {
-    if (temps.size) dropTemps({ keepalive: true });
+  window.addEventListener("pagehide", (ev) => {
+    // a page kept in the back-forward cache may come back mid-race: keep it whole
+    if (ev.persisted) return;
+    if (temps.size) dropTemps(runCreds || creds, { keepalive: true });
     creds = null;
   });
 
@@ -197,6 +206,7 @@
   function showMode() {
     $("#lv-temp").hidden = mode() !== "temp";
     $("#lv-own").hidden = mode() !== "own";
+    if (!running) $("#lv-status").textContent = "";
   }
   $("#lv-mode-temp").addEventListener("change", showMode);
   $("#lv-mode-own").addEventListener("change", showMode);
@@ -240,8 +250,10 @@
       const a = agents.find((x) => x.id === v.slice(6));
       if (a && L.guardrailOf(a)) return L.rulesOf(L.guardrailOf(a));
     }
-    const cfg = (await heldoutData()).configs[v === "demo:r0" ? "r0" : "final"];
-    return L.rulesOf(cfg);
+    const id = (await heldoutData()).configs[v === "demo:r0" ? "r0" : "final"];
+    const r = await fetch("data/run.json");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return L.rulesOf(L.runConfig(await r.json(), id));
   }
 
   $("#lv-cleanup").addEventListener("click", async () => {
@@ -251,7 +263,8 @@
     try {
       const left = await L.findLeftovers(f, creds);
       if (!left.length) { out.textContent = "No leftover temporary agents."; return; }
-      if (!window.confirm(`Delete ${left.length} agents named ${L.TEMP_PREFIX}…?`)) return;
+      const names = left.slice(0, 8).map((a) => a.name).join("\n");
+      if (!window.confirm(`Delete these ${left.length} agents?\n\n${names}${left.length > 8 ? "\n…" : ""}`)) return;
       left.forEach((a) => temps.add(a.id));
       const r = await dropTemps();
       out.textContent = `Deleted ${r.gone}.` + (r.left ? ` ${r.left} could not be deleted.` : "");
@@ -325,51 +338,57 @@
     $("#lv-export").disabled = true;
     const labels = {};
     let ids = own;
+    // the run keeps its own copy of the keys, so "Forget" mid-run cannot strand temporary agents
+    runCreds = creds;
+    $("#lv-stop").disabled = false;
     if (temp) {
       ids = [];
       try {
         for (const p of picked) {
+          if (!creds) throw new Error("keys cleared");
           status.textContent = `Making a temporary agent for ${p.model}…`;
-          const t = await L.createTemp(f, creds, { providerId: p.providerId, model: p.model, rules });
+          const t = await L.createTemp(f, runCreds, { providerId: p.providerId, model: p.model, rules });
           temps.add(t.id);
           ids.push(t.id);
           labels[t.id] = p.model;
         }
       } catch (e) {
         if (e.id) temps.add(e.id);
-        const r = await dropTemps();
-        status.textContent = `Could not make the agents (${e.message}). Removed ${r.gone}.` + (r.left ? ` ${r.left} left: use Clean up.` : "");
+        const r = await dropTemps(runCreds);
+        runCreds = null;
+        $("#lv-stop").disabled = true;
+        status.textContent = `Could not make the agents (${e.message}). Removed ${r.gone}.${leftText(r)}`;
         return;
       }
     }
 
     const results = [];
-    lanes(ids, labels, cases.length, results);
-    $("#lv-stop").disabled = false;
-    status.textContent = "Racing…";
-    let painted = 0;
-    running = L.race({
-      fetchImpl: f, creds, agents: ids, cases,
-      onResult: (r) => {
-        results.push(r);
-        if (Date.now() - painted > 120) { painted = Date.now(); lanes(ids, labels, cases.length, results); }
-      },
-    });
+    let tail = "";
     try {
+      lanes(ids, labels, cases.length, results);
+      status.textContent = "Racing…";
+      let painted = 0;
+      running = L.race({
+        fetchImpl: f, creds: runCreds, agents: ids, cases,
+        onResult: (r) => {
+          results.push(r);
+          if (Date.now() - painted > 120) { painted = Date.now(); lanes(ids, labels, cases.length, results); }
+        },
+      });
       await running.done;
+      lanes(ids, labels, cases.length, results);
+      summary(ids, labels, results);
     } finally {
       running = null;
       $("#lv-stop").disabled = true;
+      if (temp) {
+        const r = await dropTemps(runCreds);
+        tail = ` Deleted ${r.gone} temporary agents.${leftText(r)}`;
+      }
+      runCreds = null;
     }
-    lanes(ids, labels, cases.length, results);
-    summary(ids, labels, results);
     last = { cases, ids, labels, results };
     $("#lv-export").disabled = !results.length;
-    let tail = "";
-    if (temp) {
-      const r = await dropTemps();
-      tail = ` Deleted ${r.gone} temporary agents.` + (r.left ? ` ${r.left} left: use Clean up.` : "");
-    }
     status.textContent = `Done: ${results.length} answers.${tail}`;
   });
 
