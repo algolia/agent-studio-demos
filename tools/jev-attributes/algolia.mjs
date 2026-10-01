@@ -104,6 +104,8 @@ export async function search({ app, key }, query, hitsPerPage = 3) {
   const params = {
     query, hitsPerPage: 10, analytics: false, clickAnalytics: false,
     removeWordsIfNoResults: "allOptional", getRankingInfo: true, attributesToHighlight: [],
+    // whole words only: "Mars" is not the start of "Marshall Islands"
+    queryType: "prefixNone",
   };
   if (app && key) {
     for (const index of resolved ? [resolved] : INDEX_NAMES) {
