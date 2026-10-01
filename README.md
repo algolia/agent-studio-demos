@@ -11,7 +11,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 | --- | --- | --- |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
-| Guardrail battle | `/guardrail-battle/` | Local |
+| Guardrail battle | `/guardrail-battle/` | Live |
 
 ## Layout
 
