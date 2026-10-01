@@ -54,6 +54,7 @@
   <div class="tabs" role="tablist" aria-label="Which run">
     <button class="tab" role="tab" id="tab-toy" data-mode="toy" aria-controls="toy" aria-selected="true">Toy · 12&nbsp;messages</button>
     <button class="tab" role="tab" id="tab-proper" data-mode="proper" aria-controls="proper" aria-selected="false">Full run · held-out exam</button>
+    <button class="tab" role="tab" id="tab-live" data-mode="live" aria-controls="live" aria-selected="false">Your agents · live</button>
   </div>
 
   <section id="toy" role="tabpanel" aria-labelledby="tab-toy">
@@ -75,17 +76,70 @@
   <section id="proper" role="tabpanel" aria-labelledby="tab-proper" hidden>
     <div id="p-body"><p class="wait">Loading the frozen results…</p></div>
   </section>
+
+  <section id="live" role="tabpanel" aria-labelledby="tab-live" hidden>
+    <ul class="honesty safe">
+      <li>Your key and your messages stay in this tab. They go only to your own Algolia app.</li>
+      <li>Use a new key with the search ACL only and a short life. Delete it after.</li>
+      <li>Synthetic or public messages only. Never paste personal data.</li>
+      <li>Each allowed message runs your agent in full, on your provider, so it uses tokens.</li>
+    </ul>
+
+    <h2>1 · Your app</h2>
+    <div class="lv-form">
+      <label>Region
+        <select id="lv-region"><option value="eu">EU</option><option value="us">US</option></select>
+      </label>
+      <label>Application ID <input id="lv-app" type="text" spellcheck="false" autocomplete="off"></label>
+      <label>API key <input id="lv-key" type="password" spellcheck="false" autocomplete="new-password"></label>
+      <label class="wide">Agent IDs, one per model, up to four
+        <textarea id="lv-agents" rows="3" spellcheck="false" placeholder="one agent ID per line"></textarea>
+      </label>
+      <div class="wide lv-row"><button type="button" id="lv-forget">Forget keys</button></div>
+    </div>
+    <details class="pair">
+      <summary>Look up agent names, models and providers</summary>
+      <p class="note">This needs a key with the settings ACL. It only reads.</p>
+      <button type="button" id="lv-lookup">Look up</button>
+      <div id="lv-lookup-out"></div>
+    </details>
+
+    <h2>2 · The exam</h2>
+    <div class="lv-form">
+      <label class="radio"><input type="radio" name="lv-src" id="lv-src-ex" checked> Our synthetic held-out set</label>
+      <label class="radio"><input type="radio" name="lv-src" id="lv-src-csv"> Your CSV
+        <input type="file" id="lv-file" accept=".csv,text/csv"></label>
+      <label>Messages per agent <input id="lv-size" type="number" min="1" max="200" value="40"></label>
+      <div class="lv-row"><button type="button" id="lv-download">Download the example CSV</button></div>
+    </div>
+    <p class="note">Columns: message, expected (allowed or blocked), category, note. The file is read here and never uploaded.</p>
+    <div id="lv-preview"></div>
+
+    <h2>3 · The race</h2>
+    <div class="toolbar">
+      <button class="primary" type="button" id="lv-run">Start the race</button>
+      <button type="button" id="lv-stop" disabled>Stop</button>
+      <button type="button" id="lv-export" disabled>Export results CSV</button>
+      <span class="meta" id="lv-status" role="status"></span>
+    </div>
+    <div id="lv-lanes"></div>
+    <div id="lv-summary"></div>
+  </section>
 </main>
 
 <footer class="footer">
   <div class="page">
     <p>
       The numbers are a frozen snapshot of one run, served from
-      <code>data/</code> next to this page. Nothing here calls a model.
+      <code>data/</code> next to this page. Only the live tab calls a model: yours.
     </p>
   </div>
 </footer>
 
+<script src="csv.js"></script>
+<script src="stats.js"></script>
+<script src="live.js"></script>
 <script src="app.js"></script>
+<script src="live-ui.js"></script>
 </body>
 </html>

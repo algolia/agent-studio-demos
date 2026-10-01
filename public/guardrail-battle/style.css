@@ -195,6 +195,35 @@ svg.chart .grid { stroke: var(--line); }
 
 [hidden] { display: none !important; }
 
+/* ── live tab ───────────────────────────────────────────────────── */
+.honesty.safe { margin: 0 0 8px; }
+.lv-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; max-width: 900px; }
+.lv-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.lv-form label.radio { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 14px; color: var(--ink); }
+.lv-form .wide { grid-column: 1 / -1; }
+.lv-row { display: flex; gap: 8px; align-items: center; }
+.lv-form input[type="text"], .lv-form input[type="password"], .lv-form input[type="number"], .lv-form select, .lv-form textarea {
+  font: inherit; font-size: 14px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 6px 8px; min-width: 0;
+}
+.lv-form textarea { font-family: var(--mono); font-size: 13px; resize: vertical; }
+#live button:not(.primary) {
+  font: inherit; font-size: 13px; color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 6px 12px; cursor: pointer;
+}
+#live button:disabled { opacity: 0.5; cursor: default; }
+.lv-errs { color: var(--over); font-size: 13px; margin: 6px 0; }
+#lv-lookup-out ul { font-size: 14px; padding-left: 18px; }
+.lane { margin: 10px 0; }
+.lane-h { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
+.lane-h .note { margin: 0 0 0 auto; }
+.lane-t { display: flex; height: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.lane-t div { height: 100%; transition: width 0.15s; }
+.lane-t .ok { background: var(--ok); }
+.lane-t .bad { background: var(--over); }
+.lane-t .fail { background: var(--ink-3); }
+#lv-summary { margin-top: 14px; }
+
 .footer { border-top: 1px solid var(--line); background: var(--surface); }
 .footer .page { padding-top: 22px; padding-bottom: 32px; }
 .footer p { margin: 0; font-size: 13px; color: var(--ink-3); }
@@ -203,7 +232,7 @@ svg.chart .grid { stroke: var(--line); }
   .page, .masthead-inner { padding-left: 16px; padding-right: 16px; }
   .round { grid-template-columns: 1fr; }
   .rlabel { padding-top: 0; }
-  .side, .grid2, .grid3 { grid-template-columns: 1fr; }
+  .side, .grid2, .grid3, .lv-form { grid-template-columns: 1fr; }
 }
 
 /* phones: the per-round table becomes one card per round, every value labelled,

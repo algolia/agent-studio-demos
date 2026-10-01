@@ -384,16 +384,18 @@
     document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === mode)));
     $("#toy").hidden = mode !== "toy";
     $("#proper").hidden = mode !== "proper";
-    load(mode);
+    $("#live").hidden = mode !== "live";
+    if (mode !== "live") load(mode);
     if (location.hash !== "#" + mode) history.replaceState(null, "", "#" + mode);
   }
+  const fromHash = () => (location.hash === "#proper" || location.hash === "#live" ? location.hash.slice(1) : "toy");
   document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
-  window.addEventListener("hashchange", () => setMode(location.hash === "#proper" ? "proper" : "toy"));
+  window.addEventListener("hashchange", () => setMode(fromHash()));
 
   /* the held-out n in the header comes from the data, not from the markup */
   getJson("data/run.json").then((d) => {
     $("#h-n").textContent = `n\u00a0=\u00a0${d.rounds[0].heldout.n}`;
   }).catch(() => {});
 
-  setMode(location.hash === "#proper" ? "proper" : "toy");
+  setMode(fromHash());
 })();
