@@ -235,10 +235,11 @@ test("reruns keep their own repeat number, and one fighter can span several agen
 test("models are ranked for a guardrail: fast first, newest first, non-chat last", () => {
   const ranked = L.rankModels([
     { id: "p1", name: "A", models: ["claude-fable-5-1", "claude-haiku-4-5-20251001", "claude-opus-5-5", "claude-haiku-3"] },
-    { id: "p2", name: "B", models: ["gpt-4.1-mini", "gpt-5-mini", "text-embedding-3-large", "gpt-5", "mistral-small-2503"] },
+    { id: "p2", name: "B", models: ["gpt-4.1-mini", "gpt-5-mini", "text-embedding-3-large", "gpt-5", "mistral-small-2503", "luna"] },
   ]).map((r) => r.model);
-  assert.deepEqual(ranked.slice(0, 3), ["gpt-5-mini", "claude-haiku-4-5-20251001", "gpt-4.1-mini"]);
+  assert.deepEqual(ranked.slice(0, 4), ["luna", "gpt-5-mini", "claude-haiku-4-5-20251001", "gpt-4.1-mini"]);
   assert.equal(ranked[ranked.length - 1], "text-embedding-3-large");
+  assert.ok(ranked.indexOf("luna") < ranked.indexOf("gpt-5"), "luna is a fast chat model");
   assert.ok(ranked.indexOf("claude-opus-5-5") < ranked.indexOf("claude-fable-5-1") || ranked.indexOf("claude-opus-5-5") > ranked.indexOf("gpt-4.1-mini"));
   const lineup = L.suggestLineup(L.rankModels([
     { id: "p1", models: ["claude-haiku-4-5", "claude-opus-5-5"] }, { id: "p2", models: ["gpt-5-mini", "gpt-5"] }]));

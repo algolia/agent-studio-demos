@@ -155,13 +155,14 @@
    * newest version leads, and a moving alias beats a dated snapshot.
    */
   const NOT_CHAT = /embed|tts|whisper|audio|speech|realtime|transcri|image|dall-e|moderation|rerank/i;
-  const FAST = /mini|nano|flash|haiku|lite|small|fast|instant|tiny|\b[1-9]b\b|-[1-9]b|8x7b|turbo/i;
+  const FAST = /mini|nano|flash|haiku|luna|lite|small|fast|instant|tiny|\b[1-9]b\b|-[1-9]b|8x7b|turbo/i;
   const TIERS = ["fast", "strong", "other"];
   const versionOf = (m) => {
     // the first small number is the version; a date or a 2503-style build number is not
     const v = (String(m).replace(/20\d{2}-?\d{2}-?\d{2}/g, "").match(/\d+(?:[.-]\d(?!\d))?/g) || [])
       .map((s) => parseFloat(s.replace("-", "."))).find((x) => x < 100);
-    return v || 0;
+    // no number at all is a moving alias to the newest model (luna), so it leads its tier
+    return /\d/.test(m) ? v || 0 : 99;
   };
   const tierOf = (m) => (NOT_CHAT.test(m) ? "other" : FAST.test(m) ? "fast" : "strong");
 
