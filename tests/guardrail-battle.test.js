@@ -16,6 +16,8 @@ const FORBIDDEN = [
   /"(?:small|large|xlarge)"/, /[\w.+-]+@[\w-]+\.[\w.]+/, /https?:\/\//, /localhost|127\.0\.0\.1/,
   /score_payload|run\.log|sqlite/i,
   /lululemon|gymshark|athleta|adidas|\bnike\b/i,
+  // well-known brands: the synthetic shop names its rivals Brand A, Brand B, …
+  /\b(?:marvel|disney|pixar|netflix|spotify|amazon|ebay|walmart|patagonia|north face|arc.teryx|decathlon|under armour|puma|reebok|new balance|asics|salomon|vuori|uniqlo|zara|starbucks|coca.cola|pepsi|openai|tiktok|instagram|youtube)\b/i,
 ];
 
 test("the snapshots exist and stay small", () => {
