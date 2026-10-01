@@ -122,6 +122,23 @@ test("temporary fighters: made with the rules on their model, raced, then delete
   assert.deepEqual(writes.map((c) => c.init.method), ["POST", "POST", "POST", "POST", "DELETE", "DELETE"]);
 });
 
+test("the demo rules resolve to the real frozen configs, with categories, inside the server limits", () => {
+  const read = (n) => JSON.parse(fs.readFileSync(path.join(DIR, "data", n), "utf8"));
+  const run = read("run.json"), ids = read("heldout.json").configs;
+  for (const key of ["r0", "final"]) {
+    const rules = L.rulesOf(L.runConfig(run, ids[key]));
+    assert.ok(rules.categories.length >= 3, `${key}: ${rules.categories.length} categories`);
+    assert.ok(rules.scope && rules.scope.length <= 1024, `${key} scope`);
+    assert.ok(!rules.noViolationExamples || rules.noViolationExamples.length <= 1024, `${key} allowed examples`);
+    for (const c of rules.categories) {
+      assert.ok(c.name.length >= 1 && c.name.length <= 64 && c.name !== "no_violation", c.name);
+      assert.ok(!c.description || c.description.length <= 1024, `${c.name} description`);
+      assert.ok(!c.examples || String(c.examples).length <= 1024, `${c.name} examples`);
+    }
+  }
+  assert.throws(() => L.runConfig(run, "nope"), /no config/);
+});
+
 test("leftovers are found by name only, and nothing else becomes deletable", async () => {
   const left = "bbbbbbbb-0000-4000-8000-000000000001";
   const app = fakeApp([{ id: AGENT, name: "Shop agent" }, { id: left, name: `${L.TEMP_PREFIX}old_run` }]);

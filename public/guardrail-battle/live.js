@@ -155,10 +155,17 @@
     const cats = (g.categories || []).map((c) => {
       const o = { name: c.name, description: c.description || null, examples: c.examples || null };
       if (c.scope) o.scope = c.scope;
-      if (c.fallbackResponse) o.fallbackResponse = c.fallbackResponse;
+      if (c.fallbackResponse || c.fallback_response) o.fallbackResponse = c.fallbackResponse || c.fallback_response;
       return o;
     });
     return { scope: g.scope || null, noViolationExamples: g.noViolationExamples || g.no_violation_examples || null, categories: cats };
+  }
+
+  /** a config of the frozen run by candidate id (heldout.json names "r0" and "final" by id) */
+  function runConfig(run, id) {
+    const c = (run.rounds || []).flatMap((r) => r.candidates || []).find((x) => x.id === id);
+    if (!c || !c.config) throw new Error(`no config ${id} in the run`);
+    return c.config;
   }
 
   const slug = (s) => String(s || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40);
@@ -272,7 +279,7 @@
   global.GuardrailLive = {
     HOSTS, MAX_CASES, MAX_AGENTS, IN_FLIGHT, ROUTES, COMPLETION_QUERY, TEMP_PREFIX,
     isUuid, routeAllowed, call, readVerdict, statusText, listAll, providersWithModels,
-    guardrailOf, guardrailOn, rulesOf, createTemp, removeTemp, findLeftovers,
+    guardrailOf, guardrailOn, rulesOf, runConfig, createTemp, removeTemp, findLeftovers,
     judge, race, resultsCsv, summarize,
   };
 })(window);
