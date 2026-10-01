@@ -81,6 +81,32 @@ function vaultMint() {
 
 /* ── static ───────────────────────────────────────────────────── */
 
+/**
+ * Cloudflare Pages' `_headers` format: a path pattern at the start of a line
+ * (`*` matches anything, empty included), then indented `Name: value` lines.
+ * Every rule whose pattern matches applies.
+ */
+export function parseHeaders(text) {
+  const rules = [];
+  for (const line of String(text).split("\n")) {
+    if (!line.trim() || line.trim().startsWith("#")) continue;
+    if (!/^\s/.test(line)) {
+      const glob = line.trim().replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+      rules.push({ pattern: new RegExp(`^${glob}$`), headers: {} });
+      continue;
+    }
+    const m = line.trim().match(/^([^:]+):\s*(.*)$/);
+    if (m && rules.length) rules[rules.length - 1].headers[m[1]] = m[2];
+  }
+  return rules;
+}
+
+const HEADER_RULES = parseHeaders(fs.existsSync(path.join(PUBLIC_DIR, "_headers")) ? fs.readFileSync(path.join(PUBLIC_DIR, "_headers"), "utf8") : "");
+
+export function headersFor(pathname, rules = HEADER_RULES) {
+  return Object.assign({}, ...rules.filter((r) => r.pattern.test(pathname)).map((r) => r.headers));
+}
+
 function send(res, status, body, type = "text/plain; charset=utf-8") {
   res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
   res.end(typeof body === "string" ? body : JSON.stringify(body));
@@ -92,13 +118,13 @@ function serveStatic(req, res, mode) {
   if (rel.endsWith("/")) rel += "index.html";
   const file = path.normalize(path.join(PUBLIC_DIR, rel));
   const isConfig = /(^|\/)config\.js$/.test(rel);
-  if (!file.startsWith(PUBLIC_DIR + path.sep) || (isConfig && mode === "local")) return send(res, 404, "not found");
+  if (!file.startsWith(PUBLIC_DIR + path.sep) || (isConfig && mode === "local") || rel === "/_headers") return send(res, 404, "not found");
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) {
       if (!err && st.isDirectory()) { res.writeHead(301, { Location: `${u.pathname}/` }); return res.end(); }
       return send(res, 404, "not found");
     }
-    res.writeHead(200, { "Content-Type": TYPES[path.extname(file)] || "application/octet-stream", "Cache-Control": "no-store" });
+    res.writeHead(200, { ...headersFor(u.pathname), "Content-Type": TYPES[path.extname(file)] || "application/octet-stream", "Cache-Control": "no-store" });
     fs.createReadStream(file).pipe(res);
   });
 }
