@@ -258,6 +258,26 @@ What the relay cannot promise: Cloudflare terminates TLS for it, as it does for
 the static site, so the key passes through Cloudflare's edge in a header.
 Workers logs are off unless the project enables them; keep them off.
 
+While the relay is off, the page probes it once at startup (a keyless POST
+answers 404, where a live relay answers 401), shows no key fields and says
+the relay is off.
+
+#### Before enabling the relay
+
+Setting `RELAY_ENABLED=1` puts a key-forwarding endpoint on a public origin.
+None of these is built yet; each is the owner's call, and all four come first:
+
+- [ ] **Who may call it:** Cloudflare Access in front of `/jev-attributes/*`
+      and `/relay/*` (Okta, Algolia staff only), or Turnstile on the page with
+      the relay checking the token.
+- [ ] **How often:** a WAF rate-limiting rule on `/relay/*`, per IP, so a
+      stolen tab cannot turn the relay into a free proxy.
+- [ ] **Enablers tokens in memory only:** drop the tab and device options
+      for the Enablers token in `byok.mjs`, so a short-lived staff credential
+      never lands in `localStorage`.
+- [ ] **AI Platform sign-off** on staff Enablers tokens passing through a
+      Cloudflare-hosted page and relay.
+
 ### Search in public mode: a secured key
 
 ```bash
