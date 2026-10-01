@@ -9,6 +9,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 
 | Demo | Path | Status |
 | --- | --- | --- |
+| Jev picks the attributes | `/jev-attributes/` | Local (needs its proxy) |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
 
@@ -128,6 +129,98 @@ Open a file over `http://`, not `file://` — the demos load their config and sh
 `config.example.js` documents every field. It is committed; `config.js` is in `.gitignore` at every depth and must never be committed.
 
 **These pages call the API directly from the browser** so the wire log can show you every request. That means the key is visible to anyone who opens devtools. Use a key scoped to exactly what the demo needs, and put a backend in front of it before shipping anything like this.
+
+## Jev picks the attributes
+
+`/jev-attributes/` asks one question two ways. Algolia finds the countries the
+question names. Both lanes send the same model the same hits and the same system
+prompt: **FULL** sends each record whole, **JEV-FILTERED** sends only the
+attributes Jev kept. Jev is TypeSafe's typed-question model (`jev-1.13.0`, `POST
+/v1/systemone`): one request carries 13 yes/no (`noul`) questions, "does
+answering need the *Geography* section?", one per section, and every section at
+P(yes) ≥ 0.5 is kept. At depth **Fields**, a second request asks the same of
+each field inside the kept sections. Token counts are the LLM API's own
+`usage`, never estimated.
+
+### Why the Factbook
+
+The CIA World Factbook (via [factbook/factbook.json](https://github.com/factbook/factbook.json),
+CC0; the text itself is a US-government work in the public domain) is the
+shape this demo needs: 255 records, one schema, 13 sections, ~130 fields each,
+and almost every question needs one or two sections. The edition is the last
+one: the CIA retired the Factbook in February 2026, and the mirror's checkout
+used here is commit `144d697` (2026-09-11). Weighed and rejected: the books
+index (passages, so the question is *which passage*, not *which attribute*), a
+Gutenberg book (that is chunking), and a product catalog (few attributes per
+record, so little to strip).
+
+### Data and index
+
+```bash
+git clone --depth 1 https://github.com/factbook/factbook.json.git /tmp/fb   # 13 MB
+node scripts/build-factbook.mjs /tmp/fb       # → factbook.jsonl, gitignored
+node scripts/index-factbook.mjs --push        # settings, then records
+```
+
+- One record per entity, keyed `Section.Field`, plus `objectID` (the GEC code),
+  `name`, `aliases` and `region`. Oceans and the World entry are left out (other
+  schema). 255 records, 32,503 fields, 6.9 MB; the biggest is the United States
+  at 49 KB, the median 29 KB.
+- **Trimmed:** 218 fields longer than 1,500 characters are cut with an ellipsis
+  (Introduction 141, Military and Security 45, Government 26, Space 3, one each
+  in People and Society, Economy, Geography). HTML is stripped and entities decoded.
+- **Index name wart:** the app's keys are scoped to `esci_*`, so
+  `demo_factbook` is refused (403, "Index not allowed with this API key") and
+  the records live in **`esci_demo_factbook`**. The indexer and the proxy try
+  `demo_factbook` first, so widening the key moves both with no code change.
+  If neither index answers, the proxy searches `factbook.jsonl` locally and the
+  page says so.
+- Only `name` and `aliases` are searchable, all words optional, stop words off;
+  the proxy keeps the hits that match the most words, on the name, with the
+  fewest typos. Searches send `analytics: false`.
+
+### Run it
+
+```bash
+vault login -method=oidc                      # Enablers token for the LLM, once a day
+node tools/jev-attributes/server.mjs          # → http://127.0.0.1:8795/jev-attributes/
+```
+
+The proxy (`tools/jev-attributes/`) holds every key: Algolia from
+`~/.local/state/prefetch.env` (`ESCI_APP`, `ESCI_READ`; `ESCI_WRITE` for the
+indexer only), Jev from `JEV_API_KEY` in the agentic-evals `.env`, Enablers from
+the Vault login (tier `enablers`, alias `medium`, `max_tokens` 16384). It never
+serves `shared/config.js`. The page needs the proxy, so it is local only:
+Cloudflare Pages serves static files. `?q=…&depth=fields` opens a run directly.
+
+**Data rule.** Jev is an external vendor: only public or synthetic text may go
+to it. The page says so above the question box.
+
+### Measured (2026-10-01, one run each, `medium` = gemma-4-31b-it-nvfp4)
+
+Input tokens are the API's. Jev is the time of its request(s). Lanes run at the
+same time on a shared gateway with a fresh cache salt each (no prefix-cache
+hits), so the latency columns are single noisy samples, not a benchmark.
+
+| Question | Full in | Sections in | Saving | Jev | Fields in | Saving | Jev (2 calls) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Peru's GDP growth | 10,647 | 2,101 | −80% | 350 ms | 331 | −97% | 484 ms |
+| Which countries border Austria? | 9,886 | 931 | −91% | 296 ms | 353 | −96% | 465 ms |
+| Compare Japan and Germany military spending | 23,014 | 5,870 | −74% | 210 ms | 756 | −97% | 430 ms |
+| What languages are spoken in Switzerland? | 9,935 | 1,950 | −80% | 251 ms | 320 | −97% | 468 ms |
+| Population over 65 in Italy | 11,452 | 1,866 | −84% | 232 ms | 353 | −97% | 531 ms |
+| Main exports of Chile | 10,547 | 2,045 | −81% | 220 ms | 239 | −98% | 519 ms |
+| What is the capital of Burma? | 10,169 | 2,303 | −77% | 222 ms | 241 | −98% | 439 ms |
+| How many airports does Kenya have? | 10,088 | 306 | −97% | 206 ms | 137 | −99% | 426 ms |
+
+Jev kept the section a reader would pick in all eight (Economy + Military and
+Security for the Japan/Germany comparison). Answers: the page's check found
+every figure and name of the full answer in the filtered one in 15 of 16 runs;
+the miss is wording (the filtered Burma answer says "Burmese capital", not
+"Burma"). Read side by side, the answers agree; the other differences are
+wording too ("top five export commodities" vs "main export commodities"). The page's check is a text
+match on figures and capitalized names, not a fact check, and says so.
+First token, full vs filtered at depth Fields: 1.4–3.7 s vs 0.25–1.4 s.
 
 ## Checks
 
