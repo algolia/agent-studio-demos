@@ -213,7 +213,22 @@ svg.chart .grid { stroke: var(--line); }
 }
 #live button:disabled { opacity: 0.5; cursor: default; }
 .lv-errs { color: var(--over); font-size: 13px; margin: 6px 0; }
-#lv-lookup-out ul { font-size: 14px; padding-left: 18px; }
+.lv-end { align-self: end; }
+.lv-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
+  background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 999px; padding: 3px 4px 3px 12px;
+}
+#live .chip button { border: 0; background: none; padding: 0 6px; font-size: 15px; line-height: 1; }
+.lv-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius); margin: 10px 0; max-width: 900px; }
+.lv-list:empty { display: none; }
+.lv-list .note { padding: 6px 12px; }
+.lv-agent {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 12px;
+  border-bottom: 1px solid var(--line); font-size: 14px; cursor: pointer;
+}
+.lv-agent:hover { background: var(--surface-2); }
+.lv-agent .badge { margin-left: auto; }
 .lane { margin: 10px 0; }
 .lane-h { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
 .lane-h .note { margin: 0 0 0 auto; }

@@ -80,10 +80,11 @@
   <section id="live" role="tabpanel" aria-labelledby="tab-live" hidden>
     <ul class="honesty safe">
       <li>Your key and your messages stay in this tab. They go only to your own Algolia app.</li>
-      <li>Use a new key with the search ACL only and a short life. Delete it after.</li>
+      <li>Use a test app and a new key with a short life. Delete the key after.</li>
+      <li>Temporary agents need the editSettings ACL. Racing your own agents needs only search.</li>
       <li>Synthetic or public messages only. Never paste personal data.</li>
-      <li>Each allowed message runs your agent in full, on your provider, so it uses tokens.</li>
-      <li>Runs are saved like any chat, under your agent’s retention setting.</li>
+      <li>Each allowed message runs a full answer on your provider, so it uses tokens.</li>
+      <li>Runs are saved like any chat, under the agent’s retention setting.</li>
     </ul>
 
     <h2>1 · Your app</h2>
@@ -93,19 +94,43 @@
       </label>
       <label>Application ID <input id="lv-app" type="text" spellcheck="false" autocomplete="off"></label>
       <label>API key <input id="lv-key" type="password" spellcheck="false" autocomplete="off"></label>
-      <label class="wide">Agent IDs, one per model, up to four
-        <textarea id="lv-agents" rows="3" spellcheck="false" placeholder="one agent ID per line"></textarea>
-      </label>
-      <div class="wide lv-row"><button type="button" id="lv-forget">Forget keys</button></div>
+      <div class="wide lv-row">
+        <button type="button" id="lv-connect">Connect</button>
+        <button type="button" id="lv-forget">Forget keys</button>
+        <span class="meta" id="lv-conn" role="status"></span>
+      </div>
     </div>
-    <details class="pair">
-      <summary>Look up agent names, models and providers</summary>
-      <p class="note">This needs a key with the settings ACL. It only reads.</p>
-      <button type="button" id="lv-lookup">Look up</button>
-      <div id="lv-lookup-out"></div>
-    </details>
 
-    <h2>2 · The exam</h2>
+    <h2>2 · The fighters</h2>
+    <div class="lv-form">
+      <label class="radio"><input type="radio" name="lv-mode" id="lv-mode-temp" checked> Temporary agents, one per model</label>
+      <label class="radio"><input type="radio" name="lv-mode" id="lv-mode-own"> My own agents</label>
+    </div>
+    <div id="lv-temp">
+      <div class="lv-form">
+        <label>Guardrail rules
+          <select id="lv-rules"><option value="demo:final">Battle, final config</option><option value="demo:r0">Battle, starting config</option></select>
+        </label>
+        <label>Model <select id="lv-model"><option value="">Connect first</option></select></label>
+        <div class="lv-row lv-end"><button type="button" id="lv-add">Add model</button></div>
+      </div>
+      <div class="lv-chips" id="lv-picked"></div>
+      <p class="note">Each model gets an agent named EVAL_GUARDRAILS_…, raced, then deleted.
+        <button type="button" id="lv-cleanup">Clean up leftovers</button></p>
+    </div>
+    <div id="lv-own" hidden>
+      <div class="lv-form">
+        <label class="wide">Search your agents <input id="lv-q" type="search" spellcheck="false" placeholder="name, model or ID"></label>
+      </div>
+      <div class="lv-list" id="lv-list"></div>
+      <div class="lv-form">
+        <label class="wide">Agent IDs, ticked above or pasted, up to four
+          <textarea id="lv-agents" rows="3" spellcheck="false" placeholder="one agent ID per line"></textarea>
+        </label>
+      </div>
+    </div>
+
+    <h2>3 · The exam</h2>
     <div class="lv-form">
       <label class="radio"><input type="radio" name="lv-src" id="lv-src-ex" checked> Our synthetic held-out set</label>
       <label class="radio"><input type="radio" name="lv-src" id="lv-src-csv"> Your CSV
@@ -116,7 +141,7 @@
     <p class="note">Columns: message, expected (allowed or blocked), category, note. The file is read here and never uploaded.</p>
     <div id="lv-preview"></div>
 
-    <h2>3 · The race</h2>
+    <h2>4 · The race</h2>
     <div class="toolbar">
       <button class="primary" type="button" id="lv-run">Start the race</button>
       <button type="button" id="lv-stop" disabled>Stop</button>
