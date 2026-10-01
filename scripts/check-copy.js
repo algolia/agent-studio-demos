@@ -67,6 +67,8 @@ const JS_FILES = [
   "chat-with-book/app.js", "infinite-conversation/app.js",
   "shared/meter.js", "shared/books.js", "shared/compactor.js", "shared/md.js",
   "shared/sse.mjs", "shared/format.mjs", "jev-attributes/app.js", "jev-attributes/attrs.mjs",
+  "jev-attributes/engines.mjs", "jev-attributes/run.mjs", "jev-attributes/client.mjs", "jev-attributes/byok.mjs",
+  "jev-attributes/embed.mjs", "jev-attributes/search.mjs",
 ];
 
 /* ── Text extraction ──────────────────────────────────────────── */

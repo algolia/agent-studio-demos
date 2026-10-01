@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jev picks the attributes</title>
-<meta name="description" content="A fast typed-question model reads the question, keeps only the record sections it needs, and the LLM answers from the stripped records. Full and filtered lanes, side by side.">
+<meta name="description" content="Five engines read the question and keep the record sections it needs: Jev, Laya, browser embeddings, keywords and a small LLM. One LLM answers from what each kept, side by side with the full record.">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,46 +29,43 @@
 <header class="hero wrap">
   <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
   <h1>Jev picks the attributes</h1>
-  <p class="lede">Each country record has 13&nbsp;sections. A question needs one or two. Jev reads the question first, and the LLM only gets what Jev kept.</p>
+  <p class="lede">Each country record has 13&nbsp;sections. A question needs one or two. Pick the engines that guess which: one LLM answers from what each kept, next to the full record.</p>
 </header>
 
 <main class="wrap">
-  <p class="vendor" role="note"><b>Prototype.</b> Your question goes to Jev, an outside vendor. Ask about public data only.</p>
+  <section class="mode" id="mode" aria-label="Keys"></section>
+  <p class="vendor" id="vendor" role="note"></p>
 
   <form class="ask" id="ask" autocomplete="off">
     <label class="sr-only" for="q">Question</label>
     <input id="q" type="text" maxlength="300" placeholder="Ask about any country">
     <button type="submit" class="btn" id="go">Ask</button>
     <div class="depth">
-      <span id="depth-l">Jev keeps</span>
+      <span id="depth-l">Keep</span>
       <div class="seg" role="group" aria-labelledby="depth-l">
-        <button type="button" data-depth="sections" aria-pressed="true" title="One question per section: 13 in one request.">Sections</button>
-        <button type="button" data-depth="fields" aria-pressed="false" title="Then one question per field inside the kept sections: a second request.">Fields</button>
+        <button type="button" data-depth="sections" aria-pressed="true" title="Each engine picks whole sections.">Sections</button>
+        <button type="button" data-depth="fields" aria-pressed="false" title="Then the fields inside the kept sections: a second pass per engine.">Fields</button>
       </div>
     </div>
   </form>
+  <div class="engines" id="engines" role="group" aria-label="Engines"></div>
+  <div class="model" id="model" aria-live="polite"></div>
   <p class="chips" id="chips"></p>
 
   <ol class="flow" id="flow" aria-label="What happened"></ol>
 
-  <section class="saving" id="saving" aria-live="polite"></section>
-
-  <section class="picks" id="picks" aria-label="What Jev kept"></section>
+  <section class="board" id="board" aria-live="polite"></section>
+  <section class="matrix" id="matrix" aria-label="What each engine kept"></section>
 
   <ul class="legend" aria-hidden="true">
-    <li class="is-search"><i></i>search</li><li class="is-jev"><i></i>Jev</li>
+    <li class="is-search"><i></i>search</li><li class="is-load"><i></i>model load</li><li class="is-engine"><i></i>engine</li>
     <li class="is-wait"><i></i>waiting for the first token</li><li class="is-stream"><i></i>streaming</li>
   </ul>
-  <div class="lanes">
-    <section class="lane is-full" id="lane-full" aria-label="Full records"></section>
-    <section class="lane is-filtered" id="lane-filtered" aria-label="Filtered records"></section>
-  </div>
-
-  <section class="check" id="check" aria-live="polite"></section>
+  <div class="lanes" id="lanes"></div>
 </main>
 
 <footer class="wrap foot">
-  <p>Data: CIA World Factbook, public domain. Search: Algolia. Picks: Jev. Answers: one LLM, both lanes.</p>
+  <p>Data: CIA World Factbook, public domain. Search: Algolia. Answers: one LLM for every lane.</p>
 </footer>
 
 <script type="module" src="app.js"></script>
