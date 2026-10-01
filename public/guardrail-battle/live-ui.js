@@ -1,5 +1,6 @@
 /* ───────────────────────────────────────────────────────────────
-   live-ui.js — the "Your agents" tab, on top of live.js, csv.js, stats.js.
+   live-ui.js — the "Live demo" tab, on top of live.js, csv.js, stats.js
+   and race-charts.js.
 
    The key is read from its input when you connect or race, and kept in
    `creds`, a variable inside this closure. Nothing writes it anywhere else:
@@ -9,29 +10,36 @@
      temporary  one agent per picked model, made with the chosen guardrail
                 rules, raced, then deleted (also on stop, error or tab close)
      own        agent IDs you pick from your list or paste
+
+   A race runs the exam once per rerun. "Rerun once more" adds a rerun to the
+   same fighters and the same messages, so the stats grow with every click.
    ─────────────────────────────────────────────────────────────── */
 
 (function () {
   "use strict";
 
-  const L = window.GuardrailLive, C = window.GuardrailCsv, S = window.GuardrailStats;
+  const L = window.GuardrailLive, C = window.GuardrailCsv, S = window.GuardrailStats, G = window.GuardrailCharts;
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const p1 = (x) => (x == null ? "–" : (x * 100).toFixed(1) + "%");
   const ci = (r) => (r && r.ci ? `${p1(r.ci[0])}–${p1(r.ci[1])}` : "–");
+  const ms = (x) => (x == null ? "–" : x >= 10000 ? `${(x / 1000).toFixed(1)}\u00a0s` : `${Math.round(x)}\u00a0ms`);
   const f = (...a) => window.fetch(...a);
+  const MAX_CALLS = 4000;
 
   if (!$("#live")) return;
 
   let creds = null;
+  let runCreds = null;
   let heldout = null;
   let uploaded = null;
   let running = null;
-  let last = null;
+  let session = null;
   let providers = [];
+  let ranked = [];
   let agents = [];
-  let picked = [];
+  const picked = new Set();
   const temps = new Set();
 
   /* ── the exam: the shipped synthetic held-out set, or the reader's CSV ── */
@@ -62,6 +70,7 @@
   }
 
   const size = () => Math.max(1, Math.min(L.MAX_CASES, parseInt($("#lv-size").value, 10) || 0));
+  const reps = () => Math.max(1, Math.min(L.MAX_REPEATS, parseInt($("#lv-reps").value, 10) || 1));
 
   async function chosenCases() {
     if ($("#lv-src-csv").checked) return uploaded ? pick(uploaded, size()) : [];
@@ -72,7 +81,7 @@
     const head = cases.slice(0, 5).map((c) =>
       `<tr><td>${esc(c.message.slice(0, 160))}${c.message.length > 160 ? "…" : ""}</td><td><span class="lab ${c.expected}">${c.expected}</span></td></tr>`).join("");
     $("#lv-preview").innerHTML =
-      `<p class="note">${cases.length} usable rows of ${total}. Below: the first five, read in this tab only.</p>` +
+      `<p class="note">${cases.length} usable rows of ${total}. The first five:</p>` +
       (errors.length ? `<ul class="lv-errs">${errors.slice(0, 6).map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : "") +
       (head ? `<div class="scroll"><table><thead><tr><th>message</th><th>expected</th></tr></thead><tbody>${head}</tbody></table></div>` : "");
   }
@@ -81,7 +90,7 @@
     try {
       download("guardrail-exam-example.csv", C.toCsv(await exampleCases(), C.COLUMNS));
     } catch (e) {
-      $("#lv-status").textContent = "Could not load the example set.";
+      $("#lv-status").textContent = "Could not load the example set. Reload the page and try again.";
     }
   });
 
@@ -91,7 +100,7 @@
     $("#lv-src-csv").checked = true;
     if (file.size > 2 * 1024 * 1024) {
       uploaded = null;
-      $("#lv-preview").innerHTML = '<p class="err">That file is over 2&nbsp;MB.</p>';
+      $("#lv-preview").innerHTML = '<p class="err">That file is over 2&nbsp;MB. Split it, or keep the first 200 rows.</p>';
       return;
     }
     const rd = new FileReader();
@@ -107,7 +116,7 @@
 
   function readCreds() {
     const appId = $("#lv-app").value.trim(), apiKey = $("#lv-key").value.trim();
-    if (!/^[A-Za-z0-9]{6,20}$/.test(appId)) return "Enter your application ID.";
+    if (!/^[A-Za-z0-9]{6,20}$/.test(appId)) return "Enter your application ID: letters and digits, as on the dashboard.";
     if (!apiKey) return "Enter an API key.";
     creds = { region: $("#lv-region").value, appId, apiKey };
     return null;
@@ -126,16 +135,15 @@
     ids.forEach((id, k) => { if (ok[k]) temps.delete(id); });
     return { gone: ok.filter(Boolean).length, left: temps.size };
   }
-  const leftText = (r) => (r.left ? ` ${r.left} left: use Clean up.` : "");
+  const leftText = (r) => (r.left ? ` ${r.left} left over: press “Delete leftovers”.` : "");
 
-  let runCreds = null;
   function forget() {
     if (running) running.stop();
     creds = null;
     $("#lv-key").value = "";
     $("#lv-app").value = "";
     $("#lv-conn").textContent = runCreds
-      ? "Keys cleared. The run stops, deletes its temporary agents, then drops its copy."
+      ? "Keys cleared. The race stops, deletes its temporary agents, then drops its copy."
       : "Keys cleared from this tab.";
   }
   $("#lv-forget").addEventListener("click", forget);
@@ -146,12 +154,39 @@
     creds = null;
   });
 
-  function fillModels() {
-    const sel = $("#lv-model");
-    const groups = providers.filter((p) => p.models.length).map((p) =>
-      `<optgroup label="${esc(p.name)} · ${esc(p.providerName)}">` +
-      p.models.map((m) => `<option value="${esc(p.id)}|${esc(m)}">${esc(m)}</option>`).join("") + "</optgroup>").join("");
-    sel.innerHTML = groups || '<option value="">No provider with models</option>';
+  /* ── fighters: ranked models, or your own agents ───────────────── */
+
+  const TIER_NAME = { fast: "Fast and cheap: good first picks", strong: "Strong: slower, costlier", other: "Probably not chat models" };
+  const keyOf = (r) => `${r.providerId}|${r.model}`;
+  const dupes = () => {
+    const n = {};
+    ranked.forEach((r) => { n[r.model] = (n[r.model] || 0) + 1; });
+    return n;
+  };
+  const modelLabel = (r) => (dupes()[r.model] > 1 ? `${r.model} · ${r.providerName}` : r.model);
+
+  function renderModels() {
+    const q = $("#lv-mq").value.trim().toLowerCase();
+    const hit = ranked.filter((r) => !q || `${r.model} ${r.providerName}`.toLowerCase().includes(q));
+    let tier = "", html = "";
+    for (const r of hit) {
+      if (r.tier !== tier) { tier = r.tier; html += `<p class="lv-tier">${TIER_NAME[tier]}</p>`; }
+      const k = keyOf(r), on = picked.has(k);
+      html += `<label class="lv-agent"><input type="checkbox" data-k="${esc(k)}"${on ? " checked" : ""}` +
+        `${!on && picked.size >= L.MAX_AGENTS ? " disabled" : ""}><b>${esc(r.model)}</b><span class="cid">${esc(r.providerName)}</span></label>`;
+    }
+    $("#lv-models").innerHTML = html || `<p class="note">${ranked.length ? "No model matches." : "Connect your app to list its models, ranked for a guardrail."}</p>`;
+    $("#lv-count").textContent = ranked.length ? `${picked.size} of ${L.MAX_AGENTS} picked` : "";
+  }
+
+  /* a tick updates the list in place, so keyboard focus stays on the box */
+  function syncModels() {
+    const full = picked.size >= L.MAX_AGENTS;
+    document.querySelectorAll("#lv-models input[data-k]").forEach((b) => {
+      b.checked = picked.has(b.dataset.k);
+      b.disabled = full && !b.checked;
+    });
+    $("#lv-count").textContent = `${picked.size} of ${L.MAX_AGENTS} picked`;
   }
 
   function fillRules() {
@@ -159,8 +194,8 @@
     const keep = sel.value;
     const mine = agents.filter((a) => L.guardrailOn(a) && !String(a.name).startsWith(L.TEMP_PREFIX));
     sel.innerHTML =
-      '<optgroup label="This demo"><option value="demo:final">Battle, final config</option><option value="demo:r0">Battle, starting config</option></optgroup>' +
-      (mine.length ? `<optgroup label="From my agents">${mine.map((a) =>
+      '<optgroup label="This demo"><option value="demo:final">Tuned rules (final)</option><option value="demo:r0">Starting rules (round 0)</option></optgroup>' +
+      (mine.length ? `<optgroup label="Copied from my agents">${mine.map((a) =>
         `<option value="agent:${esc(a.id)}">${esc(a.name)}</option>`).join("")}</optgroup>` : "");
     if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
   }
@@ -186,20 +221,23 @@
     try {
       [providers, agents] = await Promise.all([L.providersWithModels(f, creds), L.listAll(f, creds, "/1/agents")]);
       agents.sort((a, b) => L.guardrailOn(b) - L.guardrailOn(a) || String(a.name).localeCompare(String(b.name)));
-      fillModels();
+      ranked = L.rankModels(providers);
+      picked.clear();
+      L.suggestLineup(ranked, 3).forEach((r) => picked.add(keyOf(r)));
       fillRules();
+      renderModels();
       renderList();
       const left = agents.filter((a) => String(a.name).startsWith(L.TEMP_PREFIX)).length;
-      out.textContent = `${agents.length} agents · ${providers.length} providers` +
-        (left ? ` · ${left} leftover temporary agents` : "");
+      const noModels = providers.filter((p) => !p.models.length).length;
+      out.textContent = `Connected: ${agents.length} agents, ${ranked.length} models.` +
+        (noModels ? ` ${noModels} providers list no models.` : "") +
+        (left ? ` ${left} temporary agent${left > 1 ? "s" : ""} left over from an earlier race.` : "");
     } catch (e) {
       out.textContent = e.status === 401 || e.status === 403
-        ? "This key cannot read settings. Use your own agent IDs, or a key with editSettings."
-        : `Could not connect: ${e.message}`;
+        ? "This key cannot read settings. Pick “My own agents” and paste their IDs, or use a key with editSettings."
+        : `Could not connect (${e.message}). Check the region and the application ID.`;
     }
   });
-
-  /* ── fighters ──────────────────────────────────────────────────── */
 
   const mode = () => ($("#lv-mode-own").checked ? "own" : "temp");
   const ownIds = () => [...new Set($("#lv-agents").value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean))];
@@ -211,27 +249,19 @@
   $("#lv-mode-temp").addEventListener("change", showMode);
   $("#lv-mode-own").addEventListener("change", showMode);
 
-  function renderPicked() {
-    $("#lv-picked").innerHTML = picked.map((p, k) =>
-      `<span class="chip">${esc(p.model)} <span class="cid">${esc(p.providerName)}</span>` +
-      `<button type="button" data-k="${k}" aria-label="Remove ${esc(p.model)}">×</button></span>`).join("") ||
-      '<span class="note">No model picked yet.</span>';
-  }
-  $("#lv-add").addEventListener("click", () => {
-    const v = $("#lv-model").value;
-    if (!v) return;
-    const [providerId, model] = v.split("|");
-    if (picked.length >= L.MAX_AGENTS || picked.some((p) => p.providerId === providerId && p.model === model)) return;
-    const prov = providers.find((p) => p.id === providerId);
-    picked.push({ providerId, model, providerName: prov ? prov.name : "" });
-    renderPicked();
-  });
-  $("#lv-picked").addEventListener("click", (ev) => {
+  $("#lv-mq").addEventListener("input", renderModels);
+  $("#lv-models").addEventListener("change", (ev) => {
     const k = ev.target.dataset && ev.target.dataset.k;
-    if (k == null) return;
-    picked.splice(+k, 1);
-    renderPicked();
+    if (!k) return;
+    if (ev.target.checked && picked.size < L.MAX_AGENTS) picked.add(k); else picked.delete(k);
+    syncModels();
   });
+  $("#lv-suggest").addEventListener("click", () => {
+    picked.clear();
+    L.suggestLineup(ranked, 4).forEach((r) => picked.add(keyOf(r)));
+    renderModels();
+  });
+  $("#lv-none").addEventListener("click", () => { picked.clear(); renderModels(); });
 
   $("#lv-q").addEventListener("input", renderList);
   $("#lv-list").addEventListener("change", (ev) => {
@@ -264,48 +294,148 @@
       const left = await L.findLeftovers(f, creds);
       if (!left.length) { out.textContent = "No leftover temporary agents."; return; }
       const names = left.slice(0, 8).map((a) => a.name).join("\n");
-      if (!window.confirm(`Delete these ${left.length} agents?\n\n${names}${left.length > 8 ? "\n…" : ""}`)) return;
+      if (!window.confirm(`Delete these ${left.length} temporary agents?\n\n${names}${left.length > 8 ? "\n…" : ""}`)) return;
       left.forEach((a) => temps.add(a.id));
       const r = await dropTemps();
       out.textContent = `Deleted ${r.gone}.` + (r.left ? ` ${r.left} could not be deleted.` : "");
     } catch (e) {
-      out.textContent = `Could not clean up: ${e.message}`;
+      out.textContent = `Could not clean up (${e.message}).`;
     }
   });
 
   /* ── the race ──────────────────────────────────────────────────── */
 
-  const nameOf = (labels, id, k) => labels[id] || `agent ${k + 1}`;
-
-  function lanes(ids, labels, total, results) {
-    $("#lv-lanes").innerHTML = ids.map((id, k) => {
-      const mine = results.filter((r) => r.agentId === id);
+  function lanes(s) {
+    const total = s.cases.length * s.repeats;
+    $("#lv-lanes").innerHTML = s.fighters.map((fi, k) => {
+      const mine = s.results.filter((r) => r.fighter === fi.key);
       const ok = mine.filter((r) => r.verdict && r.verdict === r.expected).length;
       const bad = mine.filter((r) => r.verdict && r.verdict !== r.expected).length;
       const fail = mine.filter((r) => !r.verdict).length;
       const w = (x) => (100 * x / total).toFixed(2);
-      return `<div class="lane"><div class="lane-h"><b>${esc(nameOf(labels, id, k))}</b> <span class="cid">· id ${esc(id.slice(0, 8))}…</span>` +
+      return `<div class="lane"><div class="lane-h"><span class="swatch" style="--c:${G.color(k)}"></span><b>${esc(fi.label)}</b>` +
         `<span class="note">${mine.length}/${total}</span></div>` +
         `<div class="lane-t"><div class="ok" style="width:${w(ok)}%"></div><div class="bad" style="width:${w(bad)}%"></div><div class="fail" style="width:${w(fail)}%"></div></div></div>`;
     }).join("") + '<div class="legend"><span style="--c:var(--ok)">right</span><span style="--c:var(--over)">wrong</span><span style="--c:var(--ink-3)">failed call</span></div>';
   }
 
-  function summary(ids, labels, results) {
-    const rows = L.summarize(ids, results).map((s, k) =>
-      `<tr><td data-label="agent"><b>${esc(nameOf(labels, s.agentId, k))}</b> <span class="cid">· id ${esc(s.agentId.slice(0, 8))}…</span></td>` +
-      `<td class="num" data-label="scored · failed">${s.n} · ${s.failed}</td>` +
-      `<td class="num" data-label="balanced acc.">${p1(s.balanced)}</td>` +
-      `<td class="num" data-label="over-refusal · 95% CI">${p1(s.overRefusal.rate)} <span class="note">n\u00a0=\u00a0${s.overRefusal.n} · ${ci(s.overRefusal)}</span></td>` +
-      `<td class="num" data-label="leak · 95% CI">${p1(s.leak.rate)} <span class="note">n\u00a0=\u00a0${s.leak.n} · ${ci(s.leak)}</span></td>` +
-      `<td class="num" data-label="p50 time">${s.p50ms == null ? "–" : Math.round(s.p50ms) + "\u00a0ms"}</td></tr>`).join("");
-    const errs = [...new Set(results.filter((r) => r.error).map((r) => r.error))].slice(0, 4);
+  function vsTop(r) {
+    if (!r.vsTop) return '<span class="badge">leader</span>';
+    const v = r.vsTop, d = v.delta == null ? "–" : `${(v.delta * 100).toFixed(1)}\u00a0pts`;
+    const p = v.p < 0.001 ? "p\u00a0<\u00a00.001" : `p\u00a0=\u00a0${v.p.toFixed(3)}`;
+    return `${v.p < 0.05 ? "behind" : "tied"} <span class="note">${d} · ${p}</span>`;
+  }
+
+  const narrowMq = window.matchMedia("(max-width: 600px)");
+  narrowMq.addEventListener("change", () => { if (session && session.results.length && !running) summary(session); });
+
+  function summary(s) {
+    G.size(narrowMq.matches);
+    const rows = L.summarize(s.fighters.map((x) => x.key), s.results);
+    const label = Object.fromEntries(s.fighters.map((x) => [x.key, x.label]));
+    const nameOf = (r) => label[r.fighter];
+    const multi = s.repeats > 1;
+    const body = rows.map((r, k) =>
+      `<tr><td class="rhead" data-label="fighter"><span class="swatch" style="--c:${G.color(k)}"></span><b>${k + 1}. ${esc(nameOf(r))}</b></td>` +
+      `<td class="num" data-label="balanced accuracy"><b>${p1(r.ba.rate)}</b> <span class="note">${ci(r.ba)}</span></td>` +
+      `<td class="num" data-label="over-refusal">${p1(r.overRefusal.rate)} <span class="note">n\u00a0=\u00a0${r.overRefusal.n}</span></td>` +
+      `<td class="num" data-label="leak">${p1(r.leak.rate)} <span class="note">n\u00a0=\u00a0${r.leak.n}</span></td>` +
+      (multi ? `<td class="num" data-label="verdict flips">${p1(r.flips.rate)} <span class="note">n\u00a0=\u00a0${r.flips.n}</span></td>` : "") +
+      `<td class="num" data-label="median time">${ms(r.p50ms)}</td>` +
+      `<td class="num" data-label="vs no. 1">${vsTop(r)}</td>` +
+      `<td class="num" data-label="failed calls">${r.failed}</td></tr>`).join("");
+    const errs = [...new Set(s.results.filter((r) => r.error).map((r) => r.error))].slice(0, 4);
+    const blocked = s.results.some((r) => r.verdict === "blocked");
     $("#lv-summary").innerHTML =
-      `<div class="scroll"><table class="reflow"><thead><tr><th>agent</th><th class="num">scored · failed</th><th class="num">balanced acc.</th>` +
-      `<th class="num">over-refusal · 95% CI</th><th class="num">leak · 95% CI</th><th class="num">p50 time</th></tr></thead><tbody>${rows}</tbody></table></div>` +
+      `<h3>Leaderboard · ${s.cases.length}\u00a0messages × ${s.repeats} ${s.repeats > 1 ? "reruns" : "run"}</h3>` +
+      `<div class="scroll"><table class="reflow"><thead><tr><th>fighter</th><th class="num">balanced accuracy · 95% CI</th>` +
+      `<th class="num">over-refusal</th><th class="num">leak</th>${multi ? '<th class="num">verdict flips</th>' : ""}` +
+      `<th class="num">median time</th><th class="num">vs no. 1</th><th class="num">failed calls</th></tr></thead><tbody>${body}</tbody></table></div>` +
+      '<p class="note">“Tied” means the race cannot tell it from no.&nbsp;1 yet (paired McNemar test, p&nbsp;≥&nbsp;0.05). More messages or reruns can split them.</p>' +
       (errs.length ? `<p class="err">Failed calls: ${errs.map(esc).join(" · ")}</p>` : "") +
-      (results.length && results.every((r) => r.verdict !== "blocked")
-        ? '<p class="err">No message was blocked. Check that the guardrail is on for these agents.</p>' : "") +
-      '<p class="note">Time runs to the verdict: an allowed message waits for the full answer.</p>';
+      (s.results.length && !blocked ? '<p class="err">Nothing was blocked. Check that the guardrail is on for these agents.</p>' : "") +
+      '<div class="grid2 lv-charts">' +
+      `<div class="card"><h3>Balanced accuracy</h3>${G.accuracy(rows, nameOf)}` +
+      `<p class="note">Bar and big dot: all runs. Line: 95% interval. ${multi ? "Small dots: one rerun each." : "Rerun to see the spread."}</p></div>` +
+      `<div class="card"><h3>What each one gets wrong</h3>${G.tradeoff(rows, nameOf)}` +
+      '<p class="note">Closer to the bottom-left corner is better. Numbers match the leaderboard.</p></div>' +
+      `<div class="card wide"><h3>Time to a verdict</h3>${G.speed(rows, nameOf)}` +
+      '<p class="note">Bar: median. Tick: 90th percentile. An allowed message waits for the full answer.</p></div></div>';
+  }
+
+  function setBusy(on) {
+    $("#lv-run").disabled = on;
+    $("#lv-more").disabled = on || !session;
+    $("#lv-stop").disabled = !on;
+    $("#lv-export").disabled = on || !(session && session.results.length);
+  }
+
+  /** race `count` more reruns of the session; temporary agents live only for this call */
+  async function raceMore(s, count) {
+    const status = $("#lv-status");
+    // the run keeps its own copy of the keys, so "Forget" mid-run cannot strand temporary agents
+    runCreds = creds;
+    setBusy(true);
+    const ids = {};
+    let tail = "", stopped = false;
+    try {
+      if (s.temp) {
+        for (const fi of s.fighters) {
+          if (!creds) throw new Error("keys cleared");
+          status.textContent = `Making a temporary agent for ${fi.label}…`;
+          try {
+            const t = await L.createTemp(f, runCreds, { providerId: fi.providerId, model: fi.model, rules: s.rules });
+            temps.add(t.id);
+            ids[fi.key] = t.id;
+          } catch (e) {
+            if (e.id) temps.add(e.id);
+            throw e;
+          }
+        }
+      } else {
+        s.fighters.forEach((fi) => { ids[fi.key] = fi.key; });
+      }
+      const byId = Object.fromEntries(Object.entries(ids).map(([k, id]) => [id, k]));
+      const first = s.repeats;
+      s.repeats += count;
+      lanes(s);
+      for (let rep = first; rep < first + count && !stopped; rep++) {
+        status.textContent = `Racing${s.repeats > 1 ? `, rerun ${rep + 1} of ${s.repeats}` : ""}…`;
+        let painted = 0;
+        running = L.race({
+          fetchImpl: f, creds: runCreds, agents: Object.values(ids), cases: s.cases, repeat: rep,
+          inFlight: s.fighters.length > 5 ? 2 : L.IN_FLIGHT,
+          onResult: (r) => {
+            s.results.push({ ...r, fighter: byId[r.agentId] });
+            if (Date.now() - painted > 120) { painted = Date.now(); lanes(s); }
+          },
+        });
+        const stop = running.stop;
+        running.stop = () => { stopped = true; stop(); };
+        await running.done;
+      }
+      s.repeats = Math.max(...s.results.map((r) => r.repeat + 1), first);
+      lanes(s);
+      if (s.results.length) summary(s);
+    } catch (e) {
+      tail = ` Stopped: ${e.message}.`;
+    } finally {
+      running = null;
+      if (s.temp) {
+        const r = await dropTemps(runCreds);
+        tail += ` Deleted ${r.gone} temporary agents.${leftText(r)}`;
+      }
+      runCreds = null;
+      setBusy(false);
+    }
+    status.textContent = `Done: ${s.results.length} answers.${tail}`;
+  }
+
+  function confirmText(s, count) {
+    const n = s.fighters.length, calls = s.cases.length * n * count;
+    return `Send ${calls}\u00a0messages (${s.cases.length} × ${n} fighters × ${count}) to your app?` +
+      (s.temp ? ` This makes ${n} temporary agents named ${L.TEMP_PREFIX}… and deletes them after.` : "") +
+      " Each allowed message runs a full answer and uses tokens.";
   }
 
   $("#lv-run").addEventListener("click", async () => {
@@ -314,90 +444,57 @@
     const bad = readCreds();
     if (bad) { status.textContent = bad; return; }
     const temp = mode() === "temp";
-    if (temp && !picked.length) { status.textContent = "Connect, then add at least one model."; return; }
-    const own = temp ? [] : ownIds();
-    if (!temp) {
-      if (!own.length) { status.textContent = "Pick or paste at least one agent ID."; return; }
-      if (own.length > L.MAX_AGENTS) { status.textContent = `${L.MAX_AGENTS} agents at most.`; return; }
-      if (!own.every(L.isUuid)) { status.textContent = "An agent ID looks wrong. Copy it from the dashboard."; return; }
+    let fighters;
+    if (temp) {
+      if (!picked.size) { status.textContent = "Connect, then tick at least one model."; return; }
+      fighters = ranked.filter((r) => picked.has(keyOf(r)))
+        .map((r) => ({ key: keyOf(r), label: modelLabel(r), providerId: r.providerId, model: r.model }));
+    } else {
+      const own = ownIds();
+      if (!own.length) { status.textContent = "Tick or paste at least one agent ID."; return; }
+      if (own.length > L.MAX_AGENTS) { status.textContent = `Pick ${L.MAX_AGENTS} agents at most.`; return; }
+      if (!own.every(L.isUuid)) { status.textContent = "One agent ID looks wrong. Copy it from the dashboard."; return; }
+      fighters = own.map((id, k) => {
+        const a = agents.find((x) => x.id === id);
+        return { key: id, label: a ? a.name : `agent ${k + 1} · ${id.slice(0, 8)}` };
+      });
     }
     let cases, rules = null;
     try {
       cases = await chosenCases();
       if (temp) rules = await chosenRules();
-    } catch (e) { status.textContent = "Could not load the example set."; return; }
+    } catch (e) { status.textContent = "Could not load the example set. Reload the page and try again."; return; }
     if (!cases.length) { status.textContent = "Pick a CSV with at least one usable row."; return; }
-    const n = temp ? picked.length : own.length;
-    const ask = `Send ${cases.length * n}\u00a0messages (${cases.length} × ${n}) to your app?` +
-      (temp ? ` This makes ${n} temporary agents named ${L.TEMP_PREFIX}… and deletes them after.` : "") +
-      " Each allowed message runs a full answer and uses tokens.";
-    if (!window.confirm(ask)) return;
-
+    const s = { temp, fighters, cases, rules, results: [], repeats: 0 };
+    const count = reps();
+    if (cases.length * fighters.length * count > MAX_CALLS) {
+      status.textContent = `That is over ${MAX_CALLS}\u00a0messages. Use fewer messages, fighters or reruns.`;
+      return;
+    }
+    if (!window.confirm(confirmText(s, count))) return;
+    session = s;
     $("#lv-summary").innerHTML = "";
-    $("#lv-lanes").innerHTML = "";
-    $("#lv-export").disabled = true;
-    const labels = {};
-    let ids = own;
-    // the run keeps its own copy of the keys, so "Forget" mid-run cannot strand temporary agents
-    runCreds = creds;
-    $("#lv-stop").disabled = false;
-    if (temp) {
-      ids = [];
-      try {
-        for (const p of picked) {
-          if (!creds) throw new Error("keys cleared");
-          status.textContent = `Making a temporary agent for ${p.model}…`;
-          const t = await L.createTemp(f, runCreds, { providerId: p.providerId, model: p.model, rules });
-          temps.add(t.id);
-          ids.push(t.id);
-          labels[t.id] = p.model;
-        }
-      } catch (e) {
-        if (e.id) temps.add(e.id);
-        const r = await dropTemps(runCreds);
-        runCreds = null;
-        $("#lv-stop").disabled = true;
-        status.textContent = `Could not make the agents (${e.message}). Removed ${r.gone}.${leftText(r)}`;
-        return;
-      }
-    }
+    await raceMore(s, count);
+  });
 
-    const results = [];
-    let tail = "";
-    try {
-      lanes(ids, labels, cases.length, results);
-      status.textContent = "Racing…";
-      let painted = 0;
-      running = L.race({
-        fetchImpl: f, creds: runCreds, agents: ids, cases,
-        onResult: (r) => {
-          results.push(r);
-          if (Date.now() - painted > 120) { painted = Date.now(); lanes(ids, labels, cases.length, results); }
-        },
-      });
-      await running.done;
-      lanes(ids, labels, cases.length, results);
-      summary(ids, labels, results);
-    } finally {
-      running = null;
-      $("#lv-stop").disabled = true;
-      if (temp) {
-        const r = await dropTemps(runCreds);
-        tail = ` Deleted ${r.gone} temporary agents.${leftText(r)}`;
-      }
-      runCreds = null;
-    }
-    last = { cases, ids, labels, results };
-    $("#lv-export").disabled = !results.length;
-    status.textContent = `Done: ${results.length} answers.${tail}`;
+  $("#lv-more").addEventListener("click", async () => {
+    if (running || !session) return;
+    const bad = readCreds();
+    if (bad) { $("#lv-status").textContent = bad; return; }
+    if (!window.confirm(confirmText(session, 1))) return;
+    await raceMore(session, 1);
   });
 
   $("#lv-stop").addEventListener("click", () => { if (running) running.stop(); });
 
   $("#lv-export").addEventListener("click", () => {
-    if (last) download("guardrail-race-results.csv", L.resultsCsv(last.cases, last.ids, last.results, last.labels));
+    if (!session) return;
+    const keys = session.fighters.map((x) => x.key);
+    const labels = Object.fromEntries(session.fighters.map((x) => [x.key, x.label]));
+    download("guardrail-race-results.csv", L.resultsCsv(session.cases, keys, session.results, labels));
   });
 
   showMode();
-  renderPicked();
+  renderModels();
+  setBusy(false);
 })();
