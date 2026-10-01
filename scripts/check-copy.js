@@ -62,10 +62,11 @@ const LIMITS = {
   jsRunWords: 50,
 };
 
-const PAGES = ["index.html", "chat-with-book/index.html", "infinite-conversation/index.html"];
+const PAGES = ["index.html", "chat-with-book/index.html", "infinite-conversation/index.html", "guardrail-battle/index.html"];
 const JS_FILES = [
   "chat-with-book/app.js", "infinite-conversation/app.js",
   "shared/meter.js", "shared/books.js", "shared/compactor.js", "shared/md.js",
+  "guardrail-battle/app.js",
 ];
 
 /* ── Text extraction ──────────────────────────────────────────── */
