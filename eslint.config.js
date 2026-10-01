@@ -195,6 +195,30 @@ module.exports = [
     rules: recommended,
   },
   {
+    // jev-attributes is built on ES modules: it imports rather
+    // than read globals. Its .mjs modules, and shared/*.mjs, are also imported
+    // by Node (tools/, scripts/*.mjs), which is why they may touch both lists.
+    files: [
+      "public/shared/**/*.mjs",
+      "public/jev-attributes/**/*.js", "public/jev-attributes/**/*.mjs", "tools/**/*.mjs", "scripts/**/*.mjs",
+    ],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...browserGlobals,
+        ...nodeGlobals,
+        ReadableStream: "readonly",
+        Response: "readonly",
+        Headers: "readonly",
+        URL: "readonly",
+        AbortController: "readonly",
+        AbortSignal: "readonly",
+      },
+    },
+    rules: recommended,
+  },
+  {
     // The conversation generator: Node, CommonJS, and never loaded by a page.
     files: ["tools/**/*.js"],
     languageOptions: {
