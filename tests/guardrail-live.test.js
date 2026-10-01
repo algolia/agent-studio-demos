@@ -200,7 +200,9 @@ test("a whole race, end to end: every agent sees every case, then stats and CSV"
   assert.equal(srv.calls.length, 8);
   assert.ok(srv.calls.every((c) => c.init.method === "POST"));
 
-  const [s] = L.summarize([AGENT, AGENT2], results);
+  const sum = L.summarize([AGENT, AGENT2], results);
+  const s = sum.find((x) => x.fighter === AGENT);
+  assert.ok(sum.find((x) => x.fighter === AGENT2).vsTop || s.vsTop, "the runner-up is paired with the leader");
   assert.equal(s.n, 4);
   assert.equal(s.overRefusal.x, 1);
   assert.equal(s.overRefusal.n, 2);
@@ -210,9 +212,38 @@ test("a whole race, end to end: every agent sees every case, then stats and CSV"
 
   const csv = L.resultsCsv(cases, [AGENT, AGENT2], results);
   const rows = globalThis.GuardrailCsv.parse(csv);
-  assert.deepEqual(rows[0], ["message", "expected", "agent", "agent_id", "verdict", "correct", "category", "stage", "ms", "error"]);
+  assert.deepEqual(rows[0], ["message", "expected", "agent", "agent_id", "repeat", "verdict", "correct", "category", "stage", "ms", "error"]);
   assert.equal(rows.length, 9);
   assert.equal(csv.includes(CREDS.apiKey), false);
+});
+
+test("reruns keep their own repeat number, and one fighter can span several agents", async () => {
+  const srv = fakeServer();
+  const cases = [{ message: "hello", expected: "allowed" }, { message: "BLOCK poem", expected: "blocked" }];
+  const a = await L.race({ fetchImpl: srv.fetchImpl, creds: CREDS, agents: [AGENT], cases, now: () => 0 }).done;
+  const b = await L.race({ fetchImpl: srv.fetchImpl, creds: CREDS, agents: [AGENT2], cases, repeat: 1, now: () => 0 }).done;
+  const rows = [...a, ...b].map((r) => ({ ...r, fighter: "model-x" }));
+  const [s] = L.summarize(["model-x"], rows);
+  assert.equal(s.n, 4);
+  assert.equal(s.perRepeat.length, 2);
+  assert.equal(s.flips.n, 2);
+  assert.equal(s.vsTop, null);
+  const csv = globalThis.GuardrailCsv.parse(L.resultsCsv(cases, ["model-x"], rows, { "model-x": "model-x" }));
+  assert.deepEqual(csv.slice(1).map((r) => r[4]), ["1", "1", "2", "2"]);
+});
+
+test("models are ranked for a guardrail: fast first, newest first, non-chat last", () => {
+  const ranked = L.rankModels([
+    { id: "p1", name: "A", models: ["claude-fable-5-1", "claude-haiku-4-5-20251001", "claude-opus-5-5", "claude-haiku-3"] },
+    { id: "p2", name: "B", models: ["gpt-4.1-mini", "gpt-5-mini", "text-embedding-3-large", "gpt-5", "mistral-small-2503"] },
+  ]).map((r) => r.model);
+  assert.deepEqual(ranked.slice(0, 3), ["gpt-5-mini", "claude-haiku-4-5-20251001", "gpt-4.1-mini"]);
+  assert.equal(ranked[ranked.length - 1], "text-embedding-3-large");
+  assert.ok(ranked.indexOf("claude-opus-5-5") < ranked.indexOf("claude-fable-5-1") || ranked.indexOf("claude-opus-5-5") > ranked.indexOf("gpt-4.1-mini"));
+  const lineup = L.suggestLineup(L.rankModels([
+    { id: "p1", models: ["claude-haiku-4-5", "claude-opus-5-5"] }, { id: "p2", models: ["gpt-5-mini", "gpt-5"] }]));
+  assert.deepEqual(lineup.map((r) => r.model), ["gpt-5-mini", "claude-haiku-4-5", "claude-opus-5-5", "gpt-5"]);
+  assert.equal(L.MAX_AGENTS, 10);
 });
 
 test("stop ends a race early", async () => {

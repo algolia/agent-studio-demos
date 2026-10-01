@@ -36,7 +36,8 @@
     us: "https://agent-studio.us.algolia.com",
   };
   const MAX_CASES = 200;
-  const MAX_AGENTS = 4;
+  const MAX_AGENTS = 10;
+  const MAX_REPEATS = 5;
   const IN_FLIGHT = 3;
   const TEMP_PREFIX = "EVAL_GUARDRAILS_";
   const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
@@ -147,6 +148,49 @@
     }));
   }
 
+  /*
+   * Which models to offer first. A guardrail runs on every message, so the
+   * small, fast tiers lead; flagship models follow; names that are clearly not
+   * chat models (embeddings, speech, images) sink to the end. Within a tier the
+   * newest version leads, and a moving alias beats a dated snapshot.
+   */
+  const NOT_CHAT = /embed|tts|whisper|audio|speech|realtime|transcri|image|dall-e|moderation|rerank/i;
+  const FAST = /mini|nano|flash|haiku|lite|small|fast|instant|tiny|\b[1-9]b\b|-[1-9]b|8x7b|turbo/i;
+  const TIERS = ["fast", "strong", "other"];
+  const versionOf = (m) => {
+    // the first small number is the version; a date or a 2503-style build number is not
+    const v = (String(m).replace(/20\d{2}-?\d{2}-?\d{2}/g, "").match(/\d+(?:[.-]\d(?!\d))?/g) || [])
+      .map((s) => parseFloat(s.replace("-", "."))).find((x) => x < 100);
+    return v || 0;
+  };
+  const tierOf = (m) => (NOT_CHAT.test(m) ? "other" : FAST.test(m) ? "fast" : "strong");
+
+  /** providers with models → one ranked list: [{ providerId, providerName, model, tier }] */
+  function rankModels(providers) {
+    const rows = [];
+    for (const p of providers || []) {
+      for (const m of p.models || []) rows.push({ providerId: p.id, providerName: p.name, model: String(m), tier: tierOf(String(m)) });
+    }
+    const dated = (m) => (/20\d{2}-?\d{2}-?\d{2}|preview|exp/i.test(m) ? 1 : 0);
+    return rows.sort((a, b) => TIERS.indexOf(a.tier) - TIERS.indexOf(b.tier) ||
+      versionOf(b.model) - versionOf(a.model) || dated(a.model) - dated(b.model) ||
+      a.model.length - b.model.length || a.model.localeCompare(b.model));
+  }
+
+  /** a starting lineup: the best fast and the best strong model of each provider, up to k */
+  function suggestLineup(ranked, k = 4) {
+    const out = [];
+    for (const tier of ["fast", "strong"]) {
+      const seen = new Set();
+      for (const r of ranked) {
+        if (r.tier !== tier || seen.has(r.providerId)) continue;
+        seen.add(r.providerId);
+        out.push(r);
+      }
+    }
+    return out.slice(0, k);
+  }
+
   const guardrailOf = (agent) => (agent && agent.config && agent.config.guardrail) || null;
   const guardrailOn = (agent) => !!(guardrailOf(agent) && guardrailOf(agent).enabled);
 
@@ -234,9 +278,10 @@
 
   /**
    * Every agent on every case. Agents run side by side, each with at most
-   * IN_FLIGHT calls open. onResult fires per answer; stop() ends the run early.
+   * inFlight calls open. Rows carry `repeat`, so reruns of one exam stay
+   * apart. onResult fires per answer; stop() ends the run early.
    */
-  function race({ fetchImpl, creds, agents, cases, onResult = () => {}, now = () => performance.now() }) {
+  function race({ fetchImpl, creds, agents, cases, repeat = 0, inFlight = IN_FLIGHT, onResult = () => {}, now = () => performance.now() }) {
     let stopped = false;
     const results = [];
     const lane = async (agentId) => {
@@ -245,41 +290,62 @@
         while (!stopped && next < cases.length) {
           const i = next++;
           const r = await judge(fetchImpl, creds, agentId, cases[i].message, now);
-          const row = { agentId, index: i, expected: cases[i].expected, ...r };
+          const row = { agentId, index: i, repeat, expected: cases[i].expected, ...r };
           results.push(row);
           onResult(row);
         }
       };
-      await Promise.all(Array.from({ length: Math.min(IN_FLIGHT, cases.length) }, worker));
+      await Promise.all(Array.from({ length: Math.min(inFlight, cases.length) }, worker));
     };
     const done = Promise.all(agents.map(lane)).then(() => results);
     return { done, stop: () => { stopped = true; } };
   }
 
-  /** the race, one row per (message, agent), as CSV text; labels: { id: "model name" } */
-  function resultsCsv(cases, agents, results, labels = {}) {
-    const label = (id) => labels[id] || `agent ${agents.indexOf(id) + 1}`;
-    const rows = results.slice().sort((a, b) => a.index - b.index || agents.indexOf(a.agentId) - agents.indexOf(b.agentId))
+  /* a row belongs to a fighter: a model raced through temporary agents, or one of your agents */
+  const fighterOf = (r) => r.fighter || r.agentId;
+
+  /** the race, one row per (message, fighter, rerun), as CSV text; labels: { fighter: "model name" } */
+  function resultsCsv(cases, fighters, results, labels = {}) {
+    const label = (k) => labels[k] || `agent ${fighters.indexOf(k) + 1}`;
+    const rows = results.slice().sort((a, b) => (a.repeat || 0) - (b.repeat || 0) || a.index - b.index ||
+      fighters.indexOf(fighterOf(a)) - fighters.indexOf(fighterOf(b)))
       .map((r) => ({
-        message: cases[r.index].message, expected: r.expected, agent: label(r.agentId), agent_id: r.agentId,
+        message: cases[r.index].message, expected: r.expected, agent: label(fighterOf(r)), agent_id: r.agentId,
+        repeat: (r.repeat || 0) + 1,
         verdict: r.verdict || "", correct: r.verdict ? String(r.verdict === r.expected) : "",
         category: r.category || "", stage: r.stage || "", ms: Math.round(r.ms), error: r.error || "",
       }));
-    return global.GuardrailCsv.toCsv(rows, ["message", "expected", "agent", "agent_id", "verdict", "correct", "category", "stage", "ms", "error"]);
+    return global.GuardrailCsv.toCsv(rows, ["message", "expected", "agent", "agent_id", "repeat", "verdict", "correct", "category", "stage", "ms", "error"]);
   }
 
-  /** per agent: the error split with intervals, plus median time to a verdict */
-  function summarize(agents, results) {
-    return agents.map((id) => {
-      const mine = results.filter((r) => r.agentId === id);
-      return { agentId: id, ...global.GuardrailStats.split(mine), p50ms: global.GuardrailStats.p50(mine.map((r) => r.ms)) };
+  /**
+   * Per fighter: the error split, balanced accuracy with a message-level
+   * interval, how often a verdict flips between reruns, balanced accuracy per
+   * rerun, and time to a verdict. Sorted best first; `vsTop` pairs each one
+   * with the leader on the same messages.
+   */
+  function summarize(fighters, results) {
+    const S = global.GuardrailStats;
+    const rows = fighters.map((k) => {
+      const mine = results.filter((r) => fighterOf(r) === k);
+      const reps = [...new Set(mine.map((r) => r.repeat || 0))].sort((a, b) => a - b);
+      return {
+        fighter: k, agentId: k, ...S.split(mine), ba: S.balancedCi(mine), flips: S.flips(mine),
+        perRepeat: reps.map((x) => S.split(mine.filter((r) => (r.repeat || 0) === x)).balanced),
+        p50ms: S.p50(mine.map((r) => r.ms)), p90ms: S.pq(mine.map((r) => r.ms), 0.9), mine,
+      };
     });
+    rows.sort((a, b) => (b.ba.rate == null ? -1 : b.ba.rate) - (a.ba.rate == null ? -1 : a.ba.rate) || (a.p50ms || 0) - (b.p50ms || 0));
+    const top = rows[0];
+    for (const r of rows) r.vsTop = r === top ? null : S.paired(top.mine, r.mine);
+    for (const r of rows) delete r.mine;
+    return rows;
   }
 
   global.GuardrailLive = {
-    HOSTS, MAX_CASES, MAX_AGENTS, IN_FLIGHT, ROUTES, COMPLETION_QUERY, TEMP_PREFIX,
+    HOSTS, MAX_CASES, MAX_AGENTS, MAX_REPEATS, IN_FLIGHT, ROUTES, COMPLETION_QUERY, TEMP_PREFIX,
     isUuid, routeAllowed, call, readVerdict, statusText, listAll, providersWithModels,
-    guardrailOf, guardrailOn, rulesOf, runConfig, createTemp, removeTemp, findLeftovers,
+    rankModels, suggestLineup, guardrailOf, guardrailOn, rulesOf, runConfig, createTemp, removeTemp, findLeftovers,
     judge, race, resultsCsv, summarize,
   };
 })(window);
