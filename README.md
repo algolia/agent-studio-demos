@@ -262,19 +262,35 @@ Workers logs are off unless the project enables them; keep them off.
 
 ```bash
 node scripts/factbook-secured-key.mjs     # appends a jevAttributes block to public/shared/config.js
+node scripts/factbook-secured-key.mjs --days 30   # a shorter life than the default 90 days
 ```
 
 The page holds a **secured** API key: an HMAC-SHA256 of
-`restrictIndices=demo_factbook,esci_demo_factbook&analytics=false&clickAnalytics=false`,
+`restrictIndices=demo_factbook,esci_demo_factbook&analytics=false&clickAnalytics=false&validUntil=<unix time>`,
 keyed with the search-only parent `ESCI_READ`, generated on the maintainer's
-machine with no API call. The parent never reaches a browser. The script checks
-the key before writing it: on 2026-10-01 `esci_demo_factbook` answered 200,
+machine. The parent never reaches a browser. Before deriving, the script reads
+the parent's ACL (`GET /1/keys/<parent>`, the only API call it makes with the
+parent) and refuses unless it is exactly `search`: a secured key carries every
+right of its parent. It prints the expiry date, and writes it as a comment in
+the block. The script checks the key before writing it: on 2026-10-01 `esci_demo_factbook` answered 200,
 `demo_factbook` 403 (the parent is scoped to `esci_*`) and an index outside the
 restriction 403. It writes the block to the gitignored `config.js` (creating
 it if absent, refusing to write twice); for the deploy, refresh the
 `DEMO_CONFIG_JS` variable from that file. Widening the parent to
 `demo_factbook` needs no new code: both names are in the restriction and the
 page tries `demo_factbook` first.
+
+**Regenerate before it expires** (90 days by default; after `validUntil`
+Algolia answers 403 and the page's search fails):
+
+1. Delete the `jevAttributes` block from `public/shared/config.js` (the
+   script refuses to write a second one).
+2. `node scripts/factbook-secured-key.mjs`, and read the new expiry it prints.
+3. `gh variable set DEMO_CONFIG_JS --repo algolia/agent-studio-demos < public/shared/config.js`,
+   then run **Actions → Deploy**.
+
+A secured key cannot be revoked on its own. To stop one before its expiry,
+rotate the parent `ESCI_READ`: every key derived from it stops with it.
 
 **Data rule.** Jev is an outside vendor: only public or synthetic text may go
 to it. It receives the question and the section and field descriptions, never

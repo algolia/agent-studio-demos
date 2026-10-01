@@ -66,15 +66,29 @@ test("the client and the relay route to the same three upstreams", async () => {
   assert.ok(TARGETS.laya.timeoutMs >= 120000, "Laya is CPU-served: never under 120 s");
 });
 
-test("the secured key is the HMAC of its parameters, restricted to the Factbook names, analytics off", async () => {
-  const { securedKey, securedParams } = await load("scripts/factbook-secured-key.mjs");
-  const params = securedParams();
+test("the secured key is the HMAC of its parameters, restricted to the Factbook names, analytics off, with an expiry", async () => {
+  const { securedKey, securedParams, validUntilIn } = await load("scripts/factbook-secured-key.mjs");
+  const validUntil = validUntilIn(90, Date.UTC(2026, 9, 1));
+  assert.equal(validUntil, Date.UTC(2026, 11, 30) / 1000);
+  const params = securedParams({ validUntil });
   const q = new URLSearchParams(params);
   assert.equal(q.get("restrictIndices"), "demo_factbook,esci_demo_factbook");
   assert.equal(q.get("analytics"), "false");
+  assert.equal(q.get("validUntil"), String(validUntil));
+  assert.throws(() => validUntilIn(0));
+  assert.throws(() => validUntilIn(Number.NaN));
   const key = securedKey("parent-key", params);
   const decoded = Buffer.from(key, "base64").toString();
   assert.equal(decoded.slice(0, 64), createHmac("sha256", "parent-key").update(params).digest("hex"));
   assert.equal(decoded.slice(64), params);
   assert.ok(!decoded.includes("parent-key"));
+});
+
+test("the secured key derives only from a search-only parent", async () => {
+  const { searchOnly } = await load("scripts/factbook-secured-key.mjs");
+  assert.ok(searchOnly(["search"]));
+  assert.ok(!searchOnly(["search", "browse"]));
+  assert.ok(!searchOnly(["addObject"]));
+  assert.ok(!searchOnly([]));
+  assert.ok(!searchOnly(undefined));
 });
