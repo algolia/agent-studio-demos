@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jev picks the attributes</title>
+<meta name="description" content="A fast typed-question model reads the question, keeps only the record sections it needs, and the LLM answers from the stripped records. Full and filtered lanes, side by side.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/tokens.css">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:,">
+<script>
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
+    var dark = saved ? saved === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+<script src="../shared/md.js"></script>
+</head>
+<body>
+<a class="skip" href="#ask">Skip to the demo</a>
+
+<header class="hero wrap">
+  <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
+  <h1>Jev picks the attributes</h1>
+  <p class="lede">Each country record has 13&nbsp;sections. A question needs one or two. Jev reads the question first, and the LLM only gets what Jev kept.</p>
+</header>
+
+<main class="wrap">
+  <p class="vendor" role="note"><b>Prototype.</b> Your question goes to Jev, an outside vendor. Ask about public data only.</p>
+
+  <form class="ask" id="ask" autocomplete="off">
+    <label class="sr-only" for="q">Question</label>
+    <input id="q" type="text" maxlength="300" placeholder="Ask about any country">
+    <button type="submit" class="btn" id="go">Ask</button>
+    <div class="depth">
+      <span id="depth-l">Jev keeps</span>
+      <div class="seg" role="group" aria-labelledby="depth-l">
+        <button type="button" data-depth="sections" aria-pressed="true" title="One question per section: 13 in one request.">Sections</button>
+        <button type="button" data-depth="fields" aria-pressed="false" title="Then one question per field inside the kept sections: a second request.">Fields</button>
+      </div>
+    </div>
+  </form>
+  <p class="chips" id="chips"></p>
+
+  <ol class="flow" id="flow" aria-label="What happened"></ol>
+
+  <section class="saving" id="saving" aria-live="polite"></section>
+
+  <section class="picks" id="picks" aria-label="What Jev kept"></section>
+
+  <ul class="legend" aria-hidden="true">
+    <li class="is-search"><i></i>search</li><li class="is-jev"><i></i>Jev</li>
+    <li class="is-wait"><i></i>waiting for the first token</li><li class="is-stream"><i></i>streaming</li>
+  </ul>
+  <div class="lanes">
+    <section class="lane is-full" id="lane-full" aria-label="Full records"></section>
+    <section class="lane is-filtered" id="lane-filtered" aria-label="Filtered records"></section>
+  </div>
+
+  <section class="check" id="check" aria-live="polite"></section>
+</main>
+
+<footer class="wrap foot">
+  <p>Data: CIA World Factbook, public domain. Search: Algolia. Picks: Jev. Answers: one LLM, both lanes.</p>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
