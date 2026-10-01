@@ -214,6 +214,14 @@ minted from the Vault login (tier `enablers`, answers on `medium`,
 `max_tokens` 16384). It answers `/api/status` (how the page knows it is
 local), searches for the page at `/api/search`, and adds the owner's key to
 any `/relay/*` call that carries none. It never serves `shared/config.js`.
+Because it adds keys, it binds loopback only (it refuses to start on another
+`HOST`) and answers 403 to any `Host` header but `127.0.0.1`, `localhost` or
+`[::1]` on its own port, so a DNS-rebinding page cannot reach the keys.
+
+Both modes send the page's headers from `public/_headers`, the same file
+Cloudflare Pages applies: a Content-Security-Policy (scripts from the site and
+jsDelivr only, `frame-ancestors 'none'`; connections to the site, Algolia,
+Hugging Face and jsDelivr) and `X-Frame-Options: DENY`.
 
 **PUBLIC** is the deployed page. Visitors paste their own Jev key and their own
 Enablers token (Algolia staff:
