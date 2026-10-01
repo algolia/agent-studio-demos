@@ -190,6 +190,8 @@ module.exports = [
         fetch: "readonly",
         URL: "readonly",
         TextEncoder: "readonly",
+        Request: "readonly",
+        Response: "readonly",
       },
     },
     rules: recommended,
@@ -214,6 +216,26 @@ module.exports = [
         URL: "readonly",
         AbortController: "readonly",
         AbortSignal: "readonly",
+        Request: "readonly",
+        Worker: "readonly",
+        caches: "readonly",
+        atob: "readonly",
+      },
+    },
+    rules: recommended,
+  },
+  {
+    // The relay is a Cloudflare Pages Function: an ES module on the Workers
+    // runtime, which has fetch, Request and Response but no DOM. The embedding
+    // worker runs in a Web Worker, where the page's globals hang off `self`.
+    // No `console` here: an accidental log in the relay fails lint.
+    files: ["functions/**/*.js", "public/jev-attributes/embed-worker.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        fetch: "readonly", Request: "readonly", Response: "readonly", Headers: "readonly", URL: "readonly",
+        AbortSignal: "readonly", self: "readonly",
       },
     },
     rules: recommended,
