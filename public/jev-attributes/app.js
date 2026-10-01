@@ -230,9 +230,10 @@ function renderMode() {
     const exp = name === "enablers" ? jwtExpiry(v) : null;
     const st = !v ? "missing" : exp && exp < Date.now() ? "expired" : "set";
     const input = h("input", {
-      type: "password", id: `key-${name}`, value: v, autocomplete: "off", spellcheck: "false", placeholder: "paste here",
+      type: "password", id: `key-${name}`, autocomplete: "off", spellcheck: "false", placeholder: "paste here",
       oninput: (e) => { app.keys.set(name, e.target.value); renderKeyStatus(); renderEngines(); },
     });
+    input.value = v; // the property, never the attribute: a key does not belong in the markup
     return h("div.key", null,
       h("label", { for: `key-${name}` }, label),
       input,
