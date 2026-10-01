@@ -192,8 +192,12 @@
   /* ── full run ──────────────────────────────────────────────────── */
 
   /** series: [{ name, color, dash, pts: [{ y, lo, hi }] }], values 0..1, axis always 0–100% */
+  /* a phone gets a narrower, taller canvas, so the same 11px reads near 1:1 instead of half size */
+  const narrowMq = window.matchMedia("(max-width: 600px)");
   function chart(series, xs, label) {
-    const W = 560, H = 250, L = 46, R = 12, T = 12, B = 30, pw = W - L - R, ph = H - T - B;
+    const narrow = narrowMq.matches;
+    const W = narrow ? 340 : 560, H = narrow ? 300 : 250, L = narrow ? 40 : 46;
+    const R = 10, T = 12, B = 30, pw = W - L - R, ph = H - T - B;
     const X = (i) => L + (i + 0.5) * pw / xs.length;
     const Y = (v) => T + ph * (1 - v);
     let g = "";
@@ -289,15 +293,18 @@
       ], xs, "error rates per round") +
       `<p class="note">NotInject is a public set of harmless messages full of trigger words. Here they are off-topic, so letting one through counts as a leak. It rose from ${p1(R[0].notinject.leak)} to ${p1(R[R.length - 1].notinject.leak)}.</p></div></div>`;
 
-    html += `<h2>Every round</h2><div class="scroll"><table><thead><tr><th>round</th><th>kept</th>` +
-      `<th class="num">train n</th><th class="num">train acc.</th><th class="num">held-out acc. · 95% CI</th>` +
-      `<th class="num">over-refusal</th><th class="num">leak</th><th class="num">NotInject leak</th><th class="num">tokens</th></tr></thead><tbody>` +
-      R.map((r, i) => `<tr><td>r${r.round}</td><td class="cid">${esc(r.kept_id)}` +
-        (i > 0 && !r.candidates.some((c) => c.kept) ? ' <span class="note">(kept previous)</span>' : "") + "</td>" +
-        `<td class="num">${r.train_n}</td><td class="num">${p1(kc[i].train.balanced_accuracy)}</td>` +
-        `<td class="num">${p1(H[i].balanced_accuracy)} <span class="note">${ciText(H[i].ba_ci95)}</span></td>` +
-        `<td class="num">${p1(H[i].over_refusal)}</td><td class="num">${p1(H[i].leak)}</td>` +
-        `<td class="num">${p1(r.notinject.leak)}</td><td class="num">${kc[i].prompt_tokens}</td></tr>`).join("") +
+    /* on a phone each row becomes a card: data-label carries the header */
+    const cols = ["train n", "train acc.", "held-out acc. · 95% CI", "over-refusal", "leak", "NotInject leak", "tokens"];
+    html += `<h2>Every round</h2><div class="scroll"><table class="reflow"><thead><tr><th>round · kept</th>` +
+      cols.map((c) => `<th class="num">${c}</th>`).join("") + "</tr></thead><tbody>" +
+      R.map((r, i) => {
+        const vals = [r.train_n, p1(kc[i].train.balanced_accuracy),
+          `${p1(H[i].balanced_accuracy)} <span class="note">${ciText(H[i].ba_ci95)}</span>`,
+          p1(H[i].over_refusal), p1(H[i].leak), p1(r.notinject.leak), kc[i].prompt_tokens];
+        return `<tr><td class="rhead"><span>r${r.round}</span> <span class="cid">${esc(r.kept_id)}</span>` +
+          (i > 0 && !r.candidates.some((c) => c.kept) ? ' <span class="note">(kept previous)</span>' : "") + "</td>" +
+          vals.map((v, k) => `<td class="num" data-label="${cols[k]}"><span>${v}</span></td>`).join("") + "</tr>";
+      }).join("") +
       "</tbody></table></div>";
 
     /* the kept config, only where it changed */
@@ -352,7 +359,11 @@
       "</tbody></table></div></details>";
 
     $("#p-body").innerHTML = html;
+    lastRun = d;
   }
+  let lastRun = null;
+  /* crossing the phone breakpoint redraws the charts at the other canvas size */
+  narrowMq.addEventListener("change", () => { if (lastRun) renderRun(lastRun); });
 
   /* ── tabs ──────────────────────────────────────────────────────── */
 

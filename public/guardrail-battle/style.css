@@ -205,3 +205,23 @@ svg.chart .grid { stroke: var(--line); }
   .rlabel { padding-top: 0; }
   .side, .grid2, .grid3 { grid-template-columns: 1fr; }
 }
+
+/* phones: the per-round table becomes one card per round, every value labelled,
+   and the charts (drawn on a narrower, taller canvas) get bigger type */
+@media (max-width: 600px) {
+  svg.chart text { font-size: 12px; }
+  .legend { font-size: 13px; }
+  table.reflow, table.reflow tbody, table.reflow tr, table.reflow td { display: block; width: auto; }
+  table.reflow thead { display: none; }
+  table.reflow { border: 0; background: none; }
+  table.reflow tr {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    margin-bottom: 10px; padding: 6px 0;
+  }
+  table.reflow td { border: 0; padding: 3px 12px; }
+  table.reflow td.rhead { font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  table.reflow td.num { display: flex; justify-content: space-between; gap: 12px; text-align: right; }
+  table.reflow td.num::before {
+    content: attr(data-label); font-family: var(--mono); font-size: 11px; color: var(--ink-3); text-align: left;
+  }
+}
