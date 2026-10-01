@@ -100,6 +100,7 @@
 .picks-h b { color: var(--ink); font-weight: 600; }
 .picks-h span[title] { text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; cursor: help; }
 .picks-h.is-fields { margin-top: 12px; }
+.picks-fb { color: var(--warn); }
 .sections {
   list-style: none; margin: 0; padding: 0; display: grid; gap: 4px 28px;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

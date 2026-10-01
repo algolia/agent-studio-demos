@@ -145,7 +145,7 @@ function renderFlow() {
     step(s.jev.done ? "is-done" : hits && hits.length ? "is-active" : "is-wait", "2", "Jev",
       s.jev.done !== null
         ? `${SECTIONS.length} questions${s.jev.fields ? ` + ${s.jev.fields.length}` : ""} · ${ms(s.jev.ms)}`
-        : "…"),
+        : hits && !hits.length ? "not asked" : "…"),
     step(s.lanes.full.done && s.lanes.filtered.done ? "is-done" : s.lanes.full.start !== null ? "is-active" : "is-wait", "3", "LLM",
       s.lanes.full.done ? `${s.lanes.full.done.model || "same model"} · both lanes` : "both lanes, one model"),
   );
@@ -158,6 +158,10 @@ function renderSaving() {
   el.saving.textContent = "";
   if (!s) {
     el.saving.append(h("p.saving-empty", null, "Pick a question. The saving shows here."));
+    return;
+  }
+  if (s.search && !s.search.hits.length) {
+    el.saving.append(h("p.saving-empty", null, "No country in that question. Name one, or pick a chip."));
     return;
   }
   const a = s.lanes.full.done && s.lanes.full.done.usage && s.lanes.full.done.usage.inputTokens;
@@ -184,15 +188,18 @@ function bar(label, n, w, cls) {
 function renderPicks() {
   const s = state;
   el.picks.textContent = "";
-  if (!s || !s.jev.sections) {
-    el.picks.hidden = !s;
+  const noHits = s && s.search && !s.search.hits.length;
+  if (!s || noHits || !s.jev.sections) {
+    el.picks.hidden = !s || noHits;
     if (s) el.picks.append(h("p.picks-h", null, h("b", null, "Jev"), " reading the question…"));
     return;
   }
   el.picks.hidden = false;
   const kept = s.jev.sections.filter((r) => r.picked).length;
+  const fallback = s.jev.sections.some((r) => r.fallback);
   el.picks.append(h("p.picks-h", null,
     h("b", null, `Kept ${kept} of ${SECTIONS.length}\u00a0sections`),
+    fallback && h("span.picks-fb", null, " · none cleared the line, so the top one stays"),
     h("span", { title: "Jev answers one yes/no question per section, all in one request. A section at or over the line is kept." },
       ` · P(yes) ≥ ${THRESHOLD} · ${ms(s.jev.sectionsMs)}`)));
   const list = h("ul.sections", { style: { "--line-at": `${THRESHOLD * 100}%` } });
@@ -224,27 +231,29 @@ function laneView(node, key, s, span, now) {
   const L = LANES[key];
   node.textContent = "";
   const lane = s ? s.lanes[key] : freshLane();
+  const idle = !s || (s.search && !s.search.hits.length);
   const d = lane.done;
   const u = (d && d.usage) || {};
   node.append(h("header.lane-h", null,
     h("p.lane-tag", null, L.tag),
-    h("p.lane-w", null, lane.keys === null ? (s ? "waiting…" : "") : `${grouped(lane.keys)} attributes · ${grouped(lane.chars)}\u00a0chars`)));
+    h("p.lane-w", null, lane.keys === null ? (idle ? "" : "waiting…") : `${grouped(lane.keys)} attributes · ${grouped(lane.chars)}\u00a0chars`)));
   node.append(h("div.nums", null,
-    h("div.num.is-in", null, h("b", null, Number.isFinite(u.inputTokens) ? grouped(u.inputTokens) : s ? "…" : "—"), h("span", null, "input tokens")),
-    h("div.num", null, h("b", null, Number.isFinite(u.outputTokens) ? grouped(u.outputTokens) : s ? "…" : "—"), h("span", null, "output tokens")),
+    h("div.num.is-in", null, h("b", null, Number.isFinite(u.inputTokens) ? grouped(u.inputTokens) : idle ? "—" : "…"), h("span", null, "input tokens")),
+    h("div.num", null, h("b", null, Number.isFinite(u.outputTokens) ? grouped(u.outputTokens) : idle ? "—" : "…"), h("span", null, "output tokens")),
   ));
-  node.append(track(key, s, span, now));
+  node.append(track(key, idle ? null : s, span, now));
+  const wait = idle ? "—" : "…";
   const times = [];
-  if (key === "filtered") times.push(h("li.is-jev", null, h("b", null, s && s.jev.ms !== null ? ms(s.jev.ms) : "…"), " Jev"));
-  times.push(h("li", null, h("b", null, d ? ms(d.ttft) : "…"), " first token"));
-  times.push(h("li", null, h("b", null, d ? ms(lane.end) : "…"), " answer done",
+  if (key === "filtered") times.push(h("li.is-jev", null, h("b", null, s && s.jev.ms !== null ? ms(s.jev.ms) : wait), " Jev"));
+  times.push(h("li", null, h("b", null, d ? ms(d.ttft) : wait), " first token"));
+  times.push(h("li", null, h("b", null, d ? ms(lane.end) : wait), " answer done",
     h("span.sr-only", null, " since the question was sent")));
   if (Number.isFinite(u.cachedTokens) && u.cachedTokens > 0) times.push(h("li.is-cache", { title: "Input tokens the gateway served from its prefix cache." }, `${grouped(u.cachedTokens)} cached`));
   node.append(h("ul.times", null, times));
   const ans = h("div.answer");
   if (lane.error) ans.append(h("p.is-error", null, lane.error));
   else if (lane.text) ans.innerHTML = window.renderMarkdown ? window.renderMarkdown(lane.text) : "";
-  else ans.append(h("p.answer-empty", null, s ? "…" : "The answer appears here."));
+  else ans.append(h("p.answer-empty", null, idle ? "The answer appears here." : "…"));
   node.append(ans);
 }
 
