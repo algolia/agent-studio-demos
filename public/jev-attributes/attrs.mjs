@@ -13,46 +13,121 @@
    ─────────────────────────────────────────────────────────────── */
 
 /* check-copy: off */
-/** the 13 sections every profile shares, with a few of their fields as a hint for Jev */
+/**
+ * The 13 sections every profile shares. `what` is the one-line description
+ * every engine reads; `notFor` and `examples` are the contrast a typed
+ * question carries (levers L3), written for the pairs that get confused:
+ * Economy, Energy and Transnational Issues; Geography and Environment.
+ * The examples are not the demo's scenarios, so a pick is never a lookup.
+ */
 export const SECTIONS = [
-  { name: "Introduction", hint: "historical background of the country" },
-  { name: "Geography", hint: "location, area, land boundaries and border countries, coastline, terrain, elevation, natural resources, rivers" },
-  { name: "People and Society", hint: "population, age structure, languages, religions, ethnic groups, life expectancy, birth and death rates, health, education, literacy" },
-  { name: "Environment", hint: "climate, land use, urbanization, environmental issues, emissions, water resources" },
-  { name: "Government", hint: "country name, government type, capital, constitution, executive, legislative and judicial branches, political parties, flag, anthem, independence" },
-  { name: "Economy", hint: "GDP, GDP growth, GDP per capita, inflation, exports and imports with commodities and partners, industries, budget, debt, unemployment, exchange rates" },
-  { name: "Energy", hint: "electricity, oil, natural gas, coal, nuclear energy, energy consumption" },
-  { name: "Communications", hint: "telephones, internet users, broadband, broadcast media" },
-  { name: "Transportation", hint: "airports, railways, ports, merchant marine" },
-  { name: "Military and Security", hint: "military and security forces, military expenditures, personnel strengths, equipment, service age, deployments" },
-  { name: "Space", hint: "space agency, launch sites, space program" },
-  { name: "Terrorism", hint: "terrorist groups active in the country" },
-  { name: "Transnational Issues", hint: "refugees, trafficking in persons, illicit drugs, international disputes" },
+  { id: "introduction", name: "Introduction", what: "historical background of the country",
+    notFor: "current figures of any kind", examples: ["How did the country come to be?"] },
+  { id: "geography", name: "Geography", what: "location, area, land boundaries and border countries, coastline, terrain, elevation, climate, natural resources, rivers and lakes, natural hazards",
+    notFor: "pollution and emissions (Environment); population counts (People and Society)", examples: ["How long is the coastline?", "Which countries share a border with it?"] },
+  { id: "people_and_society", name: "People and Society", what: "population, age structure, languages, religions, ethnic groups, life expectancy, birth and death rates, health, education, literacy, urbanization",
+    notFor: "jobs and unemployment (Economy); refugees (Transnational Issues)", examples: ["What share of people are over 65?", "Which religions are practiced?"] },
+  { id: "environment", name: "Environment", what: "environmental issues, pollution, carbon dioxide and methane emissions, waste and recycling, water resources, climate, land use, environmental agreements",
+    notFor: "terrain and borders (Geography); energy production (Energy)", examples: ["What are the main environmental problems?"] },
+  { id: "government", name: "Government", what: "country name, government type, capital, constitution, executive, legislative and judicial branches, political parties, suffrage, flag, anthem, independence, national holiday",
+    notFor: "the country's history before independence (Introduction); the armed forces (Military and Security)", examples: ["Who is the chief of state?", "What does the flag look like?"] },
+  { id: "economy", name: "Economy", what: "GDP and its growth, GDP per capita, inflation, exports and imports with their commodities and partners, industries, agriculture, budget, public debt, unemployment, poverty, exchange rates",
+    notFor: "oil, gas, coal and electricity production or use (Energy); drug trade and trafficking (Transnational Issues)", examples: ["How big is the economy?", "Who are its main trading partners?"] },
+  { id: "energy", name: "Energy", what: "electricity access, production and sources, crude oil, refined petroleum, natural gas and coal production, reserves, exports and imports, nuclear energy, energy use per person",
+    notFor: "GDP, trade totals and commodities in general (Economy); emissions as pollution (Environment)", examples: ["How much natural gas does it produce?"] },
+  { id: "communications", name: "Communications", what: "telephones, mobile subscriptions, internet users, broadband, broadcast media, internet country code",
+    notFor: "roads, airports and ports (Transportation)", examples: ["How many people use the internet?"] },
+  { id: "transportation", name: "Transportation", what: "airports and runways, heliports, railways, ports, merchant marine, aircraft registration prefix",
+    notFor: "telephones and internet (Communications)", examples: ["How long is the rail network?"] },
+  { id: "military_and_security", name: "Military and Security", what: "military and security forces, military spending, personnel strengths, equipment, service age and obligation, deployments",
+    notFor: "terrorist groups (Terrorism); border disputes (Transnational Issues)", examples: ["How large is the army?"] },
+  { id: "space", name: "Space", what: "space agency, launch sites, space program and its milestones",
+    notFor: "airports and aviation (Transportation)", examples: ["Does it have a space agency?"] },
+  { id: "terrorism", name: "Terrorism", what: "terrorist groups active in the country",
+    notFor: "the armed forces (Military and Security)", examples: ["Which terrorist groups operate there?"] },
+  { id: "transnational_issues", name: "Transnational Issues", what: "refugees and displaced persons, trafficking in persons, illicit drugs, international disputes",
+    notFor: "trade and exports (Economy); the armed forces (Military and Security)", examples: ["Does it have border disputes?"] },
 ];
 
-const FRAME = "The body is a question about one or more countries. It will be answered from CIA World Factbook country profiles.";
+/**
+ * Stage 1, levers L1, L2, L3, L6. The state holds the facts (the question
+ * and what each section covers); each question carries only the judgment and
+ * points into the state by backtick path. One atomic noul per section, plus
+ * one choice for the section that matters most, which is the only answer
+ * type that reports a confidence (L7).
+ */
+export function sectionState(question) {
+  return { question, sections: Object.fromEntries(SECTIONS.map((s) => [s.id, `${s.name}: ${s.what}`])) };
+}
 
-/** stage 1: one noul question per section, ids s0…s12 */
 export function sectionQuestions() {
   const qs = {};
-  SECTIONS.forEach((s, i) => {
-    qs[`s${i}`] = {
+  for (const s of SECTIONS) {
+    qs[s.id] = {
       type: "noul",
-      instructions: `${FRAME} Does answering it need the "${s.name}" section of the profile (${s.hint})?`,
+      instructions: {
+        question: `Does answering \`question\` need facts that \`sections.${s.id}\` covers?`,
+        note: "A country's name alone needs no section. Several sections may be needed at once.",
+      },
+      criteria: {
+        true: `the question asks for ${s.what}. For example: ${s.examples.join(" ")}`,
+        false: `the question asks only for other facts, such as ${s.notFor}`,
+      },
+    };
+  }
+  qs.main = {
+    type: "choice",
+    instructions: { question: "Which one section of `sections` holds the facts `question` asks for first?" },
+    criteria: Object.fromEntries(SECTIONS.map((s) => [s.id, { what: s.what, not_for: s.notFor, examples: s.examples }])),
+  };
+  return qs;
+}
+
+/**
+ * The same judgment in Laya's budget. Laya reads state and question together
+ * per question and keeps about 512 tokens of them (its usage is ~512 per
+ * question whatever the state holds), so the shape that suits Jev arrives
+ * cut short. Here the state is the question alone and each question names
+ * its one section; `main` lists each section's `what` only.
+ */
+export function compactSectionQuestions() {
+  const qs = {};
+  for (const s of SECTIONS) {
+    qs[s.id] = {
+      type: "noul",
+      instructions: `Does answering \`question\` need the ${s.name} section of a country profile (${s.what})?`,
+    };
+  }
+  qs.main = {
+    type: "choice",
+    instructions: "Which section of a country profile holds the facts `question` asks for first?",
+    criteria: Object.fromEntries(SECTIONS.map((s) => [s.id, s.what])),
+  };
+  return qs;
+}
+
+/** stage 2: the fields of the kept sections, as `fields.f0`…, one noul each */
+export function fieldState(question, fields) {
+  return { question, fields: Object.fromEntries(fields.map((f, i) => [`f${i}`, splitKey(f).join(": ")])) };
+}
+
+export function fieldQuestions(fields) {
+  const qs = {};
+  fields.forEach((_, i) => {
+    qs[`f${i}`] = {
+      type: "noul",
+      instructions: { question: `Does answering \`question\` need the value of \`fields.f${i}\`?` },
     };
   });
   return qs;
 }
 
-/** stage 2: one noul question per field inside the kept sections, ids f0…fn */
-export function fieldQuestions(fields) {
+/** Laya's field stage: the state is the question, each question names its field */
+export function compactFieldQuestions(fields) {
   const qs = {};
   fields.forEach((f, i) => {
     const [section, field] = splitKey(f);
-    qs[`f${i}`] = {
-      type: "noul",
-      instructions: `${FRAME} Does answering it need the field "${field}" from the "${section}" section of the profile?`,
-    };
+    qs[`f${i}`] = { type: "noul", instructions: `Does answering \`question\` need the field "${field}" from the ${section} section of a country profile?` };
   });
   return qs;
 }
@@ -71,22 +146,31 @@ export const splitKey = (k) => {
 export const THRESHOLD = 0.5;
 
 /**
- * Jev's answers → every section with its P(yes), in schema order, `picked`
- * when at or over the threshold. If nothing clears it, the single most likely
- * section is kept, and marked `fallback`, so the LLM never gets an empty record.
+ * A System One answer → every section with its P(yes), in schema order,
+ * `picked` at or over the threshold. The `main` choice is always kept, so the
+ * LLM never gets an empty record; when it is the only reason a section stays,
+ * the row says `byMain`. With no `main` and nothing over the line, the most
+ * likely section stays and says `fallback`.
  */
 export function pickSections(answers, threshold = THRESHOLD) {
-  const rows = SECTIONS.map((s, i) => {
-    const a = answers && answers[`s${i}`];
-    const p = a && Number.isFinite(a.noul) ? a.noul : null;
-    return { name: s.name, p, picked: p !== null && p >= threshold, fallback: false };
+  const a = answers || {};
+  const main = a.main && typeof a.main.choice === "string" ? a.main.choice : null;
+  const rows = SECTIONS.map((s) => {
+    const x = a[s.id];
+    const p = x && Number.isFinite(x.noul) ? x.noul : null;
+    const over = p !== null && p >= threshold;
+    return { name: s.name, id: s.id, p, picked: over || s.id === main, fallback: false, byMain: !over && s.id === main };
   });
   if (!rows.some((r) => r.picked)) {
-    const best = rows.filter((r) => r.p !== null).sort((a, b) => b.p - a.p)[0];
+    const best = rows.filter((r) => r.p !== null).sort((x, y) => y.p - x.p)[0];
     if (best) { best.picked = true; best.fallback = true; }
   }
   return rows;
 }
+
+/** the confidence of the `main` choice, null when it did not come back */
+export const mainConfidence = (answers) =>
+  (answers && answers.main && Number.isFinite(answers.main.confidence) ? answers.main.confidence : null);
 
 /** the same rule for fields: [{ key, p, picked }], at least one kept */
 export function pickFields(fields, answers, threshold = THRESHOLD) {

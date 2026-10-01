@@ -29,19 +29,37 @@ test("strip keeps the named sections, the id and the name, and nothing else", as
   assert.equal(a.weigh([a.full(RECORD)]).keys, 4);
 });
 
-test("one noul question per section, and the picks follow the threshold", async () => {
+test("one noul per section and one main choice, in one request, with the facts in the state", async () => {
   const a = await load("jev-attributes/attrs.mjs");
   const qs = a.sectionQuestions();
-  assert.equal(Object.keys(qs).length, a.SECTIONS.length);
-  assert.ok(Object.values(qs).every((q) => q.type === "noul"));
-  const answers = Object.fromEntries(a.SECTIONS.map((_, i) => [`s${i}`, { noul: i === 5 ? 0.91 : 0.1 }]));
+  assert.equal(Object.keys(qs).length, a.SECTIONS.length + 1);
+  assert.ok(a.SECTIONS.every((s) => qs[s.id].type === "noul"));
+  assert.equal(qs.main.type, "choice");
+  // L2: instructions point into the state by backtick path, and the path exists
+  const state = a.sectionState("Peru's GDP growth");
+  for (const s of a.SECTIONS) {
+    assert.match(qs[s.id].instructions.question, new RegExp(`\`sections\\.${s.id}\``));
+    assert.ok(state.sections[s.id].startsWith(s.name));
+  }
+  // L3: every main option carries the contrast
+  assert.ok(Object.values(qs.main.criteria).every((c) => c.what && c.not_for && c.examples.length));
+  const answers = Object.fromEntries(a.SECTIONS.map((s) => [s.id, { noul: s.id === "economy" ? 0.91 : 0.1 }]));
   const rows = a.pickSections(answers);
   assert.deepEqual(rows.filter((r) => r.picked).map((r) => r.name), ["Economy"]);
 });
 
-test("when nothing clears the line, the single most likely section is kept and marked", async () => {
+test("the main choice keeps its section even under the line, and says so", async () => {
   const a = await load("jev-attributes/attrs.mjs");
-  const answers = Object.fromEntries(a.SECTIONS.map((_, i) => [`s${i}`, { noul: i === 1 ? 0.4 : 0.1 }]));
+  const answers = Object.fromEntries(a.SECTIONS.map((s) => [s.id, { noul: 0.1 }]));
+  answers.main = { choice: "energy", confidence: 0.64 };
+  const picked = a.pickSections(answers).filter((r) => r.picked);
+  assert.deepEqual(picked.map((r) => [r.name, r.byMain, r.fallback]), [["Energy", true, false]]);
+  assert.equal(a.mainConfidence(answers), 0.64);
+});
+
+test("with no main choice and nothing over the line, the most likely section is kept and marked", async () => {
+  const a = await load("jev-attributes/attrs.mjs");
+  const answers = Object.fromEntries(a.SECTIONS.map((s) => [s.id, { noul: s.id === "geography" ? 0.4 : 0.1 }]));
   const picked = a.pickSections(answers).filter((r) => r.picked);
   assert.equal(picked.length, 1);
   assert.equal(picked[0].name, "Geography");
