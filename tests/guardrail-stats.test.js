@@ -63,3 +63,44 @@ test("sample keeps order, is reproducible, and caps", () => {
   assert.deepEqual(a, a.slice().sort((x, y) => x - y));
   assert.deepEqual(S.sample([1, 2], 200), [1, 2]);
 });
+
+const row = (index, expected, verdict, repeat = 0) => ({ index, expected, verdict, repeat });
+
+test("McNemar is exact: 14 fixed, 0 broken is the frozen run's p", () => {
+  assert.ok(Math.abs(S.mcnemar(0, 14) - 0.000122) < 1e-6);
+  assert.equal(S.mcnemar(0, 0), 1);
+  assert.equal(S.mcnemar(5, 5), 1);
+  assert.ok(S.mcnemar(3, 9) > 0.05, "3 against 9 is not enough to tell two fighters apart");
+});
+
+test("paired compares the same message on the same rerun only", () => {
+  const a = [row(0, "allowed", "allowed"), row(1, "blocked", "blocked"), row(2, "blocked", "allowed"), row(3, "allowed", null)];
+  const b = [row(0, "allowed", "blocked"), row(1, "blocked", "blocked"), row(2, "blocked", "blocked"), row(3, "allowed", "allowed"),
+    row(0, "allowed", "allowed", 1)];
+  const p = S.paired(a, b);
+  assert.equal(p.n, 3, "the failed call and the unmatched rerun drop out");
+  assert.equal(p.aWins, 1);
+  assert.equal(p.bWins, 1);
+  assert.equal(p.delta, 0);
+});
+
+test("flips count messages whose verdict changed between reruns", () => {
+  const r = [row(0, "allowed", "allowed"), row(0, "allowed", "blocked", 1), row(1, "blocked", "blocked"), row(1, "blocked", "blocked", 1),
+    row(2, "blocked", "blocked")];
+  assert.deepEqual(S.flips(r), { x: 1, n: 2, rate: 0.5 });
+  assert.equal(S.flips([row(0, "allowed", "allowed")]).rate, null, "one run cannot flip");
+});
+
+test("balanced accuracy's interval resamples messages, so reruns add no fake certainty", () => {
+  const one = [], five = [];
+  for (let i = 0; i < 40; i++) {
+    const exp = i % 2 ? "allowed" : "blocked", v = i % 5 === 0 ? (exp === "allowed" ? "blocked" : "allowed") : exp;
+    one.push(row(i, exp, v));
+    for (let k = 0; k < 5; k++) five.push(row(i, exp, v, k));
+  }
+  const a = S.balancedCi(one), b = S.balancedCi(five);
+  assert.ok(a.ci[0] <= a.rate && a.rate <= a.ci[1]);
+  assert.ok(Math.abs(a.rate - b.rate) < 1e-12);
+  assert.ok(Math.abs((a.ci[1] - a.ci[0]) - (b.ci[1] - b.ci[0])) < 0.03, "five copies of the same answers are one answer");
+  assert.deepEqual(S.balancedCi([row(0, "allowed", "allowed")]), { rate: null, ci: null });
+});
