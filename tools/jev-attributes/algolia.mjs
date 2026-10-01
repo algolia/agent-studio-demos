@@ -14,8 +14,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { INDEX_NAMES, queryParams, bestMatches, stripMeta } from "../../public/jev-attributes/search.mjs";
 
-export const INDEX_NAMES = ["demo_factbook", "esci_demo_factbook"];
+export { INDEX_NAMES };
 export const RECORDS_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "factbook.jsonl");
 
 /* The name and its other forms are the only thing a question searches; every Factbook field is
@@ -101,12 +102,7 @@ let resolved = null; // the index name that answered, once one has
  */
 export async function search({ app, key }, query, hitsPerPage = 3) {
   const t0 = performance.now();
-  const params = {
-    query, hitsPerPage: 10, analytics: false, clickAnalytics: false,
-    removeWordsIfNoResults: "allOptional", getRankingInfo: true, attributesToHighlight: [],
-    // whole words only: "Mars" is not the start of "Marshall Islands"
-    queryType: "prefixNone",
-  };
+  const params = queryParams(query);
   if (app && key) {
     for (const index of resolved ? [resolved] : INDEX_NAMES) {
       try {
@@ -122,27 +118,4 @@ export async function search({ app, key }, query, hitsPerPage = 3) {
     }
   }
   return { hits: searchLocal(query, hitsPerPage), index: "factbook.jsonl", backend: "local", ms: performance.now() - t0 };
-}
-
-/**
- * With every word optional, "Population over 65 in Italy" also matches
- * Switzerland on a typo of "Itali" in one of its other names. Keep the hits
- * that matched the most words, then those that matched on the name itself,
- * then the fewest typos: the countries the question names, and no tail.
- */
-export function bestMatches(hits) {
-  const info = (h) => h._rankingInfo || {};
-  if (!hits.length) return hits;
-  const most = Math.max(...hits.map((h) => info(h).words ?? 0));
-  let keep = hits.filter((h) => (info(h).words ?? 0) === most);
-  const byName = keep.filter((h) => (info(h).firstMatchedWord ?? 0) < 1000);
-  if (byName.length) keep = byName;
-  const fewest = Math.min(...keep.map((h) => info(h).nbTypos ?? 0));
-  return keep.filter((h) => (info(h).nbTypos ?? 0) === fewest);
-}
-
-function stripMeta(hit) {
-  const out = {};
-  for (const [k, v] of Object.entries(hit)) if (!k.startsWith("_")) out[k] = v;
-  return out;
 }
