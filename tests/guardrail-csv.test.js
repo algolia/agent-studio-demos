@@ -11,7 +11,7 @@ require(path.join(__dirname, "..", "public", "guardrail-battle", "csv.js"));
 const C = globalThis.GuardrailCsv;
 
 test("quoted fields keep their commas, quotes and line breaks", () => {
-  const t = C.parse('﻿message,expected\r\n"a, b ""c""\nd",allowed\r\nplain,blocked\n');
+  const t = C.parse('\uFEFFmessage,expected\r\n"a, b ""c""\nd",allowed\r\nplain,blocked\n');
   assert.deepEqual(t, [["message", "expected"], ['a, b "c"\nd', "allowed"], ["plain", "blocked"]]);
 });
 

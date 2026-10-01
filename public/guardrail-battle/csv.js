@@ -19,7 +19,7 @@
 
   /** RFC 4180: quoted fields, doubled quotes, CRLF or LF, a leading BOM */
   function parse(text) {
-    const s = String(text).replace(/^﻿/, "");
+    const s = String(text).replace(/^\uFEFF/, "");
     const rows = [];
     let row = [], field = "", quoted = false, i = 0;
     while (i < s.length) {
