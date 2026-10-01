@@ -38,13 +38,17 @@ async function bearer(fresh = false) {
 
 /**
  * Stream one completion. Calls onDelta(text, tMs) per content chunk.
+ * `cacheSalt` isolates the gateway's prefix cache (vLLM `cache_salt`): a fresh
+ * salt per lane per run means a repeated question is prefilled cold again,
+ * so the latency on screen is never a cache hit left by the previous click.
  * Resolves { text, usage: { inputTokens, outputTokens, cachedTokens }, model, ttft, total }.
  */
-export async function complete(messages, onDelta, { signal } = {}) {
+export async function complete(messages, onDelta, { signal, cacheSalt } = {}) {
   const t0 = performance.now();
   const body = JSON.stringify({
     model: LLM_MODEL, messages, max_tokens: MAX_TOKENS, temperature: 0,
     stream: true, stream_options: { include_usage: true },
+    ...(cacheSalt ? { cache_salt: cacheSalt } : {}),
   });
   let res = null;
   let ctl = null;
