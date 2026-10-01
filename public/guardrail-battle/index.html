@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardrail battle&nbsp;— Agent Studio demos</title>
+<meta name="description" content="A loop that tunes an off-topic guardrail for a synthetic apparel shop: a model proposes configs, a classifier scores them, the loop keeps the best. Frozen results from one synthetic run.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/tokens.css">
+<link rel="stylesheet" href="style.css">
+<script>
+  /* Resolve the theme before first paint, or the page flashes the wrong one.
+     Same storage key as the other demos, so a choice carries across the site. */
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
+    var dark = saved ? saved === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+</head>
+<body>
+<a class="skip" href="#panels">Skip to the results</a>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="masthead-tools">
+      <a class="theme-toggle" href="../"><span class="glyph" aria-hidden="true">←</span> All demos</a>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">
+        <span class="glyph" id="theme-glyph" aria-hidden="true">◐</span>
+        <span id="theme-label">Dark</span>
+      </button>
+    </div>
+    <p class="eyebrow">Agent Studio · guardrails <span class="tag">frozen results</span></p>
+    <h1>Guardrail battle</h1>
+    <p class="lede">
+      A model writes guardrail configs for an apparel shop. A classifier runs
+      each one on test messages. The loop keeps the best one and tries again.
+    </p>
+    <div class="flow" aria-hidden="true"><span>propose</span><i>→</i><span>classify</span><i>→</i><span>score</span><i>→</i><span>keep best</span></div>
+    <ul class="honesty" id="honesty">
+      <li>Synthetic exam, single run, one model family generated and labeled it.</li>
+      <li>Held-out <b id="h-n">n&nbsp;=&nbsp;…</b>, never shown to the model that writes configs.</li>
+      <li>Error bars are 95% bootstrap intervals. Every axis runs 0–100%.</li>
+    </ul>
+  </div>
+</header>
+
+<main class="page" id="panels">
+  <div class="tabs" role="tablist" aria-label="Which run">
+    <button class="tab" role="tab" id="tab-toy" data-mode="toy" aria-controls="toy" aria-selected="true">Toy · 12&nbsp;messages</button>
+    <button class="tab" role="tab" id="tab-proper" data-mode="proper" aria-controls="proper" aria-selected="false">Full run · held-out exam</button>
+  </div>
+
+  <section id="toy" role="tabpanel" aria-labelledby="tab-toy">
+    <p class="scope">
+      Twelve synthetic messages for an outdoor gear shop. No held-out set: these
+      scores are on the same messages the loop tuned on.
+    </p>
+    <div class="toolbar"><button class="primary" id="replay" type="button">Replay the rounds</button><span class="meta" id="toy-meta"></span></div>
+    <h2>Rounds</h2>
+    <div class="timeline" id="toy-rounds"></div>
+    <h2>What the kept config said about each message</h2>
+    <div class="scroll" id="toy-grid"></div>
+    <h2>Kept config, round by round</h2>
+    <div id="toy-side"></div>
+    <h2>Round 0 → final, as a diff</h2>
+    <div class="diff" id="toy-diff"></div>
+  </section>
+
+  <section id="proper" role="tabpanel" aria-labelledby="tab-proper" hidden>
+    <div id="p-body"><p class="wait">Loading the frozen results…</p></div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="page">
+    <p>
+      The numbers are a frozen snapshot of one run, served from
+      <code>data/</code> next to this page. Nothing here calls a model.
+    </p>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
