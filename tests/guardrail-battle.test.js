@@ -19,7 +19,7 @@ const FORBIDDEN = [
 ];
 
 test("the snapshots exist and stay small", () => {
-  assert.deepEqual(files.sort(), ["run.json", "toy.json"]);
+  assert.deepEqual(files.sort(), ["heldout.json", "run.json", "toy.json"]);
   for (const f of files) {
     const bytes = fs.statSync(path.join(DATA, f)).size;
     assert.ok(bytes < 200 * 1024, `${f} is ${bytes} bytes`);
@@ -54,4 +54,16 @@ test("every held-out figure carries its n and a 95% interval around it", () => {
   assert.equal(s.n, run.dataset.heldout);
   assert.equal(run.heldout_hard.length, run.paired.r0_wrong_final_right + run.paired.r0_right_final_wrong +
     run.heldout_hard.filter((x) => x.r0_pred !== x.gold && x.final_pred !== x.gold).length);
+});
+
+test("the shipped held-out set is the one the run scored", () => {
+  const run = JSON.parse(read("run.json"));
+  const { cases } = JSON.parse(read("heldout.json"));
+  assert.equal(cases.length, run.heldout_summary.n);
+  assert.equal(cases.filter((c) => c.r0 === c.gold).length, run.heldout_summary.r0_correct);
+  assert.equal(cases.filter((c) => c.final === c.gold).length, run.heldout_summary.final_correct);
+  for (const c of cases) {
+    assert.ok(["allowed", "blocked"].includes(c.gold));
+    assert.equal(c.gold === "allowed", c.category === "no_violation");
+  }
 });
