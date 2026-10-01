@@ -21,7 +21,7 @@ const FORBIDDEN = [
 ];
 
 test("the snapshots exist and stay small", () => {
-  assert.deepEqual(files.sort(), ["heldout.json", "run.json", "toy.json"]);
+  assert.deepEqual(files.sort(), ["heldout.json", "run.json"]);
   for (const f of files) {
     const bytes = fs.statSync(path.join(DATA, f)).size;
     assert.ok(bytes < 200 * 1024, `${f} is ${bytes} bytes`);
