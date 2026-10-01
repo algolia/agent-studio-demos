@@ -74,6 +74,7 @@ test("the overlap compares figures and names, and ignores bare years", async () 
   assert.equal(byValue.Peru, true);
   assert.equal("2024" in byValue, false);
   assert.equal(o.total, 3);
+  assert.equal(a.overlap("Other 7.9%", "and other 7.9%").shared, 2);
 });
 
 test("both lanes send the same system prompt", async () => {

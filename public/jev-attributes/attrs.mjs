@@ -197,9 +197,11 @@ export function facts(text) {
 export function overlap(fullText, filteredText) {
   const a = facts(fullText);
   const b = facts(filteredText);
+  // a name counts as shared wherever the other answer says it, capitalized or not
+  const said = String(filteredText || "").toLowerCase();
   const rows = [
     ...[...a.nums].map((v) => ({ kind: "number", value: v, shared: b.nums.has(v) })),
-    ...[...a.names].map((v) => ({ kind: "name", value: v, shared: b.names.has(v) })),
+    ...[...a.names].map((v) => ({ kind: "name", value: v, shared: said.includes(v.toLowerCase()) })),
   ];
   return { rows, shared: rows.filter((r) => r.shared).length, total: rows.length };
 }
