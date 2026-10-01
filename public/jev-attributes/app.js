@@ -556,4 +556,10 @@ renderEngines();
 renderModel();
 render();
 warmIfCached();
-if (fromUrl.get("q")) { el.q.value = fromUrl.get("q"); ask(fromUrl.get("q")); }
+if (fromUrl.get("q")) {
+  // a link may fill the question in, but it spends no key: with a key in play (the owner's, or one this browser saved) it waits for a click
+  el.q.value = fromUrl.get("q").slice(0, 300);
+  renderVendor();
+  const spends = app.mode === "local" || Object.values(visitorKeys()).some(Boolean);
+  if (spends) el.go.focus(); else ask(el.q.value);
+}

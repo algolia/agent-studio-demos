@@ -224,7 +224,10 @@ by default, or, if the visitor picks it, in `sessionStorage` or
 whose key is missing is skipped, never sent. `--public` runs the server the
 way Pages would: no key of its own, no `/api`, `shared/config.js` served.
 
-`?q=…&depth=fields&engines=jev,keyword` opens a run directly.
+`?q=…&depth=fields&engines=jev,keyword` fills the question in. It runs by
+itself only when no key is in play (PUBLIC, nothing pasted or saved); with the
+owner's keys or saved ones it waits for a click on **Ask**, so a link cannot
+spend a key or send a question to Jev.
 
 ### Why there is a relay: CORS, measured 2026-10-01
 
