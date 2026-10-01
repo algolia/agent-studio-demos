@@ -131,3 +131,9 @@ test("public mode: a lane without the key it needs is skipped, never sent", asyn
   assert.ok(!calls.some((c) => c.route === "typesafe/systemone"));
   assert.ok(calls.every((c) => c.auth === "tok"), "the visitor's token rides on every Enablers call");
 });
+
+test("the embedding library is one exact file of one version, and the model one commit", async () => {
+  const { EMBED } = await load("jev-attributes/embed.mjs");
+  assert.match(EMBED.lib, /^https:\/\/cdn\.jsdelivr\.net\/npm\/@huggingface\/transformers@\d+\.\d+\.\d+\/dist\/[\w.]+\.js$/);
+  assert.match(EMBED.revision, /^[0-9a-f]{40}$/);
+});

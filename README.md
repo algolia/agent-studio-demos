@@ -149,7 +149,7 @@ Pick any of them; they run side by side, one lane each.
 | --- | --- | --- |
 | **Jev** | TypeSafe, outside vendor (`jev-1.13.0`, `POST /v1/systemone`) | 13 `noul` questions in one request, one per section, kept at P(yes) ≥ 0.5, plus a `main` choice that is always kept and reports a confidence |
 | **Laya** | Enablers, inside Algolia (`laya-auto`, same API shape, CPU-served) | the same questions in a compact shape: Laya keeps ~512 tokens per question |
-| **Embeddings** | this browser (transformers.js 4.3.0 from jsDelivr, `Xenova/all-MiniLM-L6-v2` q8, 23 MB, WebGPU or WASM, in a worker) | cosine between the question and each section description; within 0.06 of the best, at most 3 |
+| **Embeddings** | this browser (transformers.js 4.3.0 from jsDelivr, one pinned file, `Xenova/all-MiniLM-L6-v2` q8 at commit `751bff3`, 23 MB, WebGPU or WASM, in a worker) | cosine between the question and each section description; within 0.06 of the best, at most 3 |
 | **Keywords** | this browser | BM25 between the question (minus its country names) and each section description; at least half the best score, at most 3; no match keeps everything |
 | **LLM picker** | Enablers `small` | asked for `{"keep": [...]}` from the listed sections |
 

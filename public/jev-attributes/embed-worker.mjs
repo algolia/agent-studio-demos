@@ -1,7 +1,7 @@
 /* ───────────────────────────────────────────────────────────────
    embed-worker.mjs — the embedding model, off the main thread.
 
-     in   { type: "load", lib, model, dtype, file }   once
+     in   { type: "load", lib, model, revision, dtype, file }   once
           { type: "embed", id, texts }
      out  progress { loaded, total } · cached { cached } · ready { device }
           vectors { id, vectors } · error { id?, message }
@@ -23,17 +23,19 @@ async function pickDevice(want) {
   return "wasm";
 }
 
-async function isCached(model, file) {
+async function isCached(model, revision, file) {
   try {
     const c = await self.caches.open("transformers-cache");
-    return Boolean(await c.match(`https://huggingface.co/${model}/resolve/main/${file}`));
+    return Boolean(await c.match(`https://huggingface.co/${model}/resolve/${revision}/${file}`));
   } catch (_) { return null; }
 }
 
-async function load({ lib, model, dtype, file, device: want }) {
+async function load({ lib, model, revision, dtype, file, device: want }) {
   const { pipeline, env } = await import(lib);
   env.allowLocalModels = false;
-  self.postMessage({ type: "cached", cached: await isCached(model, file) });
+  // the runtime's own files load straight from jsDelivr: its cache would re-import them from blob: URLs, which the page's CSP refuses
+  env.useWasmCache = false;
+  self.postMessage({ type: "cached", cached: await isCached(model, revision, file) });
   const files = new Map();
   const progress = (p) => {
     if (p.status !== "progress" && p.status !== "done") return;
@@ -47,11 +49,11 @@ async function load({ lib, model, dtype, file, device: want }) {
   };
   let device = await pickDevice(want);
   try {
-    extract = await pipeline("feature-extraction", model, { device, dtype, progress_callback: progress });
+    extract = await pipeline("feature-extraction", model, { revision, device, dtype, progress_callback: progress });
   } catch (err) {
     if (device !== "webgpu") throw err;
     device = "wasm";
-    extract = await pipeline("feature-extraction", model, { device, dtype, progress_callback: progress });
+    extract = await pipeline("feature-extraction", model, { revision, device, dtype, progress_callback: progress });
   }
   // one throwaway call, so kernel compilation lands in the load, not in the first question
   await extract(["warm up"], { pooling: "mean", normalize: true });

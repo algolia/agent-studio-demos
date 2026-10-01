@@ -136,7 +136,7 @@ async function warmIfCached() {
   if (!app.engines.has("embed")) return;
   const hit = await safe(async () => {
     const c = await caches.open("transformers-cache");
-    return Boolean(await c.match(`https://huggingface.co/${EMBED.model}/resolve/main/${EMBED.file}`));
+    return Boolean(await c.match(`https://huggingface.co/${EMBED.model}/resolve/${EMBED.revision}/${EMBED.file}`));
   }, false);
   if (hit) embedder().load();
 }
