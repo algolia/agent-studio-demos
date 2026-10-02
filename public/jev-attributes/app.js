@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────────
-   jev-attributes — Jev trims the record.
+   jev-attributes: Jev trims the record.
 
    A question comes in; Algolia finds the countries it names; Jev answers
    one yes/no question per section of the record, in one request; the
@@ -382,7 +382,7 @@ function applyJev(r) {
     for (const li of art.querySelectorAll(".sec")) {
       const x = rows.get(li.dataset.id);
       li.style.setProperty("--p", String(x.p ?? 0));
-      li.querySelector(".sec-p b").textContent = x.p === null ? "—" : x.p.toFixed(2);
+      li.querySelector(".sec-p b").textContent = x.p === null ? "n/a" : x.p.toFixed(2);
       li.classList.add(x.picked ? "is-kept" : "is-dropped");
       if (x.byMain || x.fallback) {
         li.querySelector(".sec-meta").before(h("span.sec-tag", { title: x.byMain ? "Under 0.5, kept as the one section Jev would read first." : "No section reached 0.5, so the likeliest stays." },

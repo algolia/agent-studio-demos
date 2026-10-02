@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────────
-   byok.mjs — the visitor's own Jev key, held in this browser only.
+   byok.mjs: the visitor's own Jev key, held in this browser only.
 
    By default a key lives in memory and is gone on reload. The visitor may
    opt in to keeping it for the tab (sessionStorage) or on this device

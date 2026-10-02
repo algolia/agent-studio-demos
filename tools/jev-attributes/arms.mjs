@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────────
-   arms.mjs — the study's other arms, the ones the page no longer runs.
+   arms.mjs: the study's other arms, the ones the page no longer runs.
 
    study.mjs compares Jev with Laya, keyword BM25 and a small LLM picker.
    The page asks Jev only, so everything else the study needs lives here,

@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────────
-   client.mjs — the one remote call the page makes: Jev, over a transport.
+   client.mjs: the one remote call the page makes: Jev, over a transport.
 
      systemOne   POST <base>/systemone   Jev (TypeSafe System One)
 

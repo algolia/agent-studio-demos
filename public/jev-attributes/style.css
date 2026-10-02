@@ -1,4 +1,4 @@
-/* jev-attributes — layered on shared/tokens.css; declares no token of its own.
+/* jev-attributes: layered on shared/tokens.css; declares no token of its own.
    Motion is CSS only, 300 to 600 ms, ease-out: the P(yes) bars grow in, then
    the dropped sections fold away and the size readouts roll to the kept size.
    prefers-reduced-motion makes every change instant. */
