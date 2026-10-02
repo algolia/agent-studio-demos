@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────────
-   live-ui.js — the "Play" tab, on top of live.js, csv.js, stats.js,
+   live-ui.js: the "Play" tab, on top of live.js, csv.js, stats.js,
    race-charts.js and label-game.js.
 
    Three steps, one game:
