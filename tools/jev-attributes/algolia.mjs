@@ -8,31 +8,39 @@
    the same function, and says so in its result.
 
    Nothing here touches any other index: every call goes through `url()`,
-   which refuses a name outside INDEX_NAMES.
+   which refuses a name outside INDEX_NAMES, or is the multi-query, whose
+   requests name an index from that list.
    ─────────────────────────────────────────────────────────────── */
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { INDEX_NAMES, queryParams, bestMatches, stripMeta } from "../../public/jev-attributes/search.mjs";
+import { INDEX_NAMES, TOPICAL, SNIPPET_WORDS, CAP, planQueries, mergeResults, multiBody } from "../../public/jev-attributes/search.mjs";
 
 export { INDEX_NAMES };
 export const RECORDS_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "factbook.jsonl");
 
-/* The name and its other forms are the only thing a question searches; every Factbook field is
-   the payload, not the query. All words optional, so "Main exports of
-   Chile" finds Chile; stop words and short-word typos off, so "of" and
-   "main" do not pull in the Isle of Man or Mali. */
+/* Two kinds of question share this index. A fields question names a country,
+   so it searches `name` and `aliases` only (restrictSearchableAttributes, see
+   search.mjs). A records question is topical ("oil exporters in the Gulf"),
+   so four topical fields are searchable after the name, unordered, and come
+   back as ~40-word snippets for Jev to read: three prose fields, and the
+   rivers, which no prose field names ("Where does the Danube flow?"). All
+   words optional, so "Main exports of Chile" finds Chile; stop words and
+   short-word typos off, so "of" and "main" do not pull in the Isle of Man or
+   Mali. */
 export const SETTINGS = {
-  searchableAttributes: ["name", "aliases"],
+  searchableAttributes: ["name", "aliases", ...TOPICAL.map((a) => `unordered(${a})`)],
   indexLanguages: ["en"],
   queryLanguages: ["en"],
   removeStopWords: ["en"],
   ignorePlurals: ["en"],
   minWordSizefor1Typo: 5,
   minWordSizefor2Typos: 9,
+  removeWordsIfNoResults: "allOptional",
   attributesToHighlight: [],
-  attributesToSnippet: [],
+  attributesToSnippet: TOPICAL.map((a) => `${a}:${SNIPPET_WORDS}`),
+  restrictHighlightAndSnippetArrays: false,
   attributeForDistinct: null,
 };
 
@@ -97,19 +105,20 @@ export function searchLocal(query, hitsPerPage = 3) {
 let resolved = null; // the index name that answered, once one has
 
 /**
- * Search the Factbook index. Returns { hits, index, backend, ms }.
- * backend is "algolia" or "local"; index is the name that answered.
+ * Search the Factbook index with the page's multi-query. `kind` is "fields"
+ * or "records". Returns { hits, queries, index, backend, ms }; backend is
+ * "algolia" or "local", index the name that answered.
  */
-export async function search({ app, key }, query, hitsPerPage = 3) {
+export async function search({ app, key }, question, kind = "fields") {
   const t0 = performance.now();
-  const params = queryParams(query);
+  const plan = planQueries(question, kind);
   if (app && key) {
     for (const index of resolved ? [resolved] : INDEX_NAMES) {
       try {
-        const r = await call(app, key, "POST", url(app, index, "/query"), params);
+        const r = await call(app, key, "POST", `https://${app}-dsn.algolia.net/1/indexes/*/queries`, multiBody(plan, index));
         if (r.status === 200 && r.json) {
           resolved = index;
-          return { hits: bestMatches(r.json.hits).slice(0, hitsPerPage).map(stripMeta), index, backend: "algolia", ms: performance.now() - t0 };
+          return { hits: mergeResults(plan, r.json.results || [], kind), queries: plan.length, index, backend: "algolia", ms: performance.now() - t0 };
         }
         if (r.status !== 403 && r.status !== 404) throw new Error(`HTTP ${r.status}: ${r.message}`);
       } catch (err) {
@@ -117,5 +126,19 @@ export async function search({ app, key }, query, hitsPerPage = 3) {
       }
     }
   }
-  return { hits: searchLocal(query, hitsPerPage), index: "factbook.jsonl", backend: "local", ms: performance.now() - t0 };
+  return { hits: searchLocal(question, CAP[kind] ?? CAP.fields), queries: 0, index: "factbook.jsonl", backend: "local", ms: performance.now() - t0 };
+}
+
+/** one whole record by objectID, as the page's getObject reads it; the local file when Algolia has no key */
+export async function getObject({ app, key }, objectID) {
+  if (app && key) {
+    for (const index of resolved ? [resolved] : INDEX_NAMES) {
+      const r = await call(app, key, "GET", url(app, index, `/${encodeURIComponent(objectID)}`));
+      if (r.status === 200 && r.json) { resolved = index; return r.json; }
+      if (r.status !== 403) throw new Error(`HTTP ${r.status}: ${r.message}`);
+    }
+  }
+  const rec = local().find((x) => x.objectID === objectID);
+  if (!rec) throw new Error("no such record");
+  return rec;
 }

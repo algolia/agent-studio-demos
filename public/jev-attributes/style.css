@@ -1,7 +1,8 @@
 /* jev-attributes: layered on shared/tokens.css; declares no token of its own.
    Motion is CSS only, 300 to 600 ms, ease-out: the P(yes) bars grow in, then
-   the dropped sections fold away and the size readouts roll to the kept size.
-   prefers-reduced-motion makes every change instant. */
+   the dropped records dim and fold, the dropped sections fold away, and the
+   size readouts roll to the kept size. prefers-reduced-motion makes every
+   change instant. */
 
 .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
 
@@ -72,6 +73,21 @@
 }
 .btn:disabled { background: var(--line-strong); color: var(--surface); cursor: not-allowed; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+.chip[data-mode="fields"] { border-style: dashed; }
+
+/* ── the mode bar: what Jev trims, what it reads of a record ─────── */
+
+.modes { display: grid; gap: 6px; margin: 12px 0 0; }
+.mode-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.mode-l { font: 600 13px var(--body); color: var(--ink-2); min-width: 68px; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.seg-b {
+  font: 500 13px var(--body); color: var(--ink-2); background: var(--surface); cursor: pointer;
+  border: 1px solid var(--line-strong); border-radius: 6px; padding: 5px 12px; min-height: 36px;
+}
+.seg-b:hover { border-color: var(--accent); color: var(--accent); }
+.seg-b[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.mode-cost { margin: 0; font: 12px var(--mono); color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .chip {
   font: 14px var(--body); color: var(--ink-2); background: var(--surface);
   border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; min-height: 36px;
@@ -85,7 +101,7 @@
   min-height: 22px; font-variant-numeric: tabular-nums;
 }
 .flow li { display: flex; align-items: baseline; gap: 7px; color: var(--ink-2); min-width: 0; }
-.flow li b { color: var(--ink); font-weight: 600; }
+.flow li b { color: var(--ink); font-weight: 600; white-space: nowrap; }
 .flow-t { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
 .flow-n {
   display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; flex: none;
@@ -98,6 +114,8 @@
 .flow .is-wait b { color: var(--ink-3); }
 .flow .is-error .flow-n { background: var(--over); color: var(--surface); }
 .flow .is-error .flow-t { color: var(--over); }
+.flow .cached { color: var(--ok); font-weight: 500; }
+.flow .was-ms { color: var(--ink-3); }
 @keyframes beat { from { transform: scale(1); } to { transform: scale(1.18); } }
 
 /* ── the stage ─────────────────────────────────────────────────── */
@@ -109,8 +127,10 @@
   border: 1px solid var(--line);
 }
 .stage-toggle { visibility: hidden; }
-.stage:has(.rec.is-failed) .stage-key { visibility: hidden; }
-.stage.is-scored .stage-toggle { visibility: visible; }
+.block:has(.rec.is-failed) .stage-key, .block.is-failed .stage-key { visibility: hidden; }
+.block.is-scored .stage-toggle { visibility: visible; }
+.block + .block, .block + .readout { margin-top: 26px; }
+.block-h { font: 800 20px/1.2 var(--display); margin: 0 0 8px; letter-spacing: -0.01em; }
 .stage-empty { margin: 8px 0; color: var(--ink-3); }
 
 .recs { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); align-items: start; }
@@ -120,6 +140,11 @@
 }
 .rec-h { grid-area: head; display: grid; gap: 8px; align-content: start; margin-bottom: 10px; }
 .rec-name { margin: 0; font: 800 24px/1.1 var(--display); letter-spacing: -0.01em; }
+.rec-open {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+  text-decoration: underline dotted var(--line-strong); text-underline-offset: 5px; text-decoration-thickness: 2px;
+}
+.rec-open:hover { text-decoration-color: var(--accent); }
 .rec-sub { margin: 0; font-size: 13px; color: var(--ink-3); }
 .rec { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "secs" "verdict"; }
 .secs { grid-area: secs; }
@@ -204,6 +229,94 @@
 .is-scored .rec:not(.is-failed) .verdict { color: var(--ink); font-weight: 600; }
 .rec.is-failed .verdict { color: var(--over); }
 
+/* the records: one card per hit, each as wide as its record, a P(yes) bar on each */
+.rsize { margin: 0 0 10px; }
+.hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hit {
+  display: grid; grid-template-rows: 1fr;
+  transition: grid-template-rows 0.55s ease-out 0.9s, opacity 0.45s ease-out 0.9s;
+}
+.hit-in { min-height: 0; overflow: hidden; }
+.hit-box {
+  width: max(calc(var(--w) * 100%), min(100%, 340px)); margin-bottom: 4px; padding: 5px 10px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 2px 12px; align-items: center;
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px;
+  transition: background-color 0.4s ease-out 0.65s, border-color 0.4s ease-out 0.65s, opacity 0.3s ease-out 0.45s;
+}
+.hit-box:hover .hit-name { text-decoration: underline; text-underline-offset: 3px; }
+.hit-rank { font: 500 11px var(--mono); color: var(--ink-3); min-width: 2ch; text-align: right; }
+.hit-main { min-width: 0; display: flex; flex-direction: column; }
+.hit-name { font: 600 14px/1.3 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hit-text { font: 12px/1.35 var(--body); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hit-size { font: 11px var(--mono); color: var(--ink-3); white-space: nowrap; }
+.hit .sec-p { width: 150px; }
+.hit .sec-tag { justify-self: end; }
+.rblock.is-reading .sec-p { opacity: 0.5; animation: breathe 0.6s ease-out infinite alternate; }
+.is-scored .hit.is-kept .hit-box { background: var(--accent-soft); border-color: var(--accent); }
+.is-scored .hit.is-kept .track i { background: var(--accent); }
+.is-scored .hit.is-kept .sec-p b { color: var(--accent); font-weight: 600; }
+.is-scored .hit.is-dropped .hit-box { opacity: 0.45; }
+.is-scored:not(.is-full) .hit.is-dropped { grid-template-rows: 0fr; opacity: 0; }
+.is-scored.is-full .hit, .is-scored.is-full .hit-box { transition-delay: 0s; }
+.rblock.is-failed .verdict { color: var(--over); }
+
+/* the readout: the hits in full, after the records, after the fields */
+.readout {
+  margin-top: 22px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent); border-radius: 8px; box-shadow: var(--shadow); animation: appear 0.4s ease-out 1.2s both;
+}
+.ro-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.ro { display: flex; flex-direction: column; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.ro-l { font-size: 12px; color: var(--ink-2); }
+.ro-n { font: 600 20px var(--mono); }
+.ro-t { font: 12px var(--mono); color: var(--ink-3); }
+.ro.is-final .ro-n { color: var(--accent); }
+.ro-arrow { color: var(--ink-3); font-size: 18px; }
+.ro-note { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
+
+/* the whole record, in a modal: what Jev read, and the rest */
+.rec-modal {
+  width: min(780px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 48px); padding: 0;
+  border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+}
+.rec-modal::backdrop { background: rgb(10 12 30 / 0.55); }
+.m-in { padding: 0 16px 18px; overflow-wrap: anywhere; }
+.m-h {
+  position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 12px 0 8px; background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.m-name { margin: 0; font: 800 24px/1.1 var(--display); min-width: 0; }
+.m-close {
+  flex: none; font: 600 14px var(--body); color: var(--ink); background: var(--surface-2); cursor: pointer;
+  border: 1px solid var(--line-strong); border-radius: 6px; padding: 0 14px; min-height: 40px;
+}
+.m-close:hover { border-color: var(--accent); color: var(--accent); }
+.m-wait { margin: 0; padding: 16px 0; color: var(--ink-3); }
+.m-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 4px; font-size: 12px; color: var(--ink-2); }
+.lg::before { content: ""; display: inline-block; width: 16px; height: 10px; margin-right: 6px; border-radius: 2px; vertical-align: -1px; }
+.lg.is-seen::before { background: var(--accent-soft); box-shadow: inset 0 -2px 0 var(--accent); }
+.lg.is-unseen::before { background: var(--surface-2); border: 1px solid var(--line); }
+.lg.is-kept::before { border-left: 3px solid var(--ok); background: var(--surface-2); }
+.lg.is-dropped::before { border-left: 3px solid var(--line-strong); background: var(--surface-2); }
+.m-counts { margin: 0 0 6px; font: 12px var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.m-note { margin: 0 0 6px; font-size: 12px; color: var(--warn); }
+.m-desc ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.m-desc li { margin: 2px 0; }
+.m-desc h3, .m-sec h3 { font: 600 15px var(--body); margin: 0 0 4px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.m-desc { margin: 12px 0; }
+.m-sec { margin: 14px 0; padding-left: 10px; border-left: 3px solid transparent; }
+.m-sec.is-kept { border-left-color: var(--ok); }
+.m-sec.is-dropped { border-left-color: var(--line-strong); }
+.m-tag { font: 500 10px/16px var(--mono); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; }
+.m-sec.is-kept .m-tag { color: var(--ok); }
+.m-sec.is-dropped .m-tag { color: var(--ink-3); }
+.m-sec dl { margin: 0; display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr); gap: 3px 14px; font-size: 13px; line-height: 1.45; }
+.m-sec dt { color: var(--ink-2); font-weight: 500; }
+.m-sec dd { margin: 0; }
+.rec-modal .seen { background: var(--accent-soft); color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); border-radius: 2px; }
+.rec-modal .unseen { color: var(--ink-3); }
+
 /* the ghost: what a record looks like before any question */
 .rec.is-ghost .sec-box { border-style: dashed; background: transparent; }
 .rec.is-ghost .sec-name { font-weight: 500; color: var(--ink-3); }
@@ -212,6 +325,12 @@
 
 @media (max-width: 640px) {
   .keycard { grid-template-columns: minmax(0, 1fr) auto; }
+  .mode-l { min-width: 0; width: 100%; }
+  .hit-box { width: max(calc(var(--w) * 100%), min(100%, 230px)); grid-template-columns: auto minmax(0, 1fr) auto; }
+  .hit .sec-p { grid-column: 2 / -1; width: auto; }
+  .hit-text { display: none; }
+  .m-sec dl { grid-template-columns: minmax(0, 1fr); }
+  .m-sec dd { margin-bottom: 6px; }
   .kc-field { grid-column: 1 / -1; grid-row: 2; }
   .sec-p { width: 112px; gap: 6px; }
   .sec-meta .m-f { display: none; }

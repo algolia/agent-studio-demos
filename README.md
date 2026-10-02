@@ -246,30 +246,77 @@ To point the public page at a backend:
 
 ## Jev trims the record
 
-`/jev-attributes/` shows one idea: a question about a country needs one or two
-of the 13 sections of its record, and Jev can say which before anything reads
-the record. Algolia finds the countries the question names. **Jev** (TypeSafe
-System One, `jev-1.13.0`, `POST /v1/systemone`) answers 13 `noul` questions in
-one request, one per section, plus a `main` choice. A section is kept at
-P(yes) ≥ 0.5, and the `main` pick is always kept. On screen, each record is
-drawn as 13 stacked blocks, each as tall as its characters (with a floor so a
-label stays readable); a P(yes) bar grows on every block, then the dropped
-blocks fold away and the size readouts roll from the full record to the kept
-part.
+`/jev-attributes/` trims the context an agent would read, twice, on one
+catalog. **Jev** (TypeSafe System One, `jev-1.13.0`, `POST /v1/systemone`)
+makes every cut; no LLM answers anything on this page, and the sizes are the
+evidence.
 
-The sizes are the evidence, and only the sizes. No LLM answers anything on
-this page. Fields and characters are counted from the record (characters of
-each `"Section.Field":value` as JSON); tokens are characters ÷ 4 and the page
-says "≈ tokens, estimated" wherever it shows one. The input and output tokens
-in the Jev step are Jev's own `usage`.
+- **Records.** A topical question ("Which Gulf countries export the most
+  oil?") brings back ten countries. Jev answers one `noul` question per hit,
+  in one request: does `` `records.<objectID>` `` help answer `` `question` ``?
+  The state is `{question, records: {<objectID>: {name, text}}}`, and the
+  criterion is contrastive (a record helps when its text answers or bears
+  directly on the question; a country merely in the same region does not). A
+  record is kept at P(yes) ≥ 0.5, and the likeliest one is always kept. On
+  screen, ten cards in Algolia order, each as wide as its full record; a
+  P(yes) bar grows on each, the dropped ones dim and fold, and the counter
+  rolls from ten records to the kept ones.
+- **Fields.** For a question that names countries, Jev answers 13 `noul`
+  questions in one request, one per section, plus a `main` choice, from the
+  question and the section descriptions only (`{question, sections: {id:
+  description}}`), never a record. A section is kept at P(yes) ≥ 0.5, and the
+  `main` pick is always kept. Each record is drawn as 13 stacked blocks, each
+  as tall as its characters; the dropped blocks fold away.
+- **Both** (the default) runs Records, then Fields on the likeliest three kept
+  records. The fields request holds no record, so one call serves all three.
+  The readout at the end reads: the ten hits in full, then after records,
+  then after fields, in characters and ≈ tokens.
 
-The Jev request follows the SystemOne levers: the state is an object
-(`{question, sections: {id: description}}`), each question points into it by
-backtick path (`` `sections.economy` ``), and the criteria are contrastive
-(what a section covers, what it is not for, examples) where sections get
-confused: Economy, Energy and Transnational Issues; Geography and Environment.
-The study below is why Jev is the one engine: the levered request covered
-64 of 64 questions.
+**What Jev sees** (Records and Both) picks the `text` Jev reads per record:
+the name only, the name and the first 300 characters of
+`Introduction.Background` (cut on a word), or the name and the snippets
+Algolia matched (`_snippetResult`, the default). The line under it counts the
+records request for the hits on screen, so flipping the toggle shows what
+each view costs before you ask again. Measured on "Which Gulf countries export
+the most oil?": ≈ 969 tokens for names only, ≈ 1,737 with the background
+excerpt, ≈ 2,362 with snippets (Jev's own count for the snippet request:
+2,548 input tokens).
+
+**Reading the numbers.** Fields and characters are counted from the record
+(characters of each `"Section.Field":value` as JSON, search keys and snippets
+excluded); tokens are characters ÷ 4, and the page says "≈" and "estimated"
+wherever it shows one. The input and output tokens in each Jev step are Jev's
+own `usage`.
+
+**One question, one multi-query.** Search sends Algolia's `queries` endpoint
+one request: a query per name phrase in the question (capitalised runs of up
+to three words, possessives stripped, stop words skipped, split on commas and
+"and"; on `name` and `aliases` only), then the whole question. Hits are joined
+by objectID, names first, capped at 10 for Records and Both and at 3 for
+Fields. So "What can Peru, Germany, and Lebanon's neighbors have in common?"
+brings back all three named records. The Search step shows how many queries
+ran and how many records came back.
+
+**The whole record.** Click a record card, or a record's name in the fields
+stage, and a modal fetches the record with `getObject` (the browser's search
+key in public mode, `/api/object` in local mode) and shows every section and
+field. What Jev read is marked "seen by Jev": the name and the snippet or
+background excerpt in the records stage; in the fields stage, the 13 section
+descriptions and nothing of the record. Once the fields stage has run, kept
+and dropped sections are marked too. A line counts both sides in characters
+and ≈ tokens.
+
+**Cache.** Jev's answers are kept in the browser, keyed by a SHA-256 of the
+request as sent (model, state, questions), in memory and mirrored to
+`localStorage` under one slot, capped at 200 entries, oldest out. Asking the
+same thing again shows "cached" on the Jev step, the first call's time struck
+through, and "0 tokens, cached". The key card has a "Clear cache" link.
+
+Out of scope: a multi-hop loop that plans 10 to 25 searches is an agent, not
+this page; it belongs to the Agent Studio race demo.
+
+The study below is why Jev is the one engine: the levered fields request
+covered 64 of 64 questions.
 
 ### Why the Factbook
 
@@ -289,6 +336,7 @@ record, so little to strip).
 git clone --depth 1 https://github.com/factbook/factbook.json.git /tmp/fb   # 13 MB
 node scripts/build-factbook.mjs /tmp/fb       # → factbook.jsonl, gitignored
 node scripts/index-factbook.mjs --push        # settings, then records
+node scripts/index-factbook.mjs --push --settings-only   # settings only
 ```
 
 - One record per entity, keyed `Section.Field`, plus `objectID` (the GEC code),
@@ -304,9 +352,16 @@ node scripts/index-factbook.mjs --push        # settings, then records
   `demo_factbook` first, so widening the key moves both with no code change.
   If neither index answers, the proxy searches `factbook.jsonl` locally and the
   page says so.
-- Only `name` and `aliases` are searchable, all words optional, stop words off;
-  the proxy keeps the hits that match the most words, on the name, with the
-  fewest typos. Searches send `analytics: false`.
+- **Searchable:** `name`, `aliases`, then `unordered(Introduction.Background)`,
+  `unordered(Geography.Location)`, `unordered(Economy.Economic overview)` and
+  `unordered(Geography.Major rivers (by length in km))` (no prose field names
+  the Danube). `attributesToSnippet` holds those four at 40 words,
+  `restrictHighlightAndSnippetArrays` is off, `removeWordsIfNoResults` is
+  `allOptional`, typo tolerance is on, stop words are removed. A fields query
+  restricts itself to `name` and `aliases`, as before; a records query makes
+  every word optional (`optionalWords`). Searches send `analytics: false`.
+  `node scripts/index-factbook.mjs --push --settings-only` pushes these
+  settings and sends no record.
 
 ### Run it: two modes
 
@@ -319,7 +374,7 @@ PORT=8796 node tools/jev-attributes/server.mjs --public   # PUBLIC, as deployed
 `~/.local/state/prefetch.env` (`ESCI_APP`, `ESCI_READ`; `ESCI_WRITE` for the
 indexer only) and Jev from `JEV_API_KEY` in the agentic-evals `.env`. It
 answers `/api/status` (how the page knows it is local), searches for the page
-at `/api/search`, and adds the owner's Jev key to any `/relay/*` call that
+at `/api/search`, fetches whole records at `/api/object`, and adds the owner's Jev key to any `/relay/*` call that
 carries none. The key card shrinks to one line: "Key held by the local
 server". It never serves `shared/config.js`. Because it adds a key, it binds
 loopback only (it refuses to start on another `HOST`) and answers 403 to any
