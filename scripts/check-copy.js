@@ -70,7 +70,7 @@ const JS_FILES = [
   "chat-with-book/app.js", "infinite-conversation/app.js",
   "shared/meter.js", "shared/books.js", "shared/compactor.js", "shared/md.js",
   "shared/format.mjs", "jev-attributes/app.js", "jev-attributes/attrs.mjs",
-  "jev-attributes/client.mjs", "jev-attributes/byok.mjs", "jev-attributes/search.mjs",
+  "jev-attributes/client.mjs", "jev-attributes/byok.mjs", "jev-attributes/search.mjs", "jev-attributes/records.mjs",
   "guardrails-arena/app.js", "guardrails-arena/live.js", "guardrails-arena/live-ui.js", "guardrails-arena/race-charts.js",
   "guardrails-arena/label-game.js", "guardrails-game/game-ui.js",
   "main-demo/app.js", "main-demo/lane.js", "main-demo/configs.mjs", "main-demo/stream.mjs",
