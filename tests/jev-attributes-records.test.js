@@ -46,6 +46,13 @@ test("what Jev sees: the name only, the background's first 300 characters on a w
   // no match at all: the background's own snippet, ellipsis trimmed
   const none = { ...h, _snippetResult: { "Introduction.Background": h._snippetResult["Introduction.Background"] } };
   assert.equal(r.seenText(none, "snippet"), "Ancient Peru was the seat of several prominent Andean civilizations");
+  // a snippet that shows its matched words goes first; one that matched outside its window is left out
+  const two = { ...h, _snippetResult: {
+    "Introduction.Background": { value: "… the 19th century that made it a protectorate…", matchLevel: "partial" },
+    "Economy.Economic overview": { value: "<em>oil</em>-based economy", matchLevel: "partial" },
+    "Geography.Location": { value: "bordering the Persian <em>Gulf</em>, <em>oil</em> fields", matchLevel: "full" },
+  } };
+  assert.deepEqual(r.snippetPieces(two).map((p) => p.attr), ["Geography.Location", "Economy.Economic overview"]);
   assert.equal(r.cutWords("short text", 300), "short text");
   assert.equal(r.cutWords("alpha beta gamma", 12), "alpha beta…");
 });

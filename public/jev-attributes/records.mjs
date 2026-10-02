@@ -35,14 +35,20 @@ const decode = (s) => String(s).replace(/<\/?em>/g, "").replace(/&quot;/g, "\"")
   .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 
 /**
- * The snippets Algolia matched on a hit, in TOPICAL order, tags out and the
- * ellipses trimmed. With no match at all, the background's own snippet.
+ * The snippets Algolia matched on a hit, tags out and the ellipses trimmed:
+ * those that show a matched word first, most matched words first, then
+ * TOPICAL order. A snippet that matched outside its window shows none and
+ * counts only when no other does. With no match at all, the background's
+ * own snippet.
  */
 export function snippetPieces(hit) {
   const sr = (hit && hit._snippetResult) || {};
   const piece = (attr) => ({ attr, text: decode(sr[attr].value).replace(/^…\s*|\s*…$/g, "").trim() });
-  const matched = TOPICAL.filter((a) => sr[a] && sr[a].matchLevel && sr[a].matchLevel !== "none").map(piece);
-  if (matched.length) return matched;
+  const ems = (attr) => (String(sr[attr].value).match(/<em>/g) || []).length;
+  const matched = TOPICAL.filter((a) => sr[a] && sr[a].matchLevel && sr[a].matchLevel !== "none");
+  const shown = matched.filter((a) => ems(a) > 0).sort((x, y) => ems(y) - ems(x));
+  if (shown.length) return shown.map(piece);
+  if (matched.length) return matched.map(piece);
   return sr["Introduction.Background"] ? [piece("Introduction.Background")] : [];
 }
 
