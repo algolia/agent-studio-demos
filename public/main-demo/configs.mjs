@@ -101,19 +101,32 @@ const GUARDRAIL = {
 export function agentConfigPatch(toggles) {
   const t = normalize(toggles);
   return {
-    // snake_case on purpose: the backend normalizes `searchPrefetch` only when
-    // `search_prefetch` is absent, so a copied base config would otherwise win
-    search_prefetch: t.prefetch ? { enabled: true } : false,
+    // the wire key; the backend stores it as `search_prefetch`, so the scripts
+    // drop both spellings from a copied config before adding this one
+    searchPrefetch: t.prefetch ? { enabled: true } : false,
     memory: { enabled: t.memory },
     guardrail: t.guardrails ? GUARDRAIL : { enabled: false },
     suggestions: { enabled: t.suggestions },
   };
 }
 
+/** the prefetch value of a stored config: stored as `search_prefetch`, sent as `searchPrefetch` */
+export function storedPrefetch(config) {
+  const c = config || {};
+  return c.search_prefetch !== undefined ? c.search_prefetch : c.searchPrefetch;
+}
+
+/** what the server wrote into the prefetch block on save, by index name; null when nothing yet */
+export function capturedSettings(config) {
+  const sp = storedPrefetch(config);
+  const cap = sp && typeof sp === "object" ? sp.capturedIndexSettings || sp.captured_index_settings : null;
+  return cap && typeof cap === "object" && Object.keys(cap).length ? cap : null;
+}
+
 /** read a stored agent config back into toggles, whatever spelling it used */
 export function togglesFromAgentConfig(config) {
   const c = config || {};
-  const sp = c.search_prefetch !== undefined ? c.search_prefetch : c.searchPrefetch;
+  const sp = storedPrefetch(c);
   const prefetch = sp === true || Boolean(sp && typeof sp === "object" && sp.enabled !== false);
   const on = (v) => Boolean(v && typeof v === "object" && v.enabled === true);
   return normalize({ prefetch, memory: on(c.memory), guardrails: on(c.guardrail), suggestions: on(c.suggestions) });
@@ -161,15 +174,29 @@ export function completionQuery() {
 /* check-copy: off */
 /** the editable fields of each config block, with the backend's defaults and bounds */
 export const BLOCKS = [
-  { id: "search_prefetch", label: "Search prefetch", fields: [
+  { id: "searchPrefetch", label: "Search prefetch", fields: [
     { path: "enabled", label: "Enabled", type: "bool", def: true },
     { path: "indexName", label: "Index", type: "text", def: null, hint: "empty: the agent's first search tool" },
     { path: "conversationWindow", label: "Conversation window", type: "int", min: 1, max: 5, def: 1,
       hint: "latest user turns in the query" },
     { path: "minInformativeTokens", label: "Min informative tokens", type: "int", min: 0, max: 10, def: 2,
       hint: "shorter queries skip prefetch" },
-    { path: "requireHits", label: "Require hits", type: "bool", def: true },
-    { path: "instruction", label: "Instruction", type: "instruction", def: false },
+    { path: "hitsPerPage", label: "Hits per page", type: "int", min: 1, max: 100, def: null, nullable: true,
+      hint: "empty: the search tool's value" },
+    { group: "Search parameters", path: "searchParameters.queryLanguages", label: "Query languages", type: "langs", def: null,
+      hint: "empty: the index's languages" },
+    { path: "searchParameters.naturalLanguages", label: "Natural languages", type: "langs", def: null },
+    { path: "searchParameters.removeStopWords", label: "Remove stop words", type: "boolOrLangs", def: null,
+      hint: "true, false, or languages" },
+    { path: "searchParameters.ignorePlurals", label: "Ignore plurals", type: "boolOrLangs", def: null,
+      hint: "true, false, or languages" },
+    { path: "searchParameters.typoTolerance", label: "Typo tolerance", type: "enum", options: [null, true, false, "min", "strict"], def: null },
+    { path: "searchParameters.removeWordsIfNoResults", label: "Remove words if no results", type: "enum",
+      options: ["none", "lastWords", "firstWords", "allOptional"], def: "allOptional" },
+    { path: "searchParameters.restrictSearchableAttributes", label: "Restrict to attributes", type: "list", def: null,
+      hint: "empty: every searchable attribute" },
+    { path: "capturedIndexSettings", label: "Captured index settings", type: "readonly", def: null,
+      hint: "written by the server on save, never sent" },
   ] },
   { id: "memory", label: "Memory", fields: [
     { path: "enabled", label: "Enabled", type: "bool", def: false },
@@ -226,15 +253,26 @@ export function blockValues(blockId, stored) {
   return out;
 }
 
+/** Algolia language codes: two letters, or a region form such as pt-br */
+const isLangs = (v) => Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string" && /^[a-z]{2}(-[a-z]{2})?$/.test(x));
+
 /** the problems with a block's values, by field path; empty when the backend would accept it */
 export function validateBlock(blockId, values) {
   const b = BLOCKS.find((x) => x.id === blockId);
   const errors = {};
   for (const f of b.fields) {
     const v = values[f.path];
-    if (f.type === "int" && (!Number.isInteger(v) || v < f.min || v > f.max)) errors[f.path] = `${f.min} to ${f.max}`;
+    const unset = v === null || v === undefined;
+    if (f.type === "int" && !(f.nullable && unset) && (!Number.isInteger(v) || v < f.min || v > f.max)) {
+      errors[f.path] = `${f.min} to ${f.max}${f.nullable ? ", or empty" : ""}`;
+    }
     if (f.type === "enum" && !f.options.includes(v)) errors[f.path] = "not an option";
     if (f.type === "json" && !Array.isArray(v)) errors[f.path] = "a JSON list";
+    if (f.type === "langs" && !unset && !isLangs(v)) errors[f.path] = "language codes, like en, fr";
+    if (f.type === "boolOrLangs" && !unset && typeof v !== "boolean" && !isLangs(v)) errors[f.path] = "true, false, or codes";
+    if (f.type === "list" && !unset && !(Array.isArray(v) && v.length && v.every((x) => typeof x === "string" && x))) {
+      errors[f.path] = "names, comma separated";
+    }
   }
   return errors;
 }
@@ -245,6 +283,7 @@ export function blockFrom(blockId, values) {
   if (b.scalar) return Boolean(values[""]);
   const out = {};
   for (const f of b.fields) {
+    if (f.type === "readonly") continue; // server-written: shown, never sent, never hashed
     const v = values[f.path];
     const empty = v === null || v === undefined || v === "";
     if (f.path === "enabled") { setPath(out, f.path, Boolean(v)); continue; }
@@ -332,7 +371,7 @@ export function customAgentBody(base, blocks, name = customName(blocks)) {
   delete config.searchPrefetch;
   delete config.search_prefetch;
   const own = { ...blocks };
-  if (own.search_prefetch && own.search_prefetch.enabled === false) own.search_prefetch = false;
+  if (own.searchPrefetch && own.searchPrefetch.enabled === false) own.searchPrefetch = false;
   return { ...baseTemplate(base), name, config: { ...config, ...own } };
 }
 
@@ -342,7 +381,7 @@ export function blocksFromConfig(config) {
   const out = {};
   for (const b of BLOCKS) {
     if (b.scalar) { if (c[b.id] === true) out[b.id] = true; continue; }
-    const raw = b.id === "search_prefetch" ? (c.search_prefetch !== undefined ? c.search_prefetch : c.searchPrefetch) : c[b.id];
+    const raw = b.id === "searchPrefetch" ? storedPrefetch(c) : c[b.id];
     out[b.id] = blockFrom(b.id, blockValues(b.id, raw === false || raw === undefined ? { enabled: false } : raw === true ? { enabled: true } : raw));
   }
   return out;

@@ -153,7 +153,10 @@
 }
 .fld textarea { resize: vertical; }
 .fld input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; justify-self: start; }
-.fld-pair { display: grid; gap: 4px; }
+.fld.is-wide, .editor-sub { grid-column: 1 / -1; }
+.editor-sub { margin: 6px 0 0; font-size: 12px; font-weight: 600; color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 8px; }
+.fld-ro { margin: 0; font: 12px var(--mono); color: var(--ink-2); max-height: 9em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fld-ro.is-empty { color: var(--ink-3); }
 .fld-hint { font-size: 12px; color: var(--ink-3); }
 .fld.is-bad input, .fld.is-bad textarea { border-color: var(--over); }
 .fld.is-bad .fld-hint { color: var(--over); }

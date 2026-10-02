@@ -159,7 +159,7 @@ function PrefetchPart({ part }) {
 
 /* ── The config panel ─────────────────────────────────────────── */
 
-const BLOCK_OF = { prefetch: "search_prefetch", memory: "memory", guardrails: "guardrail", suggestions: "suggestions" };
+const BLOCK_OF = { prefetch: "searchPrefetch", memory: "memory", guardrails: "guardrail", suggestions: "suggestions" };
 
 function Field({ f, value, error, onValue, disabled }) {
   const id = useMemo(() => `f-${Math.random().toString(36).slice(2, 9)}`, []);
@@ -171,27 +171,40 @@ function Field({ f, value, error, onValue, disabled }) {
     input = html`<input id=${id} type="number" min=${f.min} max=${f.max} step="1" value=${value ?? ""} disabled=${disabled}
       onChange=${(e) => onValue(e.target.value === "" ? null : Number(e.target.value))} />`;
   } else if (f.type === "enum") {
-    input = html`<select id=${id} value=${value} disabled=${disabled} onChange=${(e) => onValue(e.target.value)}>
-      ${f.options.map((o) => html`<option key=${o} value=${o}>${o}</option>`)}</select>`;
-  } else if (f.type === "instruction") {
-    const mode = value === true ? "default" : typeof value === "string" && value ? "custom" : "off";
-    input = html`<span class="fld-pair">
-      <select id=${id} value=${mode} disabled=${disabled}
-        onChange=${(e) => onValue(e.target.value === "default" ? true : e.target.value === "off" ? false : " ")}>
-        <option value="off">off</option><option value="default">default sentence</option><option value="custom">custom</option>
-      </select>
-      ${mode === "custom" && html`<input type="text" aria-label="Instruction text" value=${String(value).trim()} disabled=${disabled}
-        onChange=${(e) => onValue(e.target.value || " ")} />`}</span>`;
+    // options may mix null, booleans and strings: the select carries their index
+    input = html`<select id=${id} value=${String(f.options.indexOf(value))} disabled=${disabled}
+      onChange=${(e) => onValue(f.options[Number(e.target.value)])}>
+      ${f.options.map((o, i) => html`<option key=${i} value=${String(i)}>${o === null ? "unset" : String(o)}</option>`)}</select>`;
+  } else if (f.type === "langs" || f.type === "list" || f.type === "boolOrLangs") {
+    input = html`<${ListField} id=${id} value=${value} f=${f} disabled=${disabled} onValue=${onValue} />`;
+  } else if (f.type === "readonly") {
+    input = value
+      ? html`<pre id=${id} class="fld-ro">${JSON.stringify(value, null, 1)}</pre>`
+      : html`<span id=${id} class="fld-ro is-empty">none yet</span>`;
   } else if (f.type === "json") {
     input = html`<${JsonField} id=${id} value=${value} disabled=${disabled} onValue=${onValue} />`;
   } else {
     input = html`<input id=${id} type="text" value=${value ?? ""} placeholder=${f.hint || ""} disabled=${disabled}
       onChange=${(e) => onValue(e.target.value === "" ? null : e.target.value)} />`;
   }
-  return html`<div class=${"fld" + (error ? " is-bad" : "")}>
+  const hinted = f.hint && f.type !== "text";
+  return html`<div class=${"fld" + (error ? " is-bad" : "") + (f.type === "readonly" ? " is-wide" : "")}>
     <label for=${id}>${f.label}</label>${input}
-    ${(error || (f.hint && f.type === "int")) && html`<span class="fld-hint">${error || f.hint}</span>`}
+    ${(error || hinted) && html`<span class="fld-hint">${error || f.hint}</span>`}
   </div>`;
+}
+
+/** a list typed as comma-separated text, kept as typed so a trailing comma survives */
+function ListField({ id, value, f, onValue, disabled }) {
+  const [text, setText] = useState(() => (Array.isArray(value) ? value.join(", ") : value === null || value === undefined ? "" : String(value)));
+  const parse = (t) => {
+    const v = t.trim();
+    if (!v) return null;
+    if (f.type === "boolOrLangs" && (v === "true" || v === "false")) return v === "true";
+    return v.split(",").map((x) => x.trim()).filter(Boolean);
+  };
+  return html`<input id=${id} type="text" value=${text} disabled=${disabled} spellcheck="false"
+    onChange=${(e) => { setText(e.target.value); onValue(parse(e.target.value)); }} />`;
 }
 
 /** a JSON list typed as text; only a list that parses reaches the block */
@@ -213,8 +226,10 @@ function BlockEditor({ blockId, stored, edited, onApply, onReset, onClose, disab
   return html`<fieldset class="editor">
     <legend>${block.label}</legend>
     <div class="editor-grid">
-      ${block.fields.map((f) => html`<${Field} key=${f.path || "v"} f=${f} value=${values[f.path]} error=${errors[f.path]}
-        disabled=${disabled} onValue=${(v) => setValues({ ...values, [f.path]: v })} />`)}
+      ${block.fields.map((f) => html`<${React.Fragment} key=${f.path || "v"}>
+        ${f.group && html`<p class="editor-sub">${f.group}</p>`}
+        <${Field} f=${f} value=${values[f.path]} error=${errors[f.path]}
+          disabled=${disabled} onValue=${(v) => setValues({ ...values, [f.path]: v })} /></${React.Fragment}>`)}
     </div>
     <div class="editor-actions">
       <button type="button" class="btn-quiet is-primary" disabled=${disabled || bad}
@@ -253,7 +268,8 @@ function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled,
             onClick=${() => setEditing(editing === id ? null : id)}>${editing === id ? "Close" : "Edit"}</button>`}
         </div>
         ${editing === id && html`<${BlockEditor} key=${id + canonical(blocks[id] ?? null)} blockId=${id}
-          stored=${blocks[id]} edited=${Boolean(edits && edits[id])} disabled=${disabled}
+          stored=${id === "searchPrefetch" && entry.capturedIndexSettings
+            ? { ...(blocks[id] || {}), capturedIndexSettings: entry.capturedIndexSettings } : blocks[id]} edited=${Boolean(edits && edits[id])} disabled=${disabled}
           onApply=${(b) => { onEdits({ ...(edits || {}), [id]: b }); setEditing(null); }}
           onReset=${() => { const n = { ...edits }; delete n[id]; onEdits(n); setEditing(null); }}
           onClose=${() => setEditing(null)} />`}
@@ -349,7 +365,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     if (fixture) return { status: "agent", key: customKey(blocks), agentId: "fixture", entry: { name: customName(blocks) }, custom: true };
     return resolveCustom(blocks, variants, local);
   }, [custom, toggles, variants, blocks, local, fixture]);
-  const prefetchOn = Boolean(blocks.search_prefetch && blocks.search_prefetch.enabled);
+  const prefetchOn = Boolean(blocks.searchPrefetch && blocks.searchPrefetch.enabled);
 
   // one redraw per frame, however fast the events come
   const frame = useRef(0);
@@ -479,9 +495,9 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
         <p class="lane-label">${label}</p>
         <button type="button" class=${"pf-pill" + (prefetchOn ? " is-on" : "")} aria-haspopup="true"
           title=${counts.part ? decisionLabel(counts.part.decision) : "Edit the prefetch block"}
-          onClick=${() => openEditor("search_prefetch")}>
+          onClick=${() => openEditor("searchPrefetch")}>
           ${prefetchOn ? "Prefetch on" : "Prefetch off"}
-          ${edits && edits.search_prefetch && html`<span class="pf-edited">edited</span>`}</button>
+          ${edits && edits.searchPrefetch && html`<span class="pf-edited">edited</span>`}</button>
       </div>
       <${Searches} counts=${counts} view=${view} prefetchOn=${prefetchOn} />
     </header>

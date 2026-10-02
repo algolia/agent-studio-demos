@@ -306,26 +306,29 @@ test("race: medians, paired deltas and a tally across repeated runs", async () =
 test("edited configs: defaults pruned, hashed by content, resolved or named for creation", async () => {
   const c = await load("configs.mjs");
   const pf = { ...c.BASE_TOGGLES, prefetch: true };
-  assert.deepEqual(c.toggleBlocks(pf).search_prefetch, { enabled: true });
+  assert.deepEqual(c.toggleBlocks(pf).searchPrefetch, { enabled: true });
   assert.equal(c.isCustom(pf, null), false);
   // applying the editor without a change is no edit
-  const same = c.blockFrom("search_prefetch", c.blockValues("search_prefetch", { enabled: true }));
-  assert.equal(c.isCustom(pf, { search_prefetch: same }), false);
+  const same = c.blockFrom("searchPrefetch", c.blockValues("searchPrefetch", { enabled: true }));
+  assert.equal(c.isCustom(pf, { searchPrefetch: same }), false);
 
-  const v = c.blockValues("search_prefetch", c.toggleBlocks(pf).search_prefetch);
+  const v = c.blockValues("searchPrefetch", c.toggleBlocks(pf).searchPrefetch);
   assert.equal(v.conversationWindow, 1);
+  assert.equal(v["searchParameters.removeWordsIfNoResults"], "allOptional");
   v.conversationWindow = 3;
-  v.instruction = true;
-  const edited = { search_prefetch: c.blockFrom("search_prefetch", v) };
-  assert.deepEqual(edited.search_prefetch, { enabled: true, conversationWindow: 3, instruction: true });
+  v.hitsPerPage = 5;
+  v["searchParameters.queryLanguages"] = ["fr"];
+  const edited = { searchPrefetch: c.blockFrom("searchPrefetch", v) };
+  assert.deepEqual(edited.searchPrefetch,
+    { enabled: true, conversationWindow: 3, hitsPerPage: 5, searchParameters: { queryLanguages: ["fr"] } });
   assert.ok(c.isCustom(pf, edited));
   const blocks = c.effectiveBlocks(pf, edited);
   assert.match(c.customName(blocks), /^main-demo-[0-9a-f]{8}$/);
   assert.equal(c.hashConfig(blocks), c.hashConfig(JSON.parse(JSON.stringify(blocks))), "stable");
   assert.equal(c.canonical({ b: 1, a: [2, { d: 1, c: 0 }] }), '{"a":[2,{"c":0,"d":1}],"b":1}');
 
-  assert.deepEqual(c.validateBlock("search_prefetch", { ...v, conversationWindow: 9 }), { conversationWindow: "1 to 5" });
-  assert.deepEqual(c.validateBlock("search_prefetch", v), {});
+  assert.deepEqual(c.validateBlock("searchPrefetch", { ...v, conversationWindow: 9 }), { conversationWindow: "1 to 5" });
+  assert.deepEqual(c.validateBlock("searchPrefetch", v), {});
 
   const miss = c.resolveCustom(blocks, {}, {});
   assert.equal(miss.status, "custom");
@@ -337,14 +340,51 @@ test("edited configs: defaults pruned, hashed by content, resolved or named for 
   const body = c.customAgentBody(base, blocks);
   assert.equal(body.instructions, "new prompt", "instructions come from base at creation");
   assert.equal(body.id, undefined);
-  assert.equal(body.config.searchPrefetch, undefined);
-  assert.deepEqual(body.config.search_prefetch, edited.search_prefetch);
+  assert.equal(body.config.search_prefetch, undefined, "a copied stored key never shadows the one sent");
+  assert.deepEqual(body.config.searchPrefetch, edited.searchPrefetch);
   assert.equal(body.config.x, 1);
   const off = c.customAgentBody(base, c.effectiveBlocks(c.BASE_TOGGLES, { sendUsage: true }));
-  assert.equal(off.config.search_prefetch, false, "a disabled prefetch block is stored as false");
+  assert.equal(off.config.searchPrefetch, false, "a disabled prefetch block is sent as false");
   assert.equal(off.config.sendUsage, true);
-  // what the backend stores reads back as the same hash
-  const stored = { ...body.config, enableAlgoliaMcp: true };
+  // what the backend stores reads back as the same hash: snake key, captured settings and all
+  const { searchPrefetch, ...rest } = body.config;
+  const stored = { ...rest, search_prefetch: { ...searchPrefetch, capturedIndexSettings: { products: { languages: ["en"] } } }, enableAlgoliaMcp: true };
   assert.equal(c.customKey(c.blocksFromConfig(stored)), c.customKey(blocks));
   assert.equal(c.customKey(c.blocksFromConfig(off.config)), c.customKey(c.effectiveBlocks(c.BASE_TOGGLES, { sendUsage: true })));
+});
+
+test("the prefetch block: the product's fields and bounds, captured settings shown and never sent", async () => {
+  const c = await load("configs.mjs");
+  const ids = c.BLOCKS.find((b) => b.id === "searchPrefetch").fields.map((f) => f.path);
+  assert.deepEqual(ids, ["enabled", "indexName", "conversationWindow", "minInformativeTokens", "hitsPerPage",
+    "searchParameters.queryLanguages", "searchParameters.naturalLanguages", "searchParameters.removeStopWords",
+    "searchParameters.ignorePlurals", "searchParameters.typoTolerance", "searchParameters.removeWordsIfNoResults",
+    "searchParameters.restrictSearchableAttributes", "capturedIndexSettings"]);
+  assert.ok(!ids.includes("injectionFormat"));
+
+  const captured = { products: { languages: ["en"], indexLanguages: [], capturedAt: "2026-10-02T12:00:00Z" } };
+  const stored = { enabled: true, minInformativeTokens: 0, capturedIndexSettings: captured };
+  const v = c.blockValues("searchPrefetch", stored);
+  assert.deepEqual(v.capturedIndexSettings, captured, "the editor shows what the server wrote");
+  assert.deepEqual(c.blockFrom("searchPrefetch", v), { enabled: true, minInformativeTokens: 0 }, "and never sends it");
+  assert.deepEqual(c.capturedSettings({ search_prefetch: stored }), captured);
+  assert.equal(c.capturedSettings({ search_prefetch: true }), null);
+  assert.equal(c.customKey(c.blocksFromConfig({ search_prefetch: stored })),
+    c.customKey(c.blocksFromConfig({ searchPrefetch: { enabled: true, minInformativeTokens: 0 } })),
+    "a capture on save does not change the agent's hash");
+
+  const bad = c.validateBlock("searchPrefetch", { ...v, hitsPerPage: 0, "searchParameters.queryLanguages": ["French"],
+    "searchParameters.removeStopWords": "yes", "searchParameters.typoTolerance": "max",
+    "searchParameters.restrictSearchableAttributes": [""] });
+  assert.deepEqual(Object.keys(bad).sort(), ["hitsPerPage", "searchParameters.queryLanguages",
+    "searchParameters.removeStopWords", "searchParameters.restrictSearchableAttributes", "searchParameters.typoTolerance"]);
+  const good = c.validateBlock("searchPrefetch", { ...v, hitsPerPage: null, "searchParameters.removeStopWords": ["pt-br", "en"],
+    "searchParameters.ignorePlurals": true, "searchParameters.typoTolerance": false,
+    "searchParameters.restrictSearchableAttributes": ["title", "brand"] });
+  assert.deepEqual(good, {}, "hitsPerPage may be empty; booleans and language lists both pass");
+
+  // the toggle writes the wire key, and the off lane is an agent with prefetch false
+  assert.deepEqual(c.agentConfigPatch({ prefetch: true }).searchPrefetch, { enabled: true });
+  assert.equal(c.agentConfigPatch({ prefetch: false }).searchPrefetch, false);
+  assert.equal(c.agentConfigPatch({ prefetch: true }).search_prefetch, undefined);
 });
