@@ -1,0 +1,13 @@
+# Cloudflare Pages response headers for the static files (Functions set their own).
+# tools/jev-attributes/server.mjs reads this file too, so the local server sends the same.
+#
+# jev-attributes: the page holds visitors' keys, so it may not be framed and may
+# load code from itself and jsDelivr only. connect-src: the relay and /api (self),
+# Algolia search, the Hugging Face model files (huggingface.co redirects to its
+# storage hosts) and the ONNX runtime's wasm (jsDelivr). The hash is the inline
+# theme script in index.html; tests/jev-attributes-csp.test.js keeps it in step.
+/jev-attributes/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'sha256-RxRAZwch9slJLxrZPlDle7WfjBOUHc8NwNVqzSHJLyE=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self' https://*.algolia.net https://*.algolianet.com https://huggingface.co https://*.huggingface.co https://*.hf.co https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; base-uri 'none'; form-action 'self'; object-src 'none'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

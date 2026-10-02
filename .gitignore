@@ -23,3 +23,6 @@ node_modules/
 
 # Built by tools/main-demo-provision.mjs against one backend — local state, not source.
 public/main-demo/variants.json
+
+# Built by scripts/build-factbook.mjs from a factbook.json checkout — derived, not source.
+factbook.jsonl
