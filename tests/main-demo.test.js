@@ -48,22 +48,21 @@ test("the config a variant writes reads back as the same toggles", async () => {
   assert.equal(c.togglesFromAgentConfig({}).prefetch, "off");
 });
 
-test("resolution: exact agent, prefetch off by query parameter, or a command", async () => {
+test("resolution: the exact agent or a command, and prefetch off is its own agent", async () => {
   const c = await load("configs.mjs");
   const base = c.configKey(c.BASE_TOGGLES);
   const pf = c.configKey({ ...c.BASE_TOGGLES, prefetch: "tool_pair" });
   const table = { [pf]: { agentId: "pf-id", name: "main-demo-prefetch" } };
 
-  const q = c.resolveVariant(c.BASE_TOGGLES, table);
-  assert.equal(q.status, "query");
-  assert.equal(q.agentId, "pf-id");
-  assert.equal(c.completionQuery(q).searchPrefetch, "false");
-  assert.equal(c.completionQuery(q).cache, "false", "a race never reads the completion cache");
+  // no per-request override: a prefetch agent never stands in for its prefetch-off twin
+  const off = c.resolveVariant(c.BASE_TOGGLES, table);
+  assert.equal(off.status, "missing");
+  assert.equal(c.completionQuery().searchPrefetch, undefined);
+  assert.equal(c.completionQuery().cache, "false", "a race never reads the completion cache");
 
   const exact = c.resolveVariant(c.BASE_TOGGLES, { ...table, [base]: { agentId: "base-id" } });
   assert.equal(exact.status, "agent");
   assert.equal(exact.agentId, "base-id");
-  assert.equal(c.completionQuery(exact).searchPrefetch, undefined);
 
   const miss = c.resolveVariant({ ...c.BASE_TOGGLES, memory: true }, table);
   assert.equal(miss.status, "missing");

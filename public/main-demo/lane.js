@@ -251,8 +251,7 @@ function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled,
   const entry = resolution.entry || {};
   const custom = Boolean(resolution.custom || resolution.status === "custom");
   const how = resolution.status === "agent" ? html`agent <code>${entry.name || agentName(toggles)}</code>`
-    : resolution.status === "query" ? html`<code>${entry.name}</code> + <code>?searchPrefetch=false</code>`
-      : resolution.status === "custom" ? html`<code>${resolution.name}</code> not created yet`
+    : resolution.status === "custom" ? html`<code>${resolution.name}</code> not created yet`
         : html`no agent yet`;
   const rows = [...TOGGLES.map((tg) => ({ tg, id: BLOCK_OF[tg.id], label: tg.label })),
     { tg: null, id: "sendUsage", label: "Stream token usage" }];
@@ -383,7 +382,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
 
   const transport = useMemo(() => {
     if (resolution.status === "missing" || resolution.status === "custom") return null;
-    const q = new URLSearchParams(completionQuery(resolution)).toString();
+    const q = new URLSearchParams(completionQuery()).toString();
     const api = `${cfg.host}/1/agents/${resolution.agentId}/completions?${q}`;
     const upstream = fixture ? createFixtureFetch({ prefetch: prefetchFormat }) : window.fetch.bind(window);
     const observed = async (url, init) => {
@@ -508,7 +507,6 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
           onClick=${() => openEditor("search_prefetch")}>
           ${prefetchOn ? html`Prefetch on <code>${prefetchFormat}</code>` : "Prefetch off"}
           ${edits && edits.search_prefetch && html`<span class="pf-edited">edited</span>`}</button>
-        ${resolution.status === "query" && html`<span class="badge is-query">off per request</span>`}
       </div>
       <${Searches} counts=${counts} view=${view} prefetchOn=${prefetchOn} />
     </header>

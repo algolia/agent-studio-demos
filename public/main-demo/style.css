@@ -109,7 +109,6 @@
   font: 500 12px var(--mono); padding: 2px 8px; border-radius: 999px;
   border: 1px solid var(--line-strong); color: var(--ink-2);
 }
-.badge.is-query { border-color: var(--warn); color: var(--warn); }
 
 /* ── Config panel ──────────────────────────────────────────────── */
 

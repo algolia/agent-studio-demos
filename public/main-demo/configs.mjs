@@ -7,10 +7,9 @@
    without a package.json.
 
    A toggle set never PATCHes a live agent. It names a variant, and each
-   variant is its own agent, created once by the provisioning script. The
-   one exception is prefetch off: the backend takes `?searchPrefetch=false`
-   on the completions URL, so a prefetch agent can stand in for its
-   prefetch-off twin, and the lane says which of the two happened.
+   variant is its own agent, created once by the provisioning script.
+   Prefetch off is one of them: an agent whose `searchPrefetch` is false.
+   The completions call takes no per-request override.
    ─────────────────────────────────────────────────────────────── */
 
 export const PREFETCH_FORMATS = ["tool_pair", "user_fold", "persisted_tool_pair"];
@@ -138,7 +137,6 @@ export function togglesFromAgentConfig(config) {
  * What a lane should call for a toggle set.
  *
  *   { status: "agent", agentId, entry, key }         the exact variant exists
- *   { status: "query", agentId, entry, key, via }     prefetch off applied per request
  *   { status: "missing", key, command }               nothing serves it yet
  *
  * `variants` is the `variants` map of variants.json: key → { agentId, ... }.
@@ -149,15 +147,6 @@ export function resolveVariant(toggles, variants, { commandPrefix } = {}) {
   const table = variants || {};
   if (table[key] && table[key].agentId) {
     return { status: "agent", key, agentId: table[key].agentId, entry: table[key] };
-  }
-  if (t.prefetch === "off") {
-    // any prefetch twin works: the query parameter turns the whole block off
-    for (const fmt of PREFETCH_FORMATS) {
-      const twin = configKey({ ...t, prefetch: fmt });
-      if (table[twin] && table[twin].agentId) {
-        return { status: "query", key, via: twin, agentId: table[twin].agentId, entry: table[twin] };
-      }
-    }
   }
   // a manifest variant needs no --add: the plain run creates every one of them
   const inManifest = MANIFEST.some((m) => configKey(m.toggles) === key);
@@ -171,12 +160,10 @@ export function provisionCommand(keys, prefix) {
   return `${env} node tools/main-demo-provision.mjs${adds}`;
 }
 
-/** query parameters the completions URL carries for a resolution */
-export function completionQuery(resolution) {
+/** query parameters the completions URL carries */
+export function completionQuery() {
   // cache=false: a race against a stored answer measures the cache, not the agent
-  const q = { compatibilityMode: "ai-sdk-5", stream: "true", cache: "false" };
-  if (resolution && resolution.status === "query") q.searchPrefetch = "false";
-  return q;
+  return { compatibilityMode: "ai-sdk-5", stream: "true", cache: "false" };
 }
 
 /* ── Edited configs: one agent per content hash ─────────────────
