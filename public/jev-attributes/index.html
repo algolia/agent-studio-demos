@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jev trims the record</title>
-<meta name="description" content="A country record has 13&nbsp;sections and a question needs one or two. Jev, the System One model by TypeSafe, reads the question and keeps those. Watch the record shrink.">
+<meta name="description" content="Search returns ten countries and a question needs two or three; each record has 13&nbsp;sections and the question needs one or two. Jev, the System One model by TypeSafe, trims both. Watch the context shrink.">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,7 +34,7 @@
     </button>
   </div>
   <h1>Jev trims the record</h1>
-  <p class="lede">Each country record has 13&nbsp;sections. A question needs one or two. Jev reads the question and keeps those.</p>
+  <p class="lede">Search returns ten countries; a question needs a few. Each has 13&nbsp;sections; a question needs one or two. Jev keeps those.</p>
 </header>
 
 <main class="wrap">
@@ -45,12 +45,15 @@
     <input id="q" type="text" maxlength="300" placeholder="Ask about any country">
     <button type="submit" class="btn" id="go">Ask</button>
   </form>
+  <div class="modes" id="modes"></div>
   <p class="chips" id="chips"></p>
 
   <ol class="flow" id="flow" aria-label="What happened"></ol>
 
   <section class="stage" id="stage" aria-live="polite"></section>
 </main>
+
+<dialog class="rec-modal" id="rec-modal" aria-labelledby="m-title"></dialog>
 
 <footer class="wrap foot">
   <p>Data: CIA World Factbook, public domain. Search: Algolia. Decisions: Jev by TypeSafe.</p>
