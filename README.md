@@ -140,11 +140,46 @@ Open a file over `http://`, not `file://` — the demos load their config and sh
 
 ## The main demo
 
-`/main-demo/` answers "What is Agent Studio?" with a shopping assistant: the
-InstantSearch [Chat widget](https://www.algolia.com/doc/api-reference/widgets/chat/react)
-bound to an agent with a search tool and the Grouped Results tool. **RAG race**
-mode runs two lanes side by side on one question, each with its own timeline
-(first byte, first token, every tool call, total).
+`/main-demo/` answers "What is Agent Studio?" with a shopping assistant. You ask
+for a product, the agent searches a products index, and it answers with its
+picks grouped on cards. The chat is the InstantSearch
+[Chat widget](https://www.algolia.com/doc/api-reference/widgets/chat/react), bound
+to an agent with a search tool and the Grouped Results tool.
+
+**Search prefetch** means Agent Studio searches the index with your message
+before the model starts, and hands the model those hits, so it can often answer
+without asking for a search itself.
+
+**RAG race** mode is where you see it. Two lanes get the same question at the
+same moment: lane A starts without prefetch, lane B with it. Each lane draws its own
+timeline (first byte, first token, every search and model call, full paint).
+The scoreboard puts both lanes' model calls, tool calls, first token, full paint
+and tokens side by side. A race repeats 1 to 10 times, and the board shows medians and how
+often each lane won. Prefetch loses too: on a question with a budget or an age
+in it, the raw sentence finds little, and the model searches anyway.
+
+### Run it locally
+
+1. Start an Agent Studio backend, for example on `http://127.0.0.1:8000`, with a
+   products index and an agent named `main-demo-base` (model, provider, search
+   tool, Grouped Results tool, prompt).
+2. Create the other agents from it, once:
+
+   ```bash
+   MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs
+   ```
+
+3. Fill `mainDemo` in `public/shared/config.js` (see `config.example.js`): `host`,
+   `appId`, `indexName`, a search-only key in `searchApiKey` and
+   `agentStudioApiKey`, and `fields` if your records name their attributes
+   differently.
+4. Serve `public/` (see [Run it locally](#run-it-locally)) and open `/main-demo/`.
+
+No backend? The page still opens: with nothing answering at `mainDemo.host`, or
+with `?fixture=1`, the lanes replay a recorded stream and label every number as
+a replay.
+
+### How a lane picks its agent
 
 It is the one page here built on ES modules: React 19, React InstantSearch
 7.50.1 and `algoliasearch` 5.59.0 load from esm.sh through an import map, with
@@ -153,14 +188,10 @@ pinned versions and no build step.
 A lane's toggles (search prefetch, memory, guardrails, suggestions) select an
 **agent variant**; they never PATCH a live agent. Prefetch off is its own
 variant, an agent whose `searchPrefetch` is `false`: the completions call takes
-no per-request override. Create the variants once:
+no per-request override.
 
-```bash
-MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs
-```
-
-The script copies `main-demo-base`, layers each variant's config on top, adopts
-any agent that already carries the variant's name, and writes
+The provisioning script copies `main-demo-base`, layers each variant's config on
+top, adopts any agent that already carries the variant's name, and writes
 `public/main-demo/variants.json` (gitignored). A combination outside the manifest
 is added with `--add 'prefetch=1,memory=1,guardrails=0,suggestions=0'`, and the
 page prints that exact line when a lane asks for a variant nobody created.
@@ -183,32 +214,34 @@ model. The hits ride on the visible search tool call with that id, which the
 lane draws as the passive search. An injected turn sends the part again before
 `finish`, with `agentSearchedAnyway`, and the lane reads that flag from it.
 
-Fill `mainDemo` in `public/shared/config.js` (see `config.example.js`). With no
-backend answering at `mainDemo.host`, or with `?fixture=1`, the lanes replay a
-fixture stream and label every number as a replay.
-
 ### Public mode
 
-The deployed page has no `variants.json`: it is gitignored, so a deploy carries the
-same map in `mainDemo.variants` instead. The page reads that field when it is present
-and fetches `variants.json` only when it is not. To point the public page at a backend:
+The deployed page needs two things in its config, and nothing else changes:
 
-1. Provision the variants there, and print the map as JSON (agent ids and names, never
-   a key; progress goes to stderr):
+- **one search-only key**: ACL `search`, the products index only, with an
+  expiry. The browser sends it twice, as `searchApiKey` for InstantSearch and as
+  `agentStudioApiKey` on `/completions`, so every visitor can read it.
+- **the agents map**, in `mainDemo.variants`. `variants.json` is gitignored, so a
+  deploy has none; the page reads `mainDemo.variants` when it is present and
+  fetches `variants.json` only when it is not.
+
+To point the public page at a backend:
+
+1. Provision the agents there, and print the map as JSON (agent ids and names,
+   never a key; progress goes to stderr):
 
    ```bash
    MAIN_DEMO_HOST=https://… APP_ID=… ADMIN_KEY=… \
      node tools/main-demo-provision.mjs --print-config > variants.config.json
    ```
 
-2. Mint one search-only key for the page: ACL `search`, the products index only, with
-   an expiry. The browser sends it twice, as `searchApiKey` for InstantSearch and as
-   `agentStudioApiKey` on `/completions`, so it is readable by every visitor.
-3. Add a `mainDemo` block to the deploy config: `host`, `appId`, `indexName`, `fields`,
-   the key in both fields, and the printed map as `variants`. The backend must answer
-   CORS for the site's origin.
-4. Refresh `DEMO_CONFIG_JS` from that file (see [Deploy](#deploy)), and the next push to
-   `main` serves it.
+2. Mint the search-only key.
+3. Add a `mainDemo` block to the deploy config: `host`, `appId`, `indexName`,
+   `fields`, the key in both key fields, and the printed map as `variants`. The
+   backend must answer CORS for the site's origin.
+4. Refresh `DEMO_CONFIG_JS` from that file (see [Deploy](#deploy)), and the next
+   push to `main` serves it.
+
 ## Jev trims the record
 
 `/jev-attributes/` shows one idea: a question about a country needs one or two
