@@ -44,6 +44,16 @@ test("the template holds placeholders, not somebody's real credentials", () => {
   assert.match(cfg.apiKey, /^YOUR_/, "apiKey in the template must stay a placeholder");
 });
 
+test("the memoires block carries the memory-comparison demo's own app", () => {
+  assert.ok(cfg.memoires, "config.example.js is missing the memoires block");
+  for (const field of ["host", "appId", "apiKey", "providerId"]) {
+    assert.ok(cfg.memoires[field] !== undefined, `memoires is missing ${field}`);
+  }
+  assert.match(cfg.memoires.host, /^https:\/\//, "memoires host must be an https origin");
+  assert.match(cfg.memoires.appId, /^YOUR_/, "appId in the memoires template must stay a placeholder");
+  assert.match(cfg.memoires.apiKey, /^YOUR_/, "apiKey in the memoires template must stay a placeholder");
+});
+
 test("config.js is not committed", () => {
   const tracked = fs.readFileSync(path.join(__dirname, "..", ".gitignore"), "utf8");
   assert.match(tracked, /^config\.js$/m, ".gitignore must ignore config.js at any depth");
