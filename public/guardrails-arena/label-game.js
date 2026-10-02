@@ -19,7 +19,8 @@
    the last one after its last undo. Nothing is stored or sent.
 
    The top half is pure (sampling a round, the undo replay, points, labels as
-   CSV, you vs models): tests/guardrail-game.test.js. mount() is the DOM half.
+   CSV or as judgement-store NDJSON, you vs models): tests/guardrail-game.test.js
+   and tests/guardrails-game.test.js. mount() is the DOM half.
    ─────────────────────────────────────────────────────────────── */
 
 (function (global) {
@@ -188,6 +189,55 @@
     }
     const t = (r) => (r.p50ms == null ? Infinity : r.p50ms);
     return rows.sort((a, b) => b.right - a.right || t(a) - t(b));
+  }
+
+  /* ── labels for the judgement store: one NDJSON line per effective label ── */
+
+  /** SHA-256 of the exact text as UTF-8, in hex; `subtle` is crypto.subtle in a browser and in Node */
+  async function sha256Hex(text, subtle = global.crypto.subtle) {
+    const buf = await subtle.digest("SHA-256", new TextEncoder().encode(String(text)));
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  /** the labeler tag: one short line, "anon" when empty */
+  const cleanTag = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim().slice(0, 32) || "anon";
+
+  /**
+   * One judgement-store record, pure: the hash is made by the caller. An
+   * allowed label is no_violation, a blocked one carries its reason or null,
+   * an unsure one is null, as the store files them.
+   */
+  function judgementLine({ text, sha, verdict, category, ms, at }, { tag, source }) {
+    return {
+      case_id: `gg-${sha.slice(0, 16)}`,
+      text_sha256: sha,
+      text,
+      verdict,
+      category: verdict === "allowed" ? "no_violation" : verdict === "blocked" ? category || null : null,
+      latency_ms: Math.max(0, Math.round(ms || 0)),
+      created_at: new Date(at).toISOString(),
+      labeler_family: "human",
+      labeler_model: `guardrails-game:${cleanTag(tag)}`,
+      source,
+    };
+  }
+
+  /**
+   * The effective labels as NDJSON, in the order they were made; undone ones
+   * leave no line. hash(text) → hex is injected so tests can pin it.
+   * items: [{ id, text }]; labels: replay(events); source: "exam" or "csv"
+   */
+  async function judgementsNdjson(items, labels, { tag, source, hash = sha256Hex, now = Date.now } = {}) {
+    const byId = new Map(items.map((it) => [it.id, it]));
+    const out = [];
+    for (const l of labels.values()) {
+      const it = byId.get(l.id);
+      if (!it) continue;
+      out.push(JSON.stringify(judgementLine({
+        text: it.text, sha: await hash(it.text), verdict: l.verdict, category: l.category, ms: l.ms, at: l.at == null ? now() : l.at,
+      }, { tag, source })));
+    }
+    return out.length ? out.join("\n") + "\n" : "";
   }
 
   /* ── the exam, shared by the Arena and the Game; each page fetches it ── */
@@ -389,7 +439,7 @@
       if (S.busy || S.view !== "play" || !S.cur) return;
       S.busy = true;
       const it = S.cur;
-      const rec = { id: it.id, verdict, category: verdict === "blocked" ? category || null : null, ms: Math.round(elapsed()) };
+      const rec = { id: it.id, verdict, category: verdict === "blocked" ? category || null : null, ms: Math.round(elapsed()), at: Date.now() };
       S.events.push(rec);
       status("");
       const st = hud(), last = st.rows[st.rows.length - 1];
@@ -571,5 +621,6 @@
   global.GuardrailGame = {
     ROUND, FAST_MS, GLOSS, sampleRound, replay, commits, lastLabeled, score, median,
     labelRows, labelsCsv, raceCases, versus, best, BEST_KEY, examItems, EXAM_CATS, missedHtml, save, mount,
+    sha256Hex, cleanTag, judgementLine, judgementsNdjson,
   };
 })(window);
