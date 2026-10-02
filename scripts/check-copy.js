@@ -67,7 +67,7 @@ const JS_FILES = [
   "chat-with-book/app.js", "infinite-conversation/app.js",
   "shared/meter.js", "shared/books.js", "shared/compactor.js", "shared/md.js",
   "main-demo/app.js", "main-demo/lane.js", "main-demo/configs.mjs", "main-demo/stream.mjs",
-  "main-demo/fixture.mjs", "main-demo/fields.mjs",
+  "main-demo/fixture.mjs", "main-demo/fields.mjs", "main-demo/race.mjs", "main-demo/agents.mjs",
 ];
 
 /* ── Text extraction ──────────────────────────────────────────── */
