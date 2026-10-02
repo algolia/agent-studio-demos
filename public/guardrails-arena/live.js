@@ -9,7 +9,7 @@
 
    The fighters are either your own agents, or temporary ones this page makes:
    one per model, named EVAL_GUARDRAILS_…, carrying the same guardrail rules
-   (the battle's config, or one read from an agent of yours). They are
+   (the Arena's config, or one read from an agent of yours). They are
    published, raced, then deleted.
 
    What this file will and will not do:
@@ -230,7 +230,7 @@
     const name = `${TEMP_PREFIX}${slug(model)}_${tag || Math.random().toString(36).slice(2, 8)}`;
     const body = {
       name,
-      description: "Temporary agent made by the guardrail battle page. Deleted after the race.",
+      description: "Temporary agent made by the Guardrails Arena page. Deleted after the race.",
       providerId, model,
       instructions: tempInstructions(rules.scope),
       config: { guardrail: { ...rules, enabled: true, providerId, model } },

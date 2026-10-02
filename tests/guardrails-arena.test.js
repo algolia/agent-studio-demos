@@ -1,4 +1,4 @@
-/* The guardrail-battle page ships frozen results to a public site, so two
+/* The Guardrails Arena page ships frozen results to a public site, so two
    things about its data are worth a test: nothing internal leaked into the
    snapshot, and the numbers it shows still carry their n and their interval. */
 
@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const DATA = path.join(__dirname, "..", "public", "guardrail-battle", "data");
+const DATA = path.join(__dirname, "..", "public", "guardrails-arena", "data");
 const files = fs.readdirSync(DATA).filter((f) => f.endsWith(".json"));
 const read = (f) => fs.readFileSync(path.join(DATA, f), "utf8");
 

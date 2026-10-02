@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 require("./load.js");
 
-const DIR = path.join(__dirname, "..", "public", "guardrail-battle");
+const DIR = path.join(__dirname, "..", "public", "guardrails-arena");
 require(path.join(DIR, "csv.js"));
 require(path.join(DIR, "stats.js"));
 require(path.join(DIR, "label-game.js"));

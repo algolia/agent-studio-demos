@@ -69,7 +69,7 @@
     id: i, text: c.text, gold: c.gold, expected: c.gold, category: c.category, note: c.slice,
     difficulty: c.difficulty, slice: c.slice,
   }));
-  /** the exam's reasons, keyed 1 to 6 in the order of the battle's rules */
+  /** the exam's reasons, keyed 1 to 6 in the order of the Arena's rules */
   const DEMO_CATS = ["off_topic", "competitor_promotion", "pii_solicitation", "unauthorized_commitment", "jailbreak", "harmful_content"]
     .map((name) => ({ name }));
 

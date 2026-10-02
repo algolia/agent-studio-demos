@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 require("./load.js");
 
-require(path.join(__dirname, "..", "public", "guardrail-battle", "stats.js"));
+require(path.join(__dirname, "..", "public", "guardrails-arena", "stats.js"));
 const S = globalThis.GuardrailStats;
 
 const res = (expected, verdict) => ({ expected, verdict });

@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 require("./load.js");
 
-require(path.join(__dirname, "..", "public", "guardrail-battle", "csv.js"));
+require(path.join(__dirname, "..", "public", "guardrails-arena", "csv.js"));
 const C = globalThis.GuardrailCsv;
 
 test("quoted fields keep their commas, quotes and line breaks", () => {

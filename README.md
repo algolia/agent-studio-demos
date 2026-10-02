@@ -13,7 +13,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 | Jev trims the record | `/jev-attributes/` | Local; public with your own key once this site forwards it |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
-| Guardrail battle | `/guardrail-battle/` | Live |
+| Guardrails Arena | `/guardrails-arena/` | Live |
 | Mémoires | `/memoires/` | Live |
 
 ## Layout
@@ -35,7 +35,7 @@ public/                     the deployable root — this is what Cloudflare Page
   chat-with-book/           index.html + app.js + style.css
   infinite-conversation/    index.html + app.js + style.css
   main-demo/                index.html + app.js + lane.js + style.css, and six .mjs modules
-  guardrail-battle/         index.html + app.js + style.css, and data/ with frozen results
+  guardrails-arena/         index.html + app.js + style.css, and data/ with frozen results
   memoires/                 index.html + shared.js, three memory configurations side by side
 scripts/                    node, zero dependencies — see § The shelf and § The search index
   fetch-books.js            download, strip and count the texts, from either source

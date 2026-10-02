@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────────
-   Guardrail battle — the How-to tab: one frozen tuning run, told as the
+   Guardrails Arena — the How-to tab: one frozen tuning run, told as the
    five steps a reader repeats on their own app in the Live demo tab.
 
    data/run.json   a held-out exam, four rounds of proposed rules
