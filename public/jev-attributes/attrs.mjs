@@ -172,6 +172,46 @@ export function pickSections(answers, threshold = THRESHOLD) {
 export const mainConfidence = (answers) =>
   (answers && answers.main && Number.isFinite(answers.main.confidence) ? answers.main.confidence : null);
 
+/**
+ * One record, section by section: its fields and the characters they take
+ * as JSON (`"key":value,`). Search-only keys count for no section. A section
+ * the record lacks is a row of zeros, so every record has 13 rows.
+ */
+export function sectionSizes(record) {
+  const rows = SECTIONS.map((s) => ({ id: s.id, name: s.name, fields: 0, chars: 0 }));
+  const byName = new Map(rows.map((r) => [r.name, r]));
+  for (const [k, v] of Object.entries(record || {})) {
+    if (META.has(k)) continue;
+    const row = byName.get(splitKey(k)[0]);
+    if (!row) continue;
+    row.fields += 1;
+    row.chars += JSON.stringify(k).length + JSON.stringify(v).length + 2;
+  }
+  return rows;
+}
+
+/** the rough rule for English and JSON. A token count from it is an estimate, and says so */
+export const CHARS_PER_TOKEN = 4;
+
+/**
+ * What a record keeps of itself when only `keptIds` stay: sections, fields,
+ * characters and estimated tokens, kept and in total, and the kept share of
+ * the characters (null for an empty record).
+ */
+export function trimTotals(sizes, keptIds) {
+  const keep = new Set(keptIds);
+  const sum = (rows) => ({
+    sections: rows.length,
+    fields: rows.reduce((a, r) => a + r.fields, 0),
+    chars: rows.reduce((a, r) => a + r.chars, 0),
+  });
+  const total = sum(sizes);
+  const kept = sum(sizes.filter((r) => keep.has(r.id)));
+  total.tokens = Math.round(total.chars / CHARS_PER_TOKEN);
+  kept.tokens = Math.round(kept.chars / CHARS_PER_TOKEN);
+  return { kept, total, share: total.chars > 0 ? kept.chars / total.chars : null };
+}
+
 /** the same rule for fields: [{ key, p, picked }], at least one kept */
 export function pickFields(fields, answers, threshold = THRESHOLD) {
   const rows = fields.map((key, i) => {
