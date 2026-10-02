@@ -8,7 +8,7 @@
 
 import { liteClient } from "algoliasearch/lite";
 import { mountLane } from "./lane.js";
-import { MANIFEST, BASE_TOGGLES, configKey, provisionCommand } from "./configs.mjs";
+import { MANIFEST, BASE_TOGGLES, configKey, configVariants, provisionCommand } from "./configs.mjs";
 import { METRICS, REPEATS, clampRepeat, compare, deltaText, summarize } from "./race.mjs";
 
 const root = window.DEMO_CONFIG || {};
@@ -58,7 +58,10 @@ async function backendUp() {
   }
 }
 
+/** the deploy's map from config.js first; variants.json is the local run's */
 async function loadVariants() {
+  const fromConfig = configVariants(CFG);
+  if (fromConfig) return fromConfig;
   try {
     const res = await fetch("variants.json", { cache: "no-store" });
     if (!res.ok) return {};
@@ -318,7 +321,7 @@ async function main() {
       ? ["Replaying a fixture stream. Timings are not measurements."]
       : ["No backend at ", code(CFG.host), ", so lanes replay a fixture. Timings are not measurements."]);
   } else if (!Object.keys(variants).length) {
-    say(el.status, ["No variants.json yet. Run ", code(provisionCommand([]))]);
+    say(el.status, ["No agents yet. Set ", code("mainDemo.variants"), " or run ", code(provisionCommand([]))]);
   } else if (!CFG.agentStudioApiKey) {
     say(el.status, ["Set ", code("mainDemo.agentStudioApiKey"), " in ", code("shared/config.js"), "."]);
   }

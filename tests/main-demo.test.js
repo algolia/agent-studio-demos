@@ -172,6 +172,19 @@ test("config.example.js documents every mainDemo field the page reads", () => {
   }
 });
 
+test("a deploy's variant map comes from mainDemo.variants, and variants.json is the fallback", async () => {
+  const c = await load("configs.mjs");
+  const key = c.configKey({ prefetch: true });
+  assert.equal(c.configVariants({}), null, "no variants field: fetch variants.json");
+  assert.equal(c.configVariants({ variants: {} }), null, "an empty map is no map");
+  assert.equal(c.configVariants({ variants: [] }), null);
+  assert.equal(c.configVariants({ variants: { [key]: { name: "main-demo-prefetch" } } }), null,
+    "an entry without an agentId names no agent");
+  const map = c.configVariants({ variants: { [key]: { agentId: "a1", name: "main-demo-prefetch" }, x: { agentId: "" } } });
+  assert.deepEqual(Object.keys(map), [key]);
+  assert.equal(c.resolveVariant({ prefetch: true }, map).agentId, "a1", "the lane resolves it like variants.json");
+});
+
 test("card fields: an array with empty entries yields its first usable image, then the rest", async () => {
   const f = await load("fields.mjs");
   const fields = f.fieldsFrom({ fields: { title: "name", image: "image_urls.0", price: "price.value", line: "brand" } });
@@ -416,3 +429,4 @@ test("repeat: the race bar offers 1 to 10 runs, and medians and the tally hold a
   assert.equal(paint.delta, -500);
   assert.deepEqual(paint.tally, { a: 0, b: 9, even: 1 }, "500 ms on the 10 s run is within 5%: even");
 });
+

@@ -152,6 +152,21 @@ export function resolveVariant(toggles, variants, { commandPrefix } = {}) {
   return { status: "missing", key, command: provisionCommand(inManifest ? [] : [key], commandPrefix) };
 }
 
+/**
+ * The variant map a deploy carries in `mainDemo.variants`, or null when the
+ * config has none and the page should fetch variants.json. Entries without
+ * an agentId are dropped, so a half-filled map never names a dead agent.
+ */
+export function configVariants(mainDemo) {
+  const v = mainDemo && mainDemo.variants;
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const out = {};
+  for (const [key, entry] of Object.entries(v)) {
+    if (entry && typeof entry === "object" && typeof entry.agentId === "string" && entry.agentId) out[key] = entry;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 /** the exact shell line that creates a missing variant */
 export function provisionCommand(keys, prefix) {
   const env = prefix || "MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY";
