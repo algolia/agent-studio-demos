@@ -171,12 +171,13 @@ svg.chart .grid { stroke: var(--line); }
   border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 6px 8px; min-width: 0;
 }
 .lv-form textarea { font-family: var(--mono); font-size: 13px; resize: vertical; }
-/* no specificity, so the game's own buttons restyle it with one class */
-:where(#live button:not(.primary)) {
+/* no specificity, so the game's own buttons restyle it with one class.
+   #game is the Guardrails Game, which links this sheet too */
+:where(#live, #game) :where(button:not(.primary)) {
   font: inherit; font-size: 13px; color: var(--ink); background: var(--surface-2);
   border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 6px 12px; cursor: pointer;
 }
-#live button:disabled { opacity: 0.5; cursor: default; }
+#live button:disabled, #game button:disabled { opacity: 0.5; cursor: default; }
 .lv-errs { color: var(--over); font-size: 13px; margin: 6px 0; }
 .lv-end { align-self: end; }
 
