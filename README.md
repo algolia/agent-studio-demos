@@ -33,7 +33,7 @@ public/                     the deployable root — this is what Cloudflare Page
   assets/convs/             three seeded conversations, plus the manifest every figure derives from
   chat-with-book/           index.html + app.js + style.css
   infinite-conversation/    index.html + app.js + style.css
-  main-demo/                 index.html + app.js + lane.js + style.css, and three .mjs modules
+  main-demo/                index.html + app.js + lane.js + style.css, and six .mjs modules
   guardrail-battle/         index.html + app.js + style.css, and data/ with frozen results
 scripts/                    node, zero dependencies — see § The shelf and § The search index
   fetch-books.js            download, strip and count the texts, from either source
