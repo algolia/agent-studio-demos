@@ -1,13 +1,12 @@
 /* ───────────────────────────────────────────────────────────────
    functions/relay/[[path]].js — a stateless pass-through for /relay/*.
 
-   Why it exists: neither vendor answers a browser. api.typesafe.ai refuses
-   the preflight from any origin we tried ("Disallowed CORS origin"), and the
-   Enablers gateway answers the preflight 401 with no CORS headers. So the
+   Why it exists: Jev does not answer a browser. api.typesafe.ai refuses
+   the preflight from any origin we tried ("Disallowed CORS origin"). So the
    page posts to its own origin, and this forwards the request.
 
    What it does, and all it does:
-     - three routes, fixed upstream URLs, POST only; anything else is 404/405
+     - one route, a fixed upstream URL, POST only; anything else is 404/405
      - same-origin callers only (the Origin header must be this site)
      - the caller's own `Authorization: Bearer …` goes upstream unchanged;
        no key is ever added here, and a request without one is refused
@@ -24,8 +23,6 @@
 
 export const ROUTES = {
   "typesafe/systemone": "https://api.typesafe.ai/v1/systemone",
-  "laya/systemone": "https://inference-staging.api.enablers.algolia.net/v1/systemone",
-  "enablers/chat/completions": "https://inference-eu.api.enablers.algolia.net/v1/chat/completions",
 };
 
 export const MAX_BODY = 512 * 1024;

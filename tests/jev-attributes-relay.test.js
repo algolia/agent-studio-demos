@@ -41,6 +41,7 @@ test("the relay refuses other routes, other methods, other origins, and requests
   const { relay } = await load(RELAY);
   const fetchImpl = async () => { throw new Error("must not be called"); };
   assert.equal((await relay(req("evil/thing"), { fetchImpl })).status, 404);
+  for (const gone of ["laya/systemone", "enablers/chat/completions"]) assert.equal((await relay(req(gone), { fetchImpl })).status, 404, gone);
   assert.equal((await relay(req("typesafe/systemone", { method: "GET" }), { fetchImpl })).status, 405);
   assert.equal((await relay(req("typesafe/systemone", { origin: "https://elsewhere.example" }), { fetchImpl })).status, 403);
   assert.equal((await relay(req("typesafe/systemone", { origin: null }), { fetchImpl })).status, 403);
@@ -58,10 +59,11 @@ test("the relay never logs: no console call in its source", () => {
   assert.doesNotMatch(src, /console\./);
 });
 
-test("the client and the relay route to the same three upstreams", async () => {
+test("the client and the relay route to the same one upstream, Jev's", async () => {
   const { ROUTES: relayRoutes } = await load(RELAY);
   const { ROUTES: clientRoutes, TARGETS } = await load("public/jev-attributes/client.mjs");
   assert.deepEqual(clientRoutes, relayRoutes);
+  assert.deepEqual(Object.keys(relayRoutes), ["typesafe/systemone"]);
   for (const t of Object.values(TARGETS)) assert.ok(t.route in relayRoutes);
 });
 

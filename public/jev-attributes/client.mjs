@@ -13,8 +13,6 @@
 /** route → upstream. The relay (functions/relay/[[path]].js) carries a copy; a test keeps them equal. */
 export const ROUTES = {
   "typesafe/systemone": "https://api.typesafe.ai/v1/systemone",
-  "laya/systemone": "https://inference-staging.api.enablers.algolia.net/v1/systemone",
-  "enablers/chat/completions": "https://inference-eu.api.enablers.algolia.net/v1/chat/completions",
 };
 
 /** the System One target the page asks: its route, model and the key it needs */
