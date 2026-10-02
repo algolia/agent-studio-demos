@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardrails Game · Agent Studio demos</title>
+<meta name="description" content="Be the guardrail: allow or block messages to a sports shop by keyboard, score against the answers, and label your own messages for a model race or the judgement store.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/tokens.css">
+<link rel="stylesheet" href="../guardrails-arena/style.css">
+<link rel="stylesheet" href="style.css">
+<script>
+  /* Resolve the theme before first paint, or the page flashes the wrong one.
+     Same storage key as the other demos, so a choice carries across the site. */
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
+    var dark = saved ? saved === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+</head>
+<body>
+<a class="skip" href="#game">Skip to the game</a>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="masthead-tools">
+      <a class="theme-toggle" href="../"><span class="glyph" aria-hidden="true">←</span> All demos</a>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">
+        <span class="glyph" id="theme-glyph" aria-hidden="true">◐</span>
+        <span id="theme-label">Dark</span>
+      </button>
+    </div>
+    <p class="eyebrow">Agent Studio · guardrails</p>
+    <h1>Guardrails Game</h1>
+    <p class="lede">
+      You are the guardrail. Allow or block messages to a sports shop, see how
+      hard it is, then label your own.
+    </p>
+  </div>
+</header>
+
+<main class="page" id="game">
+  <h2>1 · Play a round</h2>
+  <p class="scope">Ten messages from a synthetic exam, with answers.</p>
+  <div class="pl-intro" id="gg-intro">
+    <button class="primary big" type="button" id="gg-start">Start a round</button>
+    <span class="meta pl-keys">Keys: <kbd>A</kbd> allow, <kbd>B</kbd> block, <kbd>U</kbd> unsure, <kbd>Z</kbd> undo</span>
+  </div>
+  <div id="gg-round"></div>
+
+  <h2>2 · Label your own messages</h2>
+  <div class="lv-src">
+    <label><input type="radio" name="gl-src" id="gl-src-ex" checked> The exam</label>
+    <label><input type="radio" name="gl-src" id="gl-src-csv"> My CSV</label>
+    <input type="file" id="gl-file" accept=".csv,text/csv" aria-label="CSV file to label">
+  </div>
+  <p class="note">A message column is enough. Read in this tab, never uploaded.</p>
+  <div id="gl-preview"></div>
+  <div class="lv-form gg-tag">
+    <label>Labeler tag <input id="gl-tag" type="text" spellcheck="false" autocomplete="off" maxlength="32" placeholder="anon"></label>
+  </div>
+  <div class="toolbar">
+    <button class="primary" type="button" id="gl-start">Label the messages</button>
+    <button type="button" id="gl-csv">Labels (CSV)</button>
+    <button type="button" id="gl-ndjson">Judgement store (NDJSON)</button>
+    <span class="meta" id="gl-status" role="status"></span>
+  </div>
+  <div id="gl-game"></div>
+</main>
+
+<footer class="footer">
+  <div class="page">
+    <p>
+      No keys and no model calls. The exam comes from the Arena's
+      <code>data/</code>; your file and labels stay in this tab.
+    </p>
+  </div>
+</footer>
+
+<script src="../guardrails-arena/csv.js"></script>
+<script src="../guardrails-arena/stats.js"></script>
+<script src="../guardrails-arena/label-game.js"></script>
+<script src="game-ui.js"></script>
+</body>
+</html>

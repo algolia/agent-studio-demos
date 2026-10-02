@@ -64,7 +64,7 @@ const LIMITS = {
 
 const PAGES = [
   "index.html", "chat-with-book/index.html", "infinite-conversation/index.html", "jev-attributes/index.html",
-  "guardrails-arena/index.html", "main-demo/index.html",
+  "guardrails-arena/index.html", "guardrails-game/index.html", "main-demo/index.html",
 ];
 const JS_FILES = [
   "chat-with-book/app.js", "infinite-conversation/app.js",
@@ -72,7 +72,7 @@ const JS_FILES = [
   "shared/format.mjs", "jev-attributes/app.js", "jev-attributes/attrs.mjs",
   "jev-attributes/client.mjs", "jev-attributes/byok.mjs", "jev-attributes/search.mjs",
   "guardrails-arena/app.js", "guardrails-arena/live.js", "guardrails-arena/live-ui.js", "guardrails-arena/race-charts.js",
-  "guardrails-arena/label-game.js",
+  "guardrails-arena/label-game.js", "guardrails-game/game-ui.js",
   "main-demo/app.js", "main-demo/lane.js", "main-demo/configs.mjs", "main-demo/stream.mjs",
   "main-demo/fixture.mjs", "main-demo/fields.mjs", "main-demo/race.mjs", "main-demo/agents.mjs",
 ];

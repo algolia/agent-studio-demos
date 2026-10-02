@@ -85,3 +85,34 @@ test("NDJSON with the real hash matches the known SHA-256 of hello", async () =>
   assert.equal(line.text_sha256, HELLO);
   assert.equal(line.case_id, `gg-${HELLO.slice(0, 16)}`);
 });
+
+/* The Game promises no keys and no API: the page loads only its own scripts
+   and the Arena's pure ones, and the only request any of them makes is the
+   exam, a static file. */
+const fs = require("node:fs");
+const GAME = path.join(__dirname, "..", "public", "guardrails-game");
+const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+test("the Game loads no live code and calls nothing but its static exam", () => {
+  const html = fs.readFileSync(path.join(GAME, "index.html"), "utf8");
+  const srcs = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(srcs, ["../guardrails-arena/csv.js", "../guardrails-arena/stats.js", "../guardrails-arena/label-game.js", "game-ui.js"]);
+  const fetched = [];
+  for (const src of srcs) {
+    const js = strip(fs.readFileSync(path.join(GAME, src), "utf8"));
+    for (const re of [/https?:\/\//, /algolia/i, /agent-studio/i, /XMLHttpRequest/, /sendBeacon/, /WebSocket/, /EventSource/, /import\s*\(/]) {
+      assert.equal(re.test(js), false, `${src} matches ${re}`);
+    }
+    for (const m of js.matchAll(/\bfetch\s*\(([^)]*)\)/g)) fetched.push(m[1].trim());
+  }
+  assert.deepEqual(fetched, ['"../guardrails-arena/data/heldout.json"']);
+});
+
+test("the Game stores the theme, the best round and the labeler tag, nothing else", () => {
+  const js = strip(fs.readFileSync(path.join(GAME, "game-ui.js"), "utf8"));
+  const keys = [...js.matchAll(/localStorage\.(\w+)\(([^,)]+)/g)].map((m) => `${m[1]} ${m[2]}`);
+  assert.deepEqual(keys, ['setItem "ic-theme"', "getItem TAG_KEY", "setItem TAG_KEY"]);
+  assert.match(js, /const TAG_KEY = "gg-labeler-tag";/);
+  // the best round goes through label-game.js, whose own test pins it to one number
+  for (const re of [/sessionStorage/, /indexedDB/, /document\.cookie/, /console\./]) assert.equal(re.test(js), false, `${re}`);
+});

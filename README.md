@@ -14,6 +14,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
 | Guardrails Arena | `/guardrails-arena/` | Live |
+| Guardrails Game | `/guardrails-game/` | Static, no keys |
 | Mémoires | `/memoires/` | Live |
 
 ## Layout
@@ -36,6 +37,7 @@ public/                     the deployable root — this is what Cloudflare Page
   infinite-conversation/    index.html + app.js + style.css
   main-demo/                index.html + app.js + lane.js + style.css, and six .mjs modules
   guardrails-arena/         index.html + app.js + style.css, and data/ with frozen results
+  guardrails-game/          index.html + game-ui.js, on the Arena's csv.js, stats.js and label-game.js
   memoires/                 index.html + shared.js, three memory configurations side by side
 scripts/                    node, zero dependencies — see § The shelf and § The search index
   fetch-books.js            download, strip and count the texts, from either source

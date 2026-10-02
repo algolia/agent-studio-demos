@@ -1,0 +1,8 @@
+/* ───────────────────────────────────────────────────────────────
+   Guardrails Game: the Arena's style.css does the work; this only
+   places what the Game adds. No token redeclared.
+   ─────────────────────────────────────────────────────────────── */
+
+.gg-tag { grid-template-columns: minmax(0, 260px); margin-top: 14px; }
+.gg-best { color: var(--accent); }
+#gl-preview:empty { display: none; }
