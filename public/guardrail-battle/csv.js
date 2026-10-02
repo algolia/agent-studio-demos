@@ -7,6 +7,8 @@
      message,expected,category,note
 
    `expected` is allowed or blocked. `category` and `note` are optional.
+   A file to label needs only `message`: with expectedOptional, a row with
+   no label (or "unsure") loads with expected "", ready to be labeled.
    Pure functions, no DOM: tests/guardrail-csv.test.js loads these bytes.
    ─────────────────────────────────────────────────────────────── */
 
@@ -53,12 +55,12 @@
    * Header row required, matched without regard to case or spaces. Returns
    * { cases, errors, total }: a row with a problem is reported, never guessed.
    */
-  function validate(table) {
+  function validate(table, { expectedOptional = false } = {}) {
     const errors = [];
     if (!table.length) return { cases: [], errors: ["The file is empty."], total: 0 };
     const head = table[0].map((h) => h.trim().toLowerCase());
     const col = Object.fromEntries(COLUMNS.map((c) => [c, head.indexOf(c)]));
-    for (const c of ["message", "expected"]) {
+    for (const c of expectedOptional ? ["message"] : ["message", "expected"]) {
       if (col[c] < 0) errors.push(`Missing the "${c}" column.`);
     }
     if (errors.length) return { cases: [], errors, total: table.length - 1 };
@@ -68,10 +70,11 @@
     body.slice(0, MAX_ROWS).forEach((r, k) => {
       const line = k + 2;
       const message = (r[col.message] || "").trim();
-      const expected = (r[col.expected] || "").trim().toLowerCase();
+      const raw = col.expected >= 0 ? (r[col.expected] || "").trim().toLowerCase() : "";
+      const expected = raw === "allowed" || raw === "blocked" ? raw : "";
       if (!message) { errors.push(`Row ${line}: no message.`); return; }
       if (message.length > MAX_MESSAGE_CHARS) { errors.push(`Row ${line}: message over ${MAX_MESSAGE_CHARS} characters.`); return; }
-      if (expected !== "allowed" && expected !== "blocked") {
+      if (!expected && !expectedOptional) {
         errors.push(`Row ${line}: expected must be allowed or blocked.`);
         return;
       }

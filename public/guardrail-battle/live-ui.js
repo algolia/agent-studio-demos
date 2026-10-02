@@ -1,6 +1,14 @@
 /* ───────────────────────────────────────────────────────────────
-   live-ui.js — the "Live demo" tab, on top of live.js, csv.js, stats.js
-   and race-charts.js.
+   live-ui.js: the "Play" tab, on top of live.js, csv.js, stats.js,
+   race-charts.js and label-game.js.
+
+   Three steps, one game:
+     connect   optional; the keys stay in this closure
+     play      ten exam messages in the labeling game; if connected, the
+               picked models race the same ten while you play
+     label     your CSV, or the exam, labeled in the same game, then
+               downloaded or raced in full (leaderboard and charts)
+   Everything else (fighters, rules, reruns, cleanup) sits under Advanced.
 
    The key is read from its input when you connect or race, and kept in
    `creds`, a variable inside this closure. Nothing writes it anywhere else:
@@ -11,7 +19,7 @@
                 rules, raced, then deleted (also on stop, error or tab close)
      own        agent IDs you pick from your list or paste
 
-   A race runs the exam once per rerun. "Rerun once more" adds a rerun to the
+   A full race runs its messages once per rerun. "Rerun once more" adds a rerun to the
    same fighters and the same messages, so the stats grow with every click.
    ─────────────────────────────────────────────────────────────── */
 
@@ -19,12 +27,15 @@
   "use strict";
 
   const L = window.GuardrailLive, C = window.GuardrailCsv, S = window.GuardrailStats, G = window.GuardrailCharts;
+  const Gm = window.GuardrailGame;
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const p1 = (x) => (x == null ? "–" : (x * 100).toFixed(1) + "%");
   const ci = (r) => (r && r.ci ? `${p1(r.ci[0])}–${p1(r.ci[1])}` : "–");
   const ms = (x) => (x == null ? "–" : x >= 10000 ? `${(x / 1000).toFixed(1)}\u00a0s` : `${Math.round(x)}\u00a0ms`);
+  const secs = (x) => (x == null ? "–" : `${(x / 1000).toFixed(1)}\u00a0s`);
+  const human = (x) => String(x || "").replace(/_/g, " ");
   const f = (...a) => window.fetch(...a);
   const MAX_CALLS = 4000;
 
@@ -35,6 +46,7 @@
   let heldout = null;
   let uploaded = null;
   let running = null;
+  let runData = null;
   let session = null;
   let providers = [];
   let ranked = [];
@@ -52,6 +64,14 @@
   };
   const exampleCases = async () => (await heldoutData()).cases
     .map((c) => ({ message: c.text, expected: c.gold, category: c.category, note: c.slice }));
+  /** the exam as game items: the gold rides along for the reveal, never on screen before it */
+  const examItems = async () => (await heldoutData()).cases.map((c, i) => ({
+    id: i, text: c.text, gold: c.gold, expected: c.gold, category: c.category, note: c.slice,
+    difficulty: c.difficulty, slice: c.slice,
+  }));
+  /** the exam's reasons, keyed 1 to 6 in the order of the battle's rules */
+  const DEMO_CATS = ["off_topic", "competitor_promotion", "pii_solicitation", "unauthorized_commitment", "jailbreak", "harmful_content"]
+    .map((name) => ({ name }));
 
   function download(name, text) {
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
@@ -72,16 +92,13 @@
   const size = () => Math.max(1, Math.min(L.MAX_CASES, parseInt($("#lv-size").value, 10) || 0));
   const reps = () => Math.max(1, Math.min(L.MAX_REPEATS, parseInt($("#lv-reps").value, 10) || 1));
 
-  async function chosenCases() {
-    if ($("#lv-src-csv").checked) return uploaded ? pick(uploaded, size()) : [];
-    return pick(await exampleCases(), size());
-  }
-
   function preview(cases, errors, total) {
     const head = cases.slice(0, 5).map((c) =>
-      `<tr><td>${esc(c.message.slice(0, 160))}${c.message.length > 160 ? "…" : ""}</td><td><span class="lab ${c.expected}">${c.expected}</span></td></tr>`).join("");
-    $("#lv-preview").innerHTML =
-      `<p class="note">${cases.length} usable rows of ${total}. The first five:</p>` +
+      `<tr><td>${esc(c.message.slice(0, 160))}${c.message.length > 160 ? "…" : ""}</td>` +
+      `<td>${c.expected ? `<span class="lab ${c.expected}">${c.expected}</span>` : '<span class="note">to label</span>'}</td></tr>`).join("");
+    const labeled = cases.filter((c) => c.expected).length;
+    $("#lb-preview").innerHTML =
+      `<p class="note">${cases.length} usable rows of ${total}, ${labeled} with a label. The first five:</p>` +
       (errors.length ? `<ul class="lv-errs">${errors.slice(0, 6).map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : "") +
       (head ? `<div class="scroll"><table><thead><tr><th>message</th><th>expected</th></tr></thead><tbody>${head}</tbody></table></div>` : "");
   }
@@ -90,26 +107,8 @@
     try {
       download("guardrail-exam-example.csv", C.toCsv(await exampleCases(), C.COLUMNS));
     } catch (e) {
-      $("#lv-status").textContent = "Could not load the example set. Reload the page and try again.";
+      $("#lb-status").textContent = "Could not load the example set. Reload the page and try again.";
     }
-  });
-
-  $("#lv-file").addEventListener("change", (ev) => {
-    const file = ev.target.files && ev.target.files[0];
-    if (!file) return;
-    $("#lv-src-csv").checked = true;
-    if (file.size > 2 * 1024 * 1024) {
-      uploaded = null;
-      $("#lv-preview").innerHTML = '<p class="err">That file is over 2&nbsp;MB. Split it, or keep the first 200 rows.</p>';
-      return;
-    }
-    const rd = new FileReader();
-    rd.onload = () => {
-      const v = C.validate(C.parse(rd.result));
-      uploaded = v.cases.length ? v.cases : null;
-      preview(v.cases, v.errors, v.total);
-    };
-    rd.readAsText(file);
   });
 
   /* ── keys and connection ───────────────────────────────────────── */
@@ -145,6 +144,7 @@
     $("#lv-conn").textContent = runCreds
       ? "Keys cleared. The race stops, deletes its temporary agents, then drops its copy."
       : "Keys cleared from this tab.";
+    updateWho();
   }
   $("#lv-forget").addEventListener("click", forget);
   window.addEventListener("pagehide", (ev) => {
@@ -177,6 +177,7 @@
     }
     $("#lv-models").innerHTML = html || `<p class="note">${ranked.length ? "No model matches." : "Connect your app to list its models, ranked for a guardrail."}</p>`;
     $("#lv-count").textContent = ranked.length ? `${picked.size} of ${L.MAX_AGENTS} picked` : "";
+    updateWho();
   }
 
   /* a tick updates the list in place, so keyboard focus stays on the box */
@@ -187,6 +188,7 @@
       b.disabled = full && !b.checked;
     });
     $("#lv-count").textContent = `${picked.size} of ${L.MAX_AGENTS} picked`;
+    updateWho();
   }
 
   function fillRules() {
@@ -245,6 +247,7 @@
     $("#lv-temp").hidden = mode() !== "temp";
     $("#lv-own").hidden = mode() !== "own";
     if (!running) $("#lv-status").textContent = "";
+    updateWho();
   }
   $("#lv-mode-temp").addEventListener("change", showMode);
   $("#lv-mode-own").addEventListener("change", showMode);
@@ -272,7 +275,7 @@
     if (ids.length > L.MAX_AGENTS) { ev.target.checked = false; return; }
     $("#lv-agents").value = ids.join("\n");
   });
-  $("#lv-agents").addEventListener("input", renderList);
+  $("#lv-agents").addEventListener("input", () => { renderList(); updateWho(); });
 
   async function chosenRules() {
     const v = $("#lv-rules").value;
@@ -281,9 +284,12 @@
       if (a && L.guardrailOf(a)) return L.rulesOf(L.guardrailOf(a));
     }
     const id = (await heldoutData()).configs[v === "demo:r0" ? "r0" : "final"];
-    const r = await fetch("data/run.json");
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return L.rulesOf(L.runConfig(await r.json(), id));
+    if (!runData) {
+      const r = await fetch("data/run.json");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      runData = await r.json();
+    }
+    return L.rulesOf(L.runConfig(runData, id));
   }
 
   $("#lv-cleanup").addEventListener("click", async () => {
@@ -364,15 +370,22 @@
   }
 
   function setBusy(on) {
-    $("#lv-run").disabled = on;
     $("#lv-more").disabled = on || !session;
     $("#lv-stop").disabled = !on;
     $("#lv-export").disabled = on || !(session && session.results.length);
+    $("#lb-race").disabled = on;
   }
 
+  /* where a race reports: the full race paints lanes and the leaderboard; a
+     round's race only feeds the game's reveal */
+  const fullView = {
+    status: (t) => { $("#lv-race").hidden = false; $("#lv-status").textContent = t; },
+    lanes: (s) => lanes(s),
+    done: (s) => { if (s.results.length) summary(s); },
+  };
+
   /** race `count` more reruns of the session; temporary agents live only for this call */
-  async function raceMore(s, count) {
-    const status = $("#lv-status");
+  async function raceMore(s, count, view = fullView) {
     // the run keeps its own copy of the keys, so "Forget" mid-run cannot strand temporary agents
     runCreds = creds;
     setBusy(true);
@@ -382,7 +395,7 @@
       if (s.temp) {
         for (const fi of s.fighters) {
           if (!creds) throw new Error("keys cleared");
-          status.textContent = `Making a temporary agent for ${fi.label}…`;
+          view.status(`Making a temporary agent for ${fi.label}…`);
           try {
             const t = await L.createTemp(f, runCreds, { providerId: fi.providerId, model: fi.model, rules: s.rules });
             temps.add(t.id);
@@ -398,16 +411,16 @@
       const byId = Object.fromEntries(Object.entries(ids).map(([k, id]) => [id, k]));
       const first = s.repeats;
       s.repeats += count;
-      lanes(s);
+      view.lanes(s);
       for (let rep = first; rep < first + count && !stopped; rep++) {
-        status.textContent = `Racing${s.repeats > 1 ? `, rerun ${rep + 1} of ${s.repeats}` : ""}…`;
+        view.status(`Racing${s.repeats > 1 ? `, rerun ${rep + 1} of ${s.repeats}` : ""}…`);
         let painted = 0;
         running = L.race({
           fetchImpl: f, creds: runCreds, agents: Object.values(ids), cases: s.cases, repeat: rep,
           inFlight: s.fighters.length > 5 ? 2 : L.IN_FLIGHT,
           onResult: (r) => {
             s.results.push({ ...r, fighter: byId[r.agentId] });
-            if (Date.now() - painted > 120) { painted = Date.now(); lanes(s); }
+            if (Date.now() - painted > 120) { painted = Date.now(); view.lanes(s); }
           },
         });
         const stop = running.stop;
@@ -415,8 +428,8 @@
         await running.done;
       }
       s.repeats = Math.max(...s.results.map((r) => r.repeat + 1), first);
-      lanes(s);
-      if (s.results.length) summary(s);
+      view.lanes(s);
+      view.done(s);
     } catch (e) {
       tail = ` Stopped: ${e.message}.`;
     } finally {
@@ -428,7 +441,7 @@
       runCreds = null;
       setBusy(false);
     }
-    status.textContent = `Done: ${s.results.length} answers.${tail}`;
+    view.status(`Done: ${s.results.length} answers.${tail}`);
   }
 
   function confirmText(s, count) {
@@ -438,49 +451,305 @@
       " Each allowed message runs a full answer and uses tokens.";
   }
 
-  $("#lv-run").addEventListener("click", async () => {
-    if (running) return;
-    const status = $("#lv-status");
-    const bad = readCreds();
-    if (bad) { status.textContent = bad; return; }
+  /** the fighters Advanced describes right now → { temp, fighters } or { err } */
+  function fightersNow() {
     const temp = mode() === "temp";
-    let fighters;
     if (temp) {
-      if (!picked.size) { status.textContent = "Connect, then tick at least one model."; return; }
-      fighters = ranked.filter((r) => picked.has(keyOf(r)))
-        .map((r) => ({ key: keyOf(r), label: modelLabel(r), providerId: r.providerId, model: r.model }));
-    } else {
-      const own = ownIds();
-      if (!own.length) { status.textContent = "Tick or paste at least one agent ID."; return; }
-      if (own.length > L.MAX_AGENTS) { status.textContent = `Pick ${L.MAX_AGENTS} agents at most.`; return; }
-      if (!own.every(L.isUuid)) { status.textContent = "One agent ID looks wrong. Copy it from the dashboard."; return; }
-      fighters = own.map((id, k) => {
+      if (!picked.size) return { err: "Connect, then tick at least one model." };
+      return {
+        temp, fighters: ranked.filter((r) => picked.has(keyOf(r)))
+          .map((r) => ({ key: keyOf(r), label: modelLabel(r), providerId: r.providerId, model: r.model })),
+      };
+    }
+    const own = ownIds();
+    if (!own.length) return { err: "Tick or paste at least one agent ID." };
+    if (own.length > L.MAX_AGENTS) return { err: `Pick ${L.MAX_AGENTS} agents at most.` };
+    if (!own.every(L.isUuid)) return { err: "One agent ID looks wrong. Copy it from the dashboard." };
+    return {
+      temp, fighters: own.map((id, k) => {
         const a = agents.find((x) => x.id === id);
         return { key: id, label: a ? a.name : `agent ${k + 1} · ${id.slice(0, 8)}` };
-      });
-    }
-    let cases, rules = null;
+      }),
+    };
+  }
+
+  /* ── play: one round of ten, you against the guardrail ────────── */
+
+  const freshSeed = () => {
+    try { return crypto.getRandomValues(new Uint32Array(1))[0]; } catch (e) { return (Date.now() * 2654435761) >>> 0; }
+  };
+
+  let play = null;
+
+  function updateWho() {
+    if (play && play.race && play.race.racing) return;
+    const fl = creds ? fightersNow() : {};
+    $("#pl-who").textContent = fl.fighters
+      ? `The models race the same 10: ${fl.fighters.map((x) => x.label).join(", ")}.`
+      : "Solo round. Connect your app to see models take the same 10.";
+    if (play && !play.race && play.game.view() === "end") reveal();
+  }
+
+  const caseOf = (it) => ({ message: it.text, expected: it.gold, category: it.category, note: it.slice });
+
+  /** if keys and fighters are ready, a race on the round's ten, after a yes */
+  async function roundRace(items) {
+    if (!$("#lv-app").value.trim() || !$("#lv-key").value.trim() || readCreds()) return null;
+    if (running) { $("#pl-who").textContent = "A race is running, so this round is solo."; return null; }
+    const fl = fightersNow();
+    if (!fl.fighters) return null;
+    const s = { temp: fl.temp, fighters: fl.fighters, cases: items.map(caseOf), rules: null, results: [], repeats: 0 };
     try {
-      cases = await chosenCases();
-      if (temp) rules = await chosenRules();
-    } catch (e) { status.textContent = "Could not load the example set. Reload the page and try again."; return; }
-    if (!cases.length) { status.textContent = "Pick a CSV with at least one usable row."; return; }
-    const s = { temp, fighters, cases, rules, results: [], repeats: 0 };
+      if (s.temp) s.rules = await chosenRules();
+    } catch (e) { $("#pl-who").textContent = "Could not load the rules, so this round is solo."; return null; }
+    if (s.cases.length * s.fighters.length > MAX_CALLS) return null;
+    return window.confirm(confirmText(s, 1)) ? s : null;
+  }
+
+  async function startRound() {
+    if (play && play.race && play.race.racing && running) {
+      running.stop();
+      await play.racing;
+    }
+    let items;
+    try {
+      items = Gm.sampleRound(await examItems(), { k: 10, seed: freshSeed(), hard: 3 });
+    } catch (e) { $("#pl-who").textContent = "Could not load the exam. Reload the page and try again."; return; }
+    const race = await roundRace(items);
+    if (play) play.game.destroy();
+    $("#pl-intro").hidden = true;
+    const game = Gm.mount($("#pl-game"), { items, categories: DEMO_CATS, onFinish: () => reveal() });
+    play = { game, items, race, best: Gm.best.read(), racing: null };
+    game.start();
+    $("#pl-game").scrollIntoView({ block: "nearest" });
+    if (race) play.racing = roundRaceRun(race);
+    else updateWho();
+  }
+
+  async function roundRaceRun(s) {
+    s.racing = true;
+    const mine = () => play && play.race === s;
+    $("#pl-stop").hidden = false;
+    const view = {
+      status: (t) => { if (mine()) $("#pl-who").textContent = `Models: ${t}`; },
+      lanes: (x) => {
+        if (!mine()) return;
+        $("#pl-who").textContent = `Models: ${x.results.length} of ${x.cases.length * x.fighters.length} answers.`;
+        if (play.game.view() === "end") reveal();
+      },
+      done: () => {},
+    };
+    await raceMore(s, 1, view);
+    s.racing = false;
+    $("#pl-stop").hidden = true;
+    if (mine() && play.game.view() === "end") reveal();
+  }
+  $("#pl-stop").addEventListener("click", () => { if (running && play && play.race && play.race.racing) running.stop(); });
+
+  const markHtml = (r) => `<span class="vs-marks">${r.marks.map((m, i) =>
+    `<i class="mk ${m}" title="message ${i + 1}: ${m}"></i>`).join("")}</span>`;
+
+  /** the round's end: your score against the gold, the models on the same ten, what you missed */
+  function reveal() {
+    if (!play) return;
+    const { game, items, race } = play;
+    const labels = game.labels();
+    const cont = race ? race.fighters.map((fi) => ({
+      key: fi.key, name: fi.label, rows: race.results.filter((r) => r.fighter === fi.key && (r.repeat || 0) === 0),
+    })) : [];
+    const rows = Gm.versus(items, labels, cont);
+    const me = rows.find((r) => r.you);
+    const st = game.stats();
+    if (!me.pending) Gm.best.save(me.right);
+    const best = Math.max(play.best, me.right);
+    let h = `<p class="gm-big"><b>${me.right}</b> of ${me.n} right</p>` +
+      `<p class="note">Median ${secs(me.p50ms)} per message${me.unsure ? `, ${me.unsure} unsure` : ""}. ` +
+      `Score ${st.points.toLocaleString("en-US")}. Best round: ${best} of 10. With n\u00a0=\u00a010, one message is 10 points.</p>`;
+    if (cont.length) {
+      h += "<h3>You vs models, same 10\u00a0messages</h3>" +
+        '<div class="scroll"><table class="vs"><thead><tr><th>who</th><th>each message</th><th class="num">right</th><th class="num">median</th></tr></thead><tbody>' +
+        rows.map((r) => `<tr${r.you ? ' class="me"' : ""}><td>${esc(r.name)}</td><td>${markHtml(r)}</td>` +
+          `<td class="num"><b>${r.right}</b>/${r.n}</td><td class="num">${secs(r.p50ms)}</td></tr>`).join("") +
+        "</tbody></table></div>" +
+        '<div class="legend vs-legend"><span class="mk right"></span>right <span class="mk wrong"></span>wrong ' +
+        '<span class="mk unsure"></span>unsure <span class="mk failed"></span>failed call <span class="mk pending"></span>waiting</div>' +
+        (race.racing ? '<p class="note">The models are still racing.</p>' : "");
+    } else {
+      h += creds && fightersNow().fighters
+        ? '<p class="nudge">Connected. Play again and the models take the same 10 as you.</p>'
+        : '<p class="nudge">Connect your app above to see models take the same 10.</p>';
+    }
+    const missed = items.filter((it) => { const l = labels.get(it.id); return l && l.verdict !== it.gold; });
+    h += missed.length
+      ? `<h3>What you missed (${missed.length})</h3><ol class="gm-miss">${missed.map((it) => {
+        const l = labels.get(it.id);
+        return `<li><p>${esc(it.text)}</p><span class="lab ${l.verdict === "unsure" ? "sl" : l.verdict}">you: ${l.verdict}</span>` +
+          `<span class="lab ${it.gold}">answer: ${it.gold}${it.gold === "blocked" ? ` · ${esc(human(it.category))}` : ""}</span>` +
+          `<span class="lab sl">${esc(it.difficulty)} · ${esc(human(it.slice))}</span></li>`;
+      }).join("")}</ol>`
+      : "<p>No misses. Try another round.</p>";
+    h += '<div class="toolbar"><button type="button" class="primary" data-act="again">Play again</button>' +
+      '<button type="button" data-r="undo">Undo the last answer</button></div>';
+    game.endEl.innerHTML = h;
+  }
+
+  $("#pl-start").addEventListener("click", startRound);
+  $("#pl-game").addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-act=again]")) startRound();
+  });
+
+  /* ── label: your CSV or the exam, in the same game ─────────────── */
+
+  let lbItems = null, lbGame = null;
+  const lbSay = (t) => { $("#lb-status").textContent = t; };
+  const lbLabels = () => (lbGame ? lbGame.labels() : new Map());
+  const fromCsv = () => $("#lb-src-csv").checked;
+
+  async function labelItems() {
+    if (lbItems) return lbItems;
+    if (fromCsv()) {
+      if (!uploaded) return null;
+      lbItems = uploaded.map((c, i) => ({ id: i, text: c.message, gold: c.expected || null, expected: c.expected, category: c.category, note: c.note }));
+    } else {
+      lbItems = Gm.sampleRound(await examItems(), { k: size(), seed: 11, hard: 0 });
+    }
+    return lbItems;
+  }
+
+  /** a new source drops the labels made on the old one, after a yes */
+  function resetLabels() {
+    const n = lbGame ? lbGame.commits().length : 0;
+    if (n && !window.confirm(`Drop your ${n} labels?`)) return false;
+    if (lbGame) lbGame.destroy();
+    lbGame = null;
+    lbItems = null;
+    lbSay("");
+    return true;
+  }
+
+  async function labelCats() {
+    try { return (await chosenRules()).categories.map((c) => ({ name: c.name, description: c.description })); } catch (e) { return DEMO_CATS; }
+  }
+
+  function lbCount() {
+    if (!lbGame || !lbItems) return;
+    const st = lbGame.stats();
+    lbSay(`${st.labeled} of ${lbItems.length} labeled${st.unsure ? `, ${st.unsure} unsure` : ""}.`);
+  }
+
+  function lbReveal() {
+    const items = lbItems, labels = lbGame.labels(), st = lbGame.stats();
+    const sure = items.filter((it) => it.gold && labels.has(it.id) && labels.get(it.id).verdict !== "unsure");
+    const agree = sure.filter((it) => labels.get(it.id).verdict === it.gold).length;
+    const left = items.length - st.labeled;
+    lbCount();
+    lbGame.endEl.innerHTML =
+      `<p class="gm-big"><b>${st.labeled}</b> of ${items.length} labeled</p>` +
+      `<p class="note">Median ${secs(st.p50ms)} per message. ${st.unsure} unsure, left out of a race.</p>` +
+      (sure.length ? `<p>You agree with ${fromCsv() ? "the file" : "the exam"} on ${agree} of ${sure.length}.</p>` : "") +
+      '<div class="toolbar">' +
+      (left ? `<button type="button" class="primary" data-do="next">Label the other ${left}</button>` : "") +
+      '<button type="button" data-act="download">Download labels</button>' +
+      '<button type="button" data-act="race">Race the models on my labels</button>' +
+      '<button type="button" data-r="undo">Undo the last label</button></div>';
+  }
+
+  $("#lb-file").addEventListener("change", (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    if (!resetLabels()) { ev.target.value = ""; return; }
+    $("#lb-src-csv").checked = true;
+    if (file.size > 2 * 1024 * 1024) {
+      uploaded = null;
+      $("#lb-preview").innerHTML = '<p class="err">That file is over 2&nbsp;MB. Split it, or keep the first 200 rows.</p>';
+      return;
+    }
+    const rd = new FileReader();
+    rd.onload = () => {
+      const v = C.validate(C.parse(rd.result), { expectedOptional: true });
+      uploaded = v.cases.length ? v.cases : null;
+      lbItems = null;
+      preview(v.cases, v.errors, v.total);
+    };
+    rd.readAsText(file);
+  });
+  for (const id of ["#lb-src-ex", "#lb-src-csv"]) {
+    $(id).addEventListener("change", () => {
+      if (!resetLabels()) { (fromCsv() ? $("#lb-src-ex") : $("#lb-src-csv")).checked = true; return; }
+      $("#lb-preview").innerHTML = "";
+      if (fromCsv() && uploaded) preview(uploaded, [], uploaded.length);
+    });
+  }
+  $("#lv-size").addEventListener("change", () => {
+    if (!fromCsv() && !(lbGame && lbGame.commits().length)) { if (lbGame) lbGame.destroy(); lbGame = null; lbItems = null; }
+  });
+
+  async function startLabels() {
+    let items;
+    try { items = await labelItems(); } catch (e) { lbSay("Could not load the exam. Reload the page and try again."); return; }
+    if (!items || !items.length) { lbSay("Load a CSV with a message column first."); return; }
+    if (!lbGame) lbGame = Gm.mount($("#lb-game"), { items, categories: await labelCats(), onFinish: lbReveal, onChange: lbCount });
+    lbGame.start();
+    $("#lb-game").scrollIntoView({ block: "nearest" });
+  }
+
+  async function downloadLabels() {
+    let items;
+    try { items = await labelItems(); } catch (e) { items = null; }
+    if (!items) { lbSay("Load a CSV with a message column first."); return; }
+    download("guardrail-labels.csv", Gm.labelsCsv(items, lbLabels()));
+  }
+
+  /** the full race, with your labels as the gold; unsure and unlabeled rows sit out, counted */
+  async function raceLabels() {
+    if (running) return;
+    let items;
+    try { items = await labelItems(); } catch (e) { items = null; }
+    if (!items) { lbSay("Load a CSV with a message column first."); return; }
+    const rc = Gm.raceCases(items, lbLabels());
+    const out = [rc.unsure && `${rc.unsure} unsure`, rc.unlabeled && `${rc.unlabeled} not labeled`].filter(Boolean).join(", ");
+    const sitOut = out ? ` Left out: ${out}.` : "";
+    if (!rc.cases.length) { lbSay(`Nothing labeled to race yet.${sitOut}`); return; }
+    const bad = readCreds();
+    if (bad) { lbSay(`Connect your app first. ${bad}`); return; }
+    const fl = fightersNow();
+    if (fl.err) { lbSay(fl.err); return; }
+    const cases = pick(rc.cases, size());
+    let rules = null;
+    try {
+      if (fl.temp) rules = await chosenRules();
+    } catch (e) { lbSay("Could not load the rules. Reload the page and try again."); return; }
+    const s = { temp: fl.temp, fighters: fl.fighters, cases, rules, results: [], repeats: 0 };
     const count = reps();
-    if (cases.length * fighters.length * count > MAX_CALLS) {
-      status.textContent = `That is over ${MAX_CALLS}\u00a0messages. Use fewer messages, fighters or reruns.`;
+    if (cases.length * fl.fighters.length * count > MAX_CALLS) {
+      lbSay(`That is over ${MAX_CALLS}\u00a0messages. Use fewer messages, fighters or reruns.`);
       return;
     }
     if (!window.confirm(confirmText(s, count))) return;
+    lbSay(`Racing ${cases.length} of your labels.${sitOut}`);
     session = s;
     $("#lv-summary").innerHTML = "";
+    $("#lv-lanes").innerHTML = "";
+    $("#lv-race").hidden = false;
+    $("#lv-race").scrollIntoView({ block: "nearest" });
     await raceMore(s, count);
+  }
+
+  $("#lb-start").addEventListener("click", startLabels);
+  $("#lb-download").addEventListener("click", downloadLabels);
+  $("#lb-race").addEventListener("click", raceLabels);
+  $("#lb-game").addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-act]");
+    if (b && b.dataset.act === "download") downloadLabels();
+    if (b && b.dataset.act === "race") raceLabels();
   });
+
+  /* ── Advanced: more reruns, results, stop ──────────────────────── */
 
   $("#lv-more").addEventListener("click", async () => {
     if (running || !session) return;
     const bad = readCreds();
-    if (bad) { $("#lv-status").textContent = bad; return; }
+    if (bad) { fullView.status(bad); return; }
     if (!window.confirm(confirmText(session, 1))) return;
     await raceMore(session, 1);
   });
@@ -497,4 +766,5 @@
   showMode();
   renderModels();
   setBusy(false);
+  updateWho();
 })();
