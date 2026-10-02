@@ -61,12 +61,14 @@ function combine(signal, timeoutMs) {
 }
 
 /**
- * One System One call. Retries 429 and 5xx with capped backoff, Retry-After
+ * One System One call to `target`: a name in TARGETS, or a target object of
+ * the same shape (the study passes Laya's). Retries 429 and 5xx with capped backoff, Retry-After
  * honoured. Resolves { answers, ms, model, usage, attempts }; `ms` times the
  * attempt that answered.
  */
 export async function systemOne(post, target, state, questions, { keys = {}, signal } = {}) {
-  const t = TARGETS[target];
+  const t = typeof target === "string" ? TARGETS[target] : target;
+  const name = t.name || target;
   const body = { model: t.model, state, questions };
   let last = null;
   for (let attempt = 1; attempt <= t.attempts; attempt++) {
@@ -87,7 +89,7 @@ export async function systemOne(post, target, state, questions, { keys = {}, sig
       continue;
     }
     const text = await res.text();
-    if (res.status !== 200) throw new Error(`${target} HTTP ${res.status}: ${text.slice(0, 160)}`);
+    if (res.status !== 200) throw new Error(`${name} HTTP ${res.status}: ${text.slice(0, 160)}`);
     const json = JSON.parse(text);
     const u = json.usage || {};
     return {
@@ -95,7 +97,7 @@ export async function systemOne(post, target, state, questions, { keys = {}, sig
       usage: { inputTokens: u.input_tokens ?? null, outputTokens: u.output_tokens ?? null },
     };
   }
-  throw new Error(`${target} unreachable after ${t.attempts} attempts: ${last ? last.message : "retries exhausted"}`);
+  throw new Error(`${name} unreachable after ${t.attempts} attempts: ${last ? last.message : "retries exhausted"}`);
 }
 
 const usageOf = (u) => (u ? {
