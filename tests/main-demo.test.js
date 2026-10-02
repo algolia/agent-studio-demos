@@ -199,6 +199,18 @@ test("--print-config output: the variants map without the run's status", async (
   assert.deepEqual(c.configVariants({ variants: shared }), shared, "what it prints, the page reads back");
 });
 
+test("config.example.js explains mainDemo.variants without carrying ids", () => {
+  const fs = require("node:fs");
+  const src = fs.readFileSync(path.join(__dirname, "..", "public", "shared", "config.example.js"), "utf8");
+  assert.match(src, /variants:/, "the example names the variants field");
+  assert.match(src, /--print-config/, "and says where its value comes from");
+  const { loadExampleConfig } = require("./load.js");
+  const md = loadExampleConfig().mainDemo;
+  for (const entry of Object.values(md.variants || {})) {
+    assert.match(entry.agentId, /^YOUR_/, "an example id is a placeholder");
+  }
+});
+
 test("card fields: an array with empty entries yields its first usable image, then the rest", async () => {
   const f = await load("fields.mjs");
   const fields = f.fieldsFrom({ fields: { title: "name", image: "image_urls.0", price: "price.value", line: "brand" } });
