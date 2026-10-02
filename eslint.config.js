@@ -190,6 +190,52 @@ module.exports = [
         fetch: "readonly",
         URL: "readonly",
         TextEncoder: "readonly",
+        Request: "readonly",
+        Response: "readonly",
+      },
+    },
+    rules: recommended,
+  },
+  {
+    // jev-attributes is built on ES modules: it imports rather
+    // than read globals. Its .mjs modules, and shared/*.mjs, are also imported
+    // by Node (tools/, scripts/*.mjs), which is why they may touch both lists.
+    files: [
+      "public/shared/**/*.mjs",
+      "public/jev-attributes/**/*.js", "public/jev-attributes/**/*.mjs", "tools/**/*.mjs", "scripts/**/*.mjs",
+    ],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...browserGlobals,
+        ...nodeGlobals,
+        ReadableStream: "readonly",
+        Response: "readonly",
+        Headers: "readonly",
+        URL: "readonly",
+        AbortController: "readonly",
+        AbortSignal: "readonly",
+        Request: "readonly",
+        Worker: "readonly",
+        caches: "readonly",
+        atob: "readonly",
+      },
+    },
+    rules: recommended,
+  },
+  {
+    // The relay is a Cloudflare Pages Function: an ES module on the Workers
+    // runtime, which has fetch, Request and Response but no DOM. The embedding
+    // worker runs in a Web Worker, where the page's globals hang off `self`.
+    // No `console` here: an accidental log in the relay fails lint.
+    files: ["functions/**/*.js", "public/jev-attributes/embed-worker.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        fetch: "readonly", Request: "readonly", Response: "readonly", Headers: "readonly", URL: "readonly",
+        AbortSignal: "readonly", self: "readonly",
       },
     },
     rules: recommended,

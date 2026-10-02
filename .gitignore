@@ -20,3 +20,6 @@ Thumbs.db
 # Cloudflare / wrangler
 .wrangler/
 node_modules/
+
+# Built by scripts/build-factbook.mjs from a factbook.json checkout — derived, not source.
+factbook.jsonl

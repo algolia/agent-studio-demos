@@ -170,4 +170,14 @@ window.DEMO_CONFIG = {
   },
 
   repoUrl: "https://github.com/algolia/agent-studio-demos",
+
+  // Jev picks the attributes, public mode. Search runs in the browser on a
+  // SECURED key: an HMAC of a search-only parent key, restricted to the
+  // Factbook index names, analytics forced off. Never paste the parent here.
+  // Derive and write this block with `node scripts/factbook-secured-key.mjs`.
+  jevAttributes: {
+    appId: "YOUR_APP_ID",
+    searchKey: "YOUR_SECURED_FACTBOOK_KEY",
+    indexes: ["demo_factbook", "esci_demo_factbook"],
+  },
 };
