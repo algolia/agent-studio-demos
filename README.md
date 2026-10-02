@@ -181,6 +181,29 @@ Fill `mainDemo` in `public/shared/config.js` (see `config.example.js`). With no
 backend answering at `mainDemo.host`, or with `?fixture=1`, the lanes replay a
 fixture stream and label every number as a replay.
 
+### Public mode
+
+The deployed page has no `variants.json`: it is gitignored, so a deploy carries the
+same map in `mainDemo.variants` instead. The page reads that field when it is present
+and fetches `variants.json` only when it is not. To point the public page at a backend:
+
+1. Provision the variants there, and print the map as JSON (agent ids and names, never
+   a key; progress goes to stderr):
+
+   ```bash
+   MAIN_DEMO_HOST=https://… APP_ID=… ADMIN_KEY=… \
+     node tools/main-demo-provision.mjs --print-config > variants.config.json
+   ```
+
+2. Mint one search-only key for the page: ACL `search`, the products index only, with
+   an expiry. The browser sends it twice, as `searchApiKey` for InstantSearch and as
+   `agentStudioApiKey` on `/completions`, so it is readable by every visitor.
+3. Add a `mainDemo` block to the deploy config: `host`, `appId`, `indexName`, `fields`,
+   the key in both fields, and the printed map as `variants`. The backend must answer
+   CORS for the site's origin.
+4. Refresh `DEMO_CONFIG_JS` from that file (see [Deploy](#deploy)), and the next push to
+   `main` serves it.
+
 ## Checks
 
 Two gates, both runnable verbatim on a laptop with nothing installed:
