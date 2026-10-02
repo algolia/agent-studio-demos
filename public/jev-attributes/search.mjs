@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────────
-   search.mjs — find the records a question needs, in the Factbook index.
+   search.mjs: find the records a question needs, in the Factbook index.
 
    Pure apart from fetch. The local proxy (tools/jev-attributes/algolia.mjs)
    and the page in public mode send the same queries and keep hits by the

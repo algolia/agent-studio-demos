@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────────
-   records.mjs — which hits a question needs, then which sections of them.
+   records.mjs: which hits a question needs, then which sections of them.
 
    Pure: no DOM, no fetch. The records stage asks Jev one yes/no question per
    hit ("does this record help answer the question?"), in one request, from a
