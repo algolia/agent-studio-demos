@@ -63,7 +63,6 @@ test("the client and the relay route to the same three upstreams", async () => {
   const { ROUTES: clientRoutes, TARGETS } = await load("public/jev-attributes/client.mjs");
   assert.deepEqual(clientRoutes, relayRoutes);
   for (const t of Object.values(TARGETS)) assert.ok(t.route in relayRoutes);
-  assert.ok(TARGETS.laya.timeoutMs >= 120000, "Laya is CPU-served: never under 120 s");
 });
 
 test("the secured key is the HMAC of its parameters, restricted to the Factbook names, analytics off, with an expiry", async () => {

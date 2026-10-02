@@ -1,18 +1,14 @@
 /* ───────────────────────────────────────────────────────────────
-   client.mjs — the three remote calls the demo makes, over one transport.
+   client.mjs — the one remote call the page makes: Jev, over a transport.
 
-     systemOne   POST <base>/systemone   Jev (TypeSafe) or Laya (Enablers)
-     chat        POST <base>/chat/completions, streamed, usage read off the wire
-     chatOnce    the same, not streamed: the LLM picker's JSON
+     systemOne   POST <base>/systemone   Jev (TypeSafe System One)
 
    A transport is `post(route, body, { auth, timeoutMs, signal }) → Response`.
    The page posts to the relay at /relay/<route> on its own origin (the local
-   proxy, or the stateless pass-through when deployed); the study posts to
-   the vendors directly. The routes are the relay's allowlist: nothing else
-   can be reached through it.
+   server, or the stateless pass-through when deployed); the study posts to
+   the vendor directly (tools/jev-attributes/arms.mjs). ROUTES is the relay's
+   allowlist: nothing else can be reached through it.
    ─────────────────────────────────────────────────────────────── */
-
-import { createSseParser } from "../shared/sse.mjs";
 
 /** route → upstream. The relay (functions/relay/[[path]].js) carries a copy; a test keeps them equal. */
 export const ROUTES = {
@@ -21,16 +17,11 @@ export const ROUTES = {
   "enablers/chat/completions": "https://inference-eu.api.enablers.algolia.net/v1/chat/completions",
 };
 
-/** the System One targets: same request shape, different base, model and key */
+/** the System One target the page asks: its route, model and the key it needs */
 export const TARGETS = {
-  jev: { route: "typesafe/systemone", model: "jev-1.13.0", key: "jev", timeoutMs: 20000, attempts: 3 },
-  // CPU-served: never a read timeout under 120 s
-  laya: { route: "laya/systemone", model: "laya-auto", key: "enablers", timeoutMs: 180000, attempts: 2 },
+  jev: { name: "jev", route: "typesafe/systemone", model: "jev-1.13.0", key: "jev", timeoutMs: 20000, attempts: 3 },
 };
 
-export const ANSWER_MODEL = "medium";
-export const PICKER_MODEL = "small";
-const MAX_TOKENS = 16384;
 const RETRY = new Set([429, 500, 502, 503, 504, 529]);
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
@@ -44,16 +35,6 @@ export function relayTransport(base = "/relay", fetchImpl = (...a) => fetch(...a
   });
 }
 
-/** the study's transport: straight to the vendor */
-export function directTransport(fetchImpl = (...a) => fetch(...a)) {
-  return (route, body, { auth, timeoutMs, signal } = {}) => fetchImpl(ROUTES[route], {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth}` },
-    body: JSON.stringify(body),
-    signal: combine(signal, timeoutMs),
-  });
-}
-
 function combine(signal, timeoutMs) {
   const list = [signal, timeoutMs ? AbortSignal.timeout(timeoutMs) : null].filter(Boolean);
   if (!list.length) return undefined;
@@ -62,9 +43,9 @@ function combine(signal, timeoutMs) {
 
 /**
  * One System One call to `target`: a name in TARGETS, or a target object of
- * the same shape (the study passes Laya's). Retries 429 and 5xx with capped backoff, Retry-After
- * honoured. Resolves { answers, ms, model, usage, attempts }; `ms` times the
- * attempt that answered.
+ * the same shape (the study passes Laya's). Retries 429 and 5xx with capped
+ * backoff, Retry-After honoured. Resolves { answers, ms, model, usage,
+ * attempts }; `ms` times the attempt that answered.
  */
 export async function systemOne(post, target, state, questions, { keys = {}, signal } = {}) {
   const t = typeof target === "string" ? TARGETS[target] : target;
@@ -98,61 +79,4 @@ export async function systemOne(post, target, state, questions, { keys = {}, sig
     };
   }
   throw new Error(`${name} unreachable after ${t.attempts} attempts: ${last ? last.message : "retries exhausted"}`);
-}
-
-const usageOf = (u) => (u ? {
-  inputTokens: u.prompt_tokens ?? null,
-  outputTokens: u.completion_tokens ?? null,
-  cachedTokens: (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) ?? null,
-} : null);
-
-/**
- * Stream one completion. onDelta(text, tMs) per content chunk. `cacheSalt`
- * isolates the gateway's prefix cache (vLLM `cache_salt`): a fresh salt per
- * lane per run, so the latency on screen is never a cache hit left by the
- * previous click. Resolves { text, usage, model, ttft, total }.
- */
-export async function chat(post, messages, { model = ANSWER_MODEL, keys = {}, onDelta, cacheSalt, signal } = {}) {
-  const t0 = performance.now();
-  const res = await post("enablers/chat/completions", {
-    model, messages, max_tokens: MAX_TOKENS, temperature: 0,
-    stream: true, stream_options: { include_usage: true },
-    ...(cacheSalt ? { cache_salt: cacheSalt } : {}),
-  }, { auth: keys.enablers, timeoutMs: 180000, signal });
-  if (res.status !== 200) throw new Error(`LLM HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`);
-  const out = { text: "", usage: null, model: null, ttft: null, total: null };
-  const parser = createSseParser((evt) => {
-    if (evt.type === "[DONE]") return;
-    if (evt.model) out.model = evt.model;
-    const delta = evt.choices && evt.choices[0] && evt.choices[0].delta && evt.choices[0].delta.content;
-    if (delta) {
-      const t = performance.now() - t0;
-      if (out.ttft === null) out.ttft = t;
-      out.text += delta;
-      if (onDelta) onDelta(delta, t);
-    }
-    if (evt.usage) out.usage = usageOf(evt.usage);
-  });
-  const reader = res.body.getReader();
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    parser.push(value);
-  }
-  parser.end();
-  out.total = performance.now() - t0;
-  return out;
-}
-
-/** one completion, not streamed: { text, usage, model, ms } */
-export async function chatOnce(post, messages, { model = PICKER_MODEL, keys = {}, signal } = {}) {
-  const t0 = performance.now();
-  const res = await post("enablers/chat/completions", {
-    model, messages, max_tokens: MAX_TOKENS, temperature: 0, response_format: { type: "json_object" },
-  }, { auth: keys.enablers, timeoutMs: 120000, signal });
-  const text = await res.text();
-  if (res.status !== 200) throw new Error(`LLM HTTP ${res.status}: ${text.slice(0, 160)}`);
-  const json = JSON.parse(text);
-  const msg = json.choices && json.choices[0] && json.choices[0].message;
-  return { text: (msg && msg.content) || "", usage: usageOf(json.usage), model: json.model || model, ms: performance.now() - t0 };
 }

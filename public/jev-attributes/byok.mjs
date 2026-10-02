@@ -1,5 +1,5 @@
 /* ───────────────────────────────────────────────────────────────
-   byok.mjs — the visitor's own keys, held in this browser only.
+   byok.mjs — the visitor's own Jev key, held in this browser only.
 
    By default a key lives in memory and is gone on reload. The visitor may
    opt in to keeping it for the tab (sessionStorage) or on this device
@@ -7,7 +7,7 @@
    and blocked site data throw. Nothing here sends, logs or prints a key.
    ─────────────────────────────────────────────────────────────── */
 
-export const NAMES = ["jev", "enablers"];
+export const NAMES = ["jev"];
 export const KEEP = ["memory", "tab", "device"];
 const SLOT = "jev-attributes.keys";
 
@@ -17,7 +17,7 @@ function safe(fn, fallback = null) {
 
 /** `stores` is { tab, device }: sessionStorage and localStorage, or fakes in a test */
 export function createKeyStore(stores = { tab: safe(() => globalThis.sessionStorage), device: safe(() => globalThis.localStorage) }) {
-  const mem = { jev: "", enablers: "" };
+  const mem = { jev: "" };
   let keep = "memory";
 
   for (const where of ["device", "tab"]) {
@@ -37,7 +37,7 @@ export function createKeyStore(stores = { tab: safe(() => globalThis.sessionStor
 
   return {
     get: (n) => mem[n] || "",
-    all: () => ({ jev: mem.jev || null, enablers: mem.enablers || null }),
+    all: () => ({ jev: mem.jev || null }),
     set(n, v) { if (NAMES.includes(n)) { mem[n] = String(v || "").trim(); persist(); } },
     keep: () => keep,
     setKeep(where) { if (KEEP.includes(where)) { keep = where; persist(); } },
