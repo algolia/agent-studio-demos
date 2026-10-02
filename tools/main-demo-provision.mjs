@@ -76,6 +76,8 @@ function client({ host, appId, key }) {
     "content-type": "application/json",
     "x-algolia-application-id": appId,
     "x-algolia-api-key": key,
+    // review environments refuse a request without one
+    "user-agent": "main-demo-provision",
   };
   return async function call(method, p, body) {
     const ctl = new AbortController();
