@@ -1,28 +1,86 @@
 /* ───────────────────────────────────────────────────────────────
-   engines.mjs — five ways to decide which sections a question needs.
+   arms.mjs: the study's other arms, the ones the page no longer runs.
 
-   Pure: no DOM, no fetch. Each engine's network or model call lives in
-   run.mjs; what is decided from its answer lives here, so the page, the
-   study and the tests share one rule per engine.
-
-     jev      TypeSafe System One, outside vendor      P(yes) per section
-     laya     the same API shape, on Enablers           P(yes) per section
-     embed    a small embedding model, in the browser   cosine similarity
-     keyword  BM25 over section names and descriptions  BM25 score
-     llm      a small Enablers LLM, asked for JSON      kept or not
+   study.mjs compares Jev with Laya, keyword BM25 and a small LLM picker.
+   The page asks Jev only, so everything else the study needs lives here,
+   next to it: the Laya target and its compact request, the routes and the
+   direct transport to every vendor, the picker's one-shot completion, and
+   the keyword and picker decisions. The deciding parts are pure (no DOM,
+   no fetch); `directTransport` and `chatOnce` are the only network code.
    ─────────────────────────────────────────────────────────────── */
 
-import { SECTIONS, splitKey } from "./attrs.mjs";
+import { SECTIONS } from "../../public/jev-attributes/attrs.mjs";
+import { ROUTES as PAGE_ROUTES } from "../../public/jev-attributes/client.mjs";
 
-export const ENGINES = [
-  { id: "jev", label: "Jev", where: "vendor", needs: "jev", scale: "P(yes)" },
-  { id: "laya", label: "Laya", where: "enablers", needs: "enablers", scale: "P(yes)" },
-  { id: "embed", label: "Embeddings", where: "browser", needs: null, scale: "cosine" },
-  { id: "keyword", label: "Keywords", where: "browser", needs: null, scale: "BM25" },
-  { id: "llm", label: "LLM picker", where: "enablers", needs: "enablers", scale: "kept" },
-];
+/** every upstream the study reaches: the page's one route, plus Laya and the Enablers chat */
+export const ROUTES = {
+  ...PAGE_ROUTES,
+  "laya/systemone": "https://inference-staging.api.enablers.algolia.net/v1/systemone",
+  "enablers/chat/completions": "https://inference-eu.api.enablers.algolia.net/v1/chat/completions",
+};
 
-export const engine = (id) => ENGINES.find((e) => e.id === id);
+/** Laya: the System One request shape, on Enablers. CPU-served: never a read timeout under 120 s */
+export const LAYA = { name: "laya", route: "laya/systemone", model: "laya-auto", key: "enablers", timeoutMs: 180000, attempts: 2 };
+
+export const PICKER_MODEL = "small";
+const MAX_TOKENS = 16384;
+
+/** the study's transport: straight to the vendor, the caller's key in the header */
+export function directTransport(fetchImpl = (...a) => fetch(...a)) {
+  return (route, body, { auth, timeoutMs, signal } = {}) => fetchImpl(ROUTES[route], {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth}` },
+    body: JSON.stringify(body),
+    signal: combine(signal, timeoutMs),
+  });
+}
+
+function combine(signal, timeoutMs) {
+  const list = [signal, timeoutMs ? AbortSignal.timeout(timeoutMs) : null].filter(Boolean);
+  if (!list.length) return undefined;
+  return list.length === 1 ? list[0] : AbortSignal.any(list);
+}
+
+/** one completion, not streamed: { text, usage, model, ms } */
+export async function chatOnce(post, messages, { model = PICKER_MODEL, keys = {}, signal } = {}) {
+  const t0 = performance.now();
+  const res = await post("enablers/chat/completions", {
+    model, messages, max_tokens: MAX_TOKENS, temperature: 0, response_format: { type: "json_object" },
+  }, { auth: keys.enablers, timeoutMs: 120000, signal });
+  const text = await res.text();
+  if (res.status !== 200) throw new Error(`LLM HTTP ${res.status}: ${text.slice(0, 160)}`);
+  const json = JSON.parse(text);
+  const msg = json.choices && json.choices[0] && json.choices[0].message;
+  const u = json.usage;
+  return {
+    text: (msg && msg.content) || "", model: json.model || model, ms: performance.now() - t0,
+    usage: u ? { inputTokens: u.prompt_tokens ?? null, outputTokens: u.completion_tokens ?? null } : null,
+  };
+}
+
+/* check-copy: off */
+/**
+ * Jev's judgment in Laya's budget. Laya reads state and question together
+ * per question and keeps about 512 tokens of them, so the shape that suits
+ * Jev arrives cut short. Here the state is the question alone and each
+ * question names its one section; `main` lists each section's `what` only.
+ */
+export function compactSectionQuestions() {
+  const qs = {};
+  for (const s of SECTIONS) {
+    qs[s.id] = {
+      type: "noul",
+      instructions: `Does answering \`question\` need the ${s.name} section of a country profile (${s.what})?`,
+    };
+  }
+  qs.main = {
+    type: "choice",
+    instructions: "Which section of a country profile holds the facts `question` asks for first?",
+    criteria: Object.fromEntries(SECTIONS.map((s) => [s.id, s.what])),
+  };
+  return qs;
+}
+/* check-copy: on */
 
 /* ── text ─────────────────────────────────────────────────────── */
 
@@ -41,7 +99,7 @@ const stem = (w) => {
 
 /** lowercase words, accents folded, stop words out, a light plural strip */
 export function terms(text) {
-  return String(text || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/'s\b/g, "")
+  return String(text || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/'s\b/g, "")
     .split(/[^a-z0-9]+/).filter((w) => w.length > 1 && !STOP.has(w)).map(stem);
 }
 
@@ -84,61 +142,22 @@ export function topByRatio(scores, { ratio = 0.5, maxK = 3 } = {}) {
   return new Set(order.slice(0, maxK).map(([, i]) => i));
 }
 
-/** keep the scores within `margin` of the best, at most `maxK`, always the best one */
-export function topByMargin(scores, { margin = 0.05, maxK = 3 } = {}) {
-  if (!scores.length) return new Set();
-  const best = Math.max(...scores);
-  const order = scores.map((s, i) => [s, i]).filter(([s]) => s >= best - margin).sort((x, y) => y[0] - x[0]);
-  return new Set(order.slice(0, maxK).map(([, i]) => i));
-}
-
-/** the text an engine without typed questions reads for each section */
+/** the text an arm without typed questions reads for each section */
 export const sectionDocs = () => SECTIONS.map((s) => `${s.name}: ${s.what}`);
-/** and for each field: its section and its name */
-export const fieldDocs = (fields) => fields.map((f) => splitKey(f).join(": "));
 
 /**
- * Rows in the shape every engine reports: { name, score, picked, fallback }.
- * With nothing kept, every section stays and each row says `fallback`: the
- * engine had no opinion, so the LLM gets the full record rather than nothing.
+ * Rows { name, id, score, picked, fallback }. With nothing kept, every
+ * section stays and each row says `fallback`: the arm had no opinion.
  */
 export function sectionRows(scores, keep) {
   const none = keep.size === 0;
   return SECTIONS.map((s, i) => ({ name: s.name, id: s.id, score: scores[i], picked: none || keep.has(i), fallback: none }));
 }
 
-export function fieldRows(fields, scores, keep) {
-  const none = keep.size === 0;
-  return fields.map((key, i) => ({ key, score: scores[i], picked: none || keep.has(i), fallback: none }));
-}
-
-/** keyword picks over sections, then over fields */
-export const KEYWORD = { sections: { ratio: 0.5, maxK: 3 }, fields: { ratio: 0.5, maxK: 6 } };
+export const KEYWORD = { ratio: 0.5, maxK: 3 };
 export function keywordSections(question, hits) {
   const scores = bm25(askTerms(question, hits), sectionDocs());
-  return sectionRows(scores, topByRatio(scores, KEYWORD.sections));
-}
-export function keywordFields(question, hits, fields) {
-  const scores = bm25(askTerms(question, hits), fields.map((f) => splitKey(f)[1]));
-  return fieldRows(fields, scores, topByRatio(scores, KEYWORD.fields));
-}
-
-/* ── embeddings: cosine over unit vectors ──────────────────────── */
-
-export const cosine = (a, b) => {
-  let s = 0;
-  for (let i = 0; i < a.length; i++) s += a[i] * b[i];
-  return s;
-};
-
-export const EMBED_RULE = { sections: { margin: 0.06, maxK: 3 }, fields: { margin: 0.08, maxK: 6 } };
-export function embedSections(qVec, docVecs) {
-  const scores = docVecs.map((v) => cosine(qVec, v));
-  return sectionRows(scores, topByMargin(scores, EMBED_RULE.sections));
-}
-export function embedFields(qVec, fields, docVecs) {
-  const scores = docVecs.map((v) => cosine(qVec, v));
-  return fieldRows(fields, scores, topByMargin(scores, EMBED_RULE.fields));
+  return sectionRows(scores, topByRatio(scores, KEYWORD));
 }
 
 /* ── LLM picker: a JSON list ───────────────────────────────────── */
@@ -156,14 +175,6 @@ export function pickerSectionMessages(question) {
   return [
     { role: "system", content: PICK_SYSTEM },
     { role: "user", content: `Sections:\n${list}\n\nAllowed names: ${names}.\n\nQuestion: ${question}` },
-  ];
-}
-
-export function pickerFieldMessages(question, fields) {
-  const list = fields.map((f) => `- ${f}`).join("\n");
-  return [
-    { role: "system", content: PICK_SYSTEM },
-    { role: "user", content: `Fields:\n${list}\n\nQuestion: ${question}` },
   ];
 }
 /* check-copy: on */
@@ -203,26 +214,4 @@ export function pickerSectionRows(text) {
   }
   const keep = new Set(SECTIONS.map((s, i) => (kept.has(s.name) ? i : -1)).filter((i) => i >= 0));
   return sectionRows(SECTIONS.map((s) => (kept.has(s.name) ? 1 : 0)), keep);
-}
-
-export function pickerFieldRows(text, fields) {
-  const kept = new Set(parseKeep(text, fields));
-  const keep = new Set(fields.map((f, i) => (kept.has(f) ? i : -1)).filter((i) => i >= 0));
-  return fieldRows(fields, fields.map((f) => (kept.has(f) ? 1 : 0)), keep);
-}
-
-/* ── language ─────────────────────────────────────────────────── */
-
-const EN = new Set("the is are what which how many much does do of in and who where when has have".split(" "));
-const OTHER = new Set([
-  ..."le la les des du est quel quelle quels combien pays de".split(" "),
-  ..."el los las del es cual cuales cuantos qué cuál".split(" "),
-  ..."der die das und ist welche wie viele il gli che sono quanti quale o os qual quais".split(" "),
-]);
-/** a question that reads as not English: another script, or another language's function words and none of English's */
-export function looksNonEnglish(question) {
-  const q = String(question || "");
-  if (/[^\s\x20-\u024f\u2000-\u206f]/u.test(q)) return true;
-  const words = q.toLowerCase().split(/[^a-z\u00c0-\u024f]+/).filter(Boolean);
-  return words.some((w) => OTHER.has(w)) && !words.some((w) => EN.has(w));
 }

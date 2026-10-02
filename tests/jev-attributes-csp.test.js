@@ -23,7 +23,7 @@ async function policy() {
   return { rules, headersFor, dirs };
 }
 
-test("the page may not be framed, and loads code from itself and jsDelivr only", async () => {
+test("the page may not be framed, and loads code from itself only", async () => {
   const { dirs, headersFor, rules } = await policy();
   assert.deepEqual(dirs["frame-ancestors"], ["'none'"]);
   assert.deepEqual(dirs["default-src"], ["'none'"]);
@@ -31,13 +31,12 @@ test("the page may not be framed, and loads code from itself and jsDelivr only",
   assert.deepEqual(dirs["base-uri"], ["'none'"]);
   assert.ok(!dirs["script-src"].includes("'unsafe-inline'") && !dirs["script-src"].includes("'unsafe-eval'"));
   assert.ok(!dirs["script-src"].includes("blob:") && !dirs["script-src"].includes("data:"));
-  assert.ok(dirs["script-src"].includes("https://cdn.jsdelivr.net"));
-  assert.deepEqual(dirs["worker-src"], ["'self'"]);
-  for (const host of ["'self'", "https://*.algolia.net", "https://huggingface.co", "https://cdn.jsdelivr.net"]) {
-    assert.ok(dirs["connect-src"].includes(host), host);
-  }
-  // the worker is served under the same rule, so it runs under the same policy
-  assert.equal(headersFor("/jev-attributes/embed-worker.mjs", rules)["Content-Security-Policy"], headersFor("/jev-attributes/", rules)["Content-Security-Policy"]);
+  // no CDN, no wasm, no worker: the embedding engine is gone, and its allowances with it
+  assert.ok(dirs["script-src"].every((s) => s === "'self'" || s.startsWith("'sha256-")), dirs["script-src"].join(" "));
+  assert.equal(dirs["worker-src"], undefined);
+  assert.deepEqual(dirs["connect-src"], ["'self'", "https://*.algolia.net", "https://*.algolianet.com"]);
+  // every file of the page is served under the same rule
+  assert.equal(headersFor("/jev-attributes/app.js", rules)["Content-Security-Policy"], headersFor("/jev-attributes/", rules)["Content-Security-Policy"]);
   assert.equal(headersFor("/chat-with-book/", rules)["Content-Security-Policy"], undefined, "the other demos are untouched");
 });
 

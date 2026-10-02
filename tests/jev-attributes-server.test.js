@@ -49,14 +49,11 @@ test("isLoopback and the Host allowlist name loopback only", async () => {
 });
 
 test("LOCAL: a rebinding Host is refused before any key is looked up", async () => {
-  let minted = 0;
-  const { server, port } = await listening({
-    mode: "local", keys: { jev: { JEV_API_KEY: "owner-jev-key-000" } }, mint: async () => { minted += 1; return "owner-token-000"; },
-  });
+  const { server, port } = await listening({ mode: "local", keys: { jev: { JEV_API_KEY: "owner-jev-key-000" } } });
   try {
     const evil = `evil.example:${port}`;
     assert.equal((await call(port, { host: evil })).status, 403);
-    for (const route of ["typesafe/systemone", "enablers/chat/completions"]) {
+    for (const route of ["typesafe/systemone", "laya/systemone"]) {
       const r = await call(port, {
         host: evil, method: "POST", url: `/relay/${route}`, body: "{}",
         headers: { Origin: `http://${evil}`, "Content-Type": "application/json" },
@@ -65,19 +62,35 @@ test("LOCAL: a rebinding Host is refused before any key is looked up", async () 
       assert.doesNotMatch(r.text, /owner-/);
     }
     assert.equal((await call(port, { host: evil, url: "/jev-attributes/" })).status, 403);
-    assert.equal(minted, 0, "no token minted for a refused host");
   } finally {
     server.close();
   }
 });
 
 test("LOCAL: loopback Hosts are served", async () => {
-  const { server, port } = await listening({ mode: "local", keys: {}, mint: async () => { throw new Error("no vault in tests"); } });
+  const { server, port } = await listening({ mode: "local", keys: {} });
   try {
     for (const host of [`127.0.0.1:${port}`, `localhost:${port}`]) {
       const r = await call(port, { host });
       assert.equal(r.status, 200, host);
       assert.equal(JSON.parse(r.text).mode, "local");
+      assert.deepEqual(JSON.parse(r.text).ready, { jev: false, search: false });
+    }
+  } finally {
+    server.close();
+  }
+});
+
+test("LOCAL: a route the relay does not have is 404, and the owner's key goes nowhere", async () => {
+  const { server, port } = await listening({ mode: "local", keys: { jev: { JEV_API_KEY: "owner-jev-key-000" } } });
+  try {
+    for (const route of ["laya/systemone", "enablers/chat/completions"]) {
+      const r = await call(port, {
+        host: `127.0.0.1:${port}`, method: "POST", url: `/relay/${route}`, body: "{}",
+        headers: { Origin: `http://127.0.0.1:${port}`, "Content-Type": "application/json" },
+      });
+      assert.equal(r.status, 404, route);
+      assert.doesNotMatch(r.text, /owner-/);
     }
   } finally {
     server.close();
