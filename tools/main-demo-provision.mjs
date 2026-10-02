@@ -5,6 +5,7 @@
      MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… \
        node tools/main-demo-provision.mjs [--add 'prefetch=1,memory=1,…']
          [--config '{"searchPrefetch":{…},…}'] [--sync-instructions] [--dry-run]
+         [--base NAME] [--out FILE] [--print-config]
 
    Reads the variant manifest from public/main-demo/configs.mjs (the same
    module the page uses), lists the agents on HOST, and for each variant:
@@ -28,6 +29,10 @@
    freshly created agent shows them from the next run on. Idempotent: a
    second run creates nothing.
 
+   --print-config also prints the variants map to stdout, as JSON, for
+   mainDemo.variants in a deploy's config.js (variants.json is gitignored).
+   The progress lines move to stderr, so stdout is only the map.
+
    Environment, never printed: MAIN_DEMO_HOST (or HOST when it is a URL —
    zsh sets HOST to the machine name), APP_ID, ADMIN_KEY.
    Node 20+, no dependencies.
@@ -38,7 +43,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
   MANIFEST, configKey, parseKey, agentName, agentConfigPatch, togglesFromAgentConfig,
-  baseTemplate, customAgentBody, customKey, customName, blocksFromConfig, capturedSettings,
+  baseTemplate, customAgentBody, customKey, customName, blocksFromConfig, capturedSettings, shareableVariants,
 } from "../public/main-demo/configs.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -46,11 +51,12 @@ const DEFAULT_OUT = path.join(HERE, "..", "public", "main-demo", "variants.json"
 const BASE_NAME = "main-demo-base";
 
 function parseArgs(argv) {
-  const out = { add: [], configs: [], sync: false, dryRun: false, out: DEFAULT_OUT, base: BASE_NAME };
+  const out = { add: [], configs: [], sync: false, dryRun: false, printConfig: false, out: DEFAULT_OUT, base: BASE_NAME };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--add") out.add.push(argv[++i]);
     else if (a === "--dry-run") out.dryRun = true;
+    else if (a === "--print-config") out.printConfig = true;
     else if (a === "--config") out.configs.push(JSON.parse(argv[++i]));
     else if (a === "--sync-instructions") out.sync = true;
     else if (a === "--out") out.out = path.resolve(argv[++i]);
@@ -148,14 +154,17 @@ async function existingFormat(file) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  // with --print-config, stdout carries only the map, so it pipes straight into a file
+  const log = args.printConfig ? (...a) => console.error(...a) : (...a) => console.log(...a);
   if (args.help) {
-    console.log("usage: MAIN_DEMO_HOST=… APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs"
-      + " [--add KEY]… [--config JSON]… [--sync-instructions] [--dry-run] [--out FILE]");
+    log("usage: MAIN_DEMO_HOST=… APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs"
+      + " [--add KEY]… [--config JSON]… [--sync-instructions] [--dry-run] [--out FILE] [--base NAME]"
+      + " [--print-config]");
     return;
   }
   const e = env();
   const call = client(e);
-  console.log(`host ${e.host} · app ${e.appId.slice(0, 3)}… · key from env`);
+  log(`host ${e.host} · app ${e.appId.slice(0, 3)}… · key from env`);
 
   const wanted = new Map();
   for (const m of MANIFEST) wanted.set(configKey(m.toggles), m.toggles);
@@ -185,26 +194,26 @@ async function main() {
     if (found) {
       const full = found.config ? found : await call("GET", `/1/agents/${found.id}`);
       const actual = record(full, "adopted");
-      console.log(`adopt  ${name}${actual === key ? "" : `  (its config reads as ${actual}, keyed by that)`}`);
+      log(`adopt  ${name}${actual === key ? "" : `  (its config reads as ${actual}, keyed by that)`}`);
       continue;
     }
-    if (args.dryRun) { console.log(`create ${name}  (dry run: skipped)`); continue; }
+    if (args.dryRun) { log(`create ${name}  (dry run: skipped)`); continue; }
     const created = await call("POST", "/1/agents", variantBody(base, toggles));
     try {
       await call("POST", `/1/agents/${created.id}/publish`);
     } catch (err) {
-      if (err.status !== 409) console.log(`       publish: ${err.message}`);
+      if (err.status !== 409) log(`       publish: ${err.message}`);
     }
     const full = await call("GET", `/1/agents/${created.id}`);
     record(full, "created");
-    console.log(`create ${name}`);
+    log(`create ${name}`);
   }
 
   const publish = async (id) => {
     try {
       await call("POST", `/1/agents/${id}/publish`);
     } catch (err) {
-      if (err.status !== 409) console.log(`       publish: ${err.message}`);
+      if (err.status !== 409) log(`       publish: ${err.message}`);
     }
   };
 
@@ -214,18 +223,18 @@ async function main() {
     if (!/^main-demo-[0-9a-f]{8}$/.test(a.name)) continue;
     const full = a.config ? a : await call("GET", `/1/agents/${a.id}`);
     const blocks = blocksFromConfig(full.config);
-    if (customName(blocks) !== a.name) { console.log(`skip   ${a.name}  (its config hashes to ${customName(blocks)})`); continue; }
+    if (customName(blocks) !== a.name) { log(`skip   ${a.name}  (its config hashes to ${customName(blocks)})`); continue; }
     variants[customKey(blocks)] = { agentId: a.id, name: a.name, model: a.model || null, status: "adopted", ...withCaptured(full.config) };
     customs.delete(customKey(blocks));
-    console.log(`adopt  ${a.name}`);
+    log(`adopt  ${a.name}`);
   }
   for (const [key, blocks] of customs) {
     const name = customName(blocks);
-    if (args.dryRun) { console.log(`create ${name}  (dry run: skipped)`); continue; }
+    if (args.dryRun) { log(`create ${name}  (dry run: skipped)`); continue; }
     const created = await call("POST", "/1/agents", customAgentBody(base, blocks, name));
     await publish(created.id);
     variants[key] = { agentId: created.id, name, model: created.model || null, status: "created" };
-    console.log(`create ${name}`);
+    log(`create ${name}`);
   }
 
   if (args.sync) {
@@ -233,26 +242,28 @@ async function main() {
       if (!a.name.startsWith("main-demo-") || a.name === args.base || a.id === base.id) continue;
       const full = await call("GET", `/1/agents/${a.id}`);
       if (full.instructions === base.instructions && full.systemPrompt === base.systemPrompt) {
-        console.log(`same   ${a.name}`);
+        log(`same   ${a.name}`);
         continue;
       }
-      if (args.dryRun) { console.log(`sync   ${a.name}  (dry run: skipped)`); continue; }
+      if (args.dryRun) { log(`sync   ${a.name}  (dry run: skipped)`); continue; }
       await call("PATCH", `/1/agents/${a.id}`, { instructions: base.instructions, systemPrompt: base.systemPrompt });
       await publish(a.id);
-      console.log(`sync   ${a.name}  (instructions from ${args.base})`);
+      log(`sync   ${a.name}  (instructions from ${args.base})`);
     }
   }
 
   const doc = { generatedAt: new Date().toISOString(), host: e.host, variants };
-  if (args.dryRun) { console.log(JSON.stringify(doc, null, 2)); return; }
+  // the map a deploy pastes into mainDemo.variants: agent ids and names, never a key
+  if (args.printConfig) console.log(JSON.stringify(shareableVariants(variants), null, 2));
+  if (args.dryRun) { log(JSON.stringify(doc, null, 2)); return; }
   let out = args.out;
   const fmt = await existingFormat(out);
   if (fmt === "foreign") {
     out = out.replace(/\.json$/, "") + `.${Date.now()}.json`;
-    console.log(`${args.out} holds something else; writing ${out} instead`);
+    log(`${args.out} holds something else; writing ${out} instead`);
   }
   await writeFile(out, JSON.stringify(doc, null, 2) + "\n");
-  console.log(`wrote ${path.relative(process.cwd(), out)} · ${Object.keys(variants).length} variants`);
+  log(`wrote ${path.relative(process.cwd(), out)} · ${Object.keys(variants).length} variants`);
 }
 
 main().catch((err) => {

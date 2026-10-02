@@ -185,6 +185,20 @@ test("a deploy's variant map comes from mainDemo.variants, and variants.json is 
   assert.equal(c.resolveVariant({ prefetch: true }, map).agentId, "a1", "the lane resolves it like variants.json");
 });
 
+test("--print-config output: the variants map without the run's status", async () => {
+  const c = await load("configs.mjs");
+  const shared = c.shareableVariants({
+    a: { agentId: "a1", name: "main-demo-base", model: "gpt-4.1", provider: "openai", status: "adopted" },
+    b: { agentId: "b1", name: "main-demo-prefetch", model: null, status: "created", capturedIndexSettings: { x: 1 } },
+    c: { name: "no-id" },
+  });
+  assert.deepEqual(shared, {
+    a: { agentId: "a1", name: "main-demo-base", model: "gpt-4.1", provider: "openai" },
+    b: { agentId: "b1", name: "main-demo-prefetch", capturedIndexSettings: { x: 1 } },
+  });
+  assert.deepEqual(c.configVariants({ variants: shared }), shared, "what it prints, the page reads back");
+});
+
 test("card fields: an array with empty entries yields its first usable image, then the rest", async () => {
   const f = await load("fields.mjs");
   const fields = f.fieldsFrom({ fields: { title: "name", image: "image_urls.0", price: "price.value", line: "brand" } });
@@ -430,3 +444,58 @@ test("repeat: the race bar offers 1 to 10 runs, and medians and the tally hold a
   assert.deepEqual(paint.tally, { a: 0, b: 9, even: 1 }, "500 ms on the 10 s run is within 5%: even");
 });
 
+test("provision --print-config: stdout is the map, the progress goes to stderr, and every call names itself", async () => {
+  const http = require("node:http");
+  const os = require("node:os");
+  const fs = require("node:fs");
+  const { execFile } = require("node:child_process");
+  const SECRET = "test-admin-key-never-printed";
+  const agents = [{ id: "base-id", name: "main-demo-base", model: "m", providerId: "p", config: { searchPrefetch: false } }];
+  const uas = new Set();
+  const server = http.createServer((req, res) => {
+    uas.add(req.headers["user-agent"]);
+    let body = "";
+    req.on("data", (d) => { body += d; });
+    req.on("end", () => {
+      const send = (j) => { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(j)); };
+      const url = new URL(req.url, "http://x");
+      const one = url.pathname.match(/^\/1\/agents\/([^/]+)(\/publish)?$/);
+      if (req.method === "GET" && url.pathname === "/1/agents") return send({ data: agents, pagination: { totalPages: 1 } });
+      if (req.method === "GET" && url.pathname === "/1/providers") return send({ data: [{ id: "p", providerName: "openai" }] });
+      if (req.method === "POST" && url.pathname === "/1/agents") {
+        const a = { id: `id-${agents.length}`, ...JSON.parse(body) };
+        agents.push(a);
+        return send(a);
+      }
+      if (one && one[2]) return send({});
+      if (one) return send(agents.find((a) => a.id === one[1]));
+      res.statusCode = 404;
+      send({ detail: "not here" });
+    });
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "main-demo-"));
+  const out = path.join(tmp, "variants.json");
+  try {
+    const { stdout, stderr } = await new Promise((resolve, reject) => {
+      execFile(process.execPath, [path.join(__dirname, "..", "tools", "main-demo-provision.mjs"), "--print-config", "--out", out], {
+        env: { ...process.env, MAIN_DEMO_HOST: `http://127.0.0.1:${server.address().port}`, APP_ID: "APPID", ADMIN_KEY: SECRET },
+      }, (err, so, se) => (err ? reject(Object.assign(err, { stderr: se })) : resolve({ stdout: so, stderr: se })));
+    });
+    const map = JSON.parse(stdout);
+    const c = await load("configs.mjs");
+    assert.deepEqual(Object.keys(map).sort(), c.MANIFEST.map((m) => c.configKey(m.toggles)).sort());
+    assert.equal(map[c.configKey(c.BASE_TOGGLES)].agentId, "base-id", "main-demo-base is adopted, not copied");
+    assert.equal(agents.length, c.MANIFEST.length, "the other manifest variants are created");
+    for (const e of Object.values(map)) assert.equal(e.status, undefined, "the run's status stays in variants.json");
+    assert.match(stderr, /wrote .*variants\.json/);
+    assert.ok(!stdout.includes(SECRET) && !stderr.includes(SECRET), "the key is never printed");
+    assert.deepEqual([...uas], ["main-demo-provision"]);
+    assert.deepEqual(c.configVariants({ variants: map }), map, "the page reads the printed map as is");
+    const file = JSON.parse(fs.readFileSync(out, "utf8"));
+    assert.equal(Object.keys(file.variants).length, c.MANIFEST.length, "variants.json is still written");
+  } finally {
+    server.close();
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

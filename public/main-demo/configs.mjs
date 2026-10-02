@@ -167,6 +167,18 @@ export function configVariants(mainDemo) {
   return Object.keys(out).length ? out : null;
 }
 
+/** variants.json's map as a config block: what the page reads, without the run's status */
+export function shareableVariants(variants) {
+  const keep = ["agentId", "name", "model", "provider", "capturedIndexSettings"];
+  const out = {};
+  for (const [key, entry] of Object.entries(variants || {})) {
+    if (!entry || !entry.agentId) continue;
+    out[key] = {};
+    for (const k of keep) if (entry[k] !== undefined && entry[k] !== null) out[key][k] = entry[k];
+  }
+  return out;
+}
+
 /** the exact shell line that creates a missing variant */
 export function provisionCommand(keys, prefix) {
   const env = prefix || "MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY";
