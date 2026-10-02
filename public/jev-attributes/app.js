@@ -221,7 +221,6 @@ async function ask(question) {
   ctl = new AbortController();
   const signal = ctl.signal;
   const r = (run = { question, status: "search", t0: performance.now(), search: null, jev: null, sizes: new Map() });
-  el.stage.classList.remove("is-scored", "is-full");
   updateGo();
   renderFlow();
   startTick();
@@ -312,6 +311,7 @@ function renderFlow() {
 
 function renderStage() {
   const r = run;
+  el.stage.classList.remove("is-scored", "is-full");
   el.stage.textContent = "";
   if (!r || !r.search || r.search.error) { el.stage.append(ghost()); return; }
   if (!r.search.hits.length) {
@@ -373,6 +373,7 @@ function applyJev(r) {
     art.classList.remove("is-reading");
     const verdict = art.querySelector(".verdict");
     if (r.jev.error) {
+      // no decision: nothing is scored, nothing shrinks
       art.classList.add("is-failed");
       verdict.textContent = "No decision from Jev, so the whole record stays.";
       continue;
@@ -398,8 +399,9 @@ function applyJev(r) {
     art.querySelector(".size-bar").style.setProperty("--share", String(t.share ?? 1));
     verdict.textContent = `Kept ${t.kept.sections} of ${t.total.sections}\u00a0sections, ${pct(t.share)} of the characters.`;
   }
+  if (r.jev.error) return;
   // two frames: the blocks are painted at full size before they are told to shrink, so the change animates
-  requestAnimationFrame(() => requestAnimationFrame(() => el.stage.classList.add("is-scored")));
+  requestAnimationFrame(() => requestAnimationFrame(() => { if (run === r) el.stage.classList.add("is-scored"); }));
 }
 
 const pct = (share) => {
