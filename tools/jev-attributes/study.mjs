@@ -29,9 +29,11 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { load } from "./keys.mjs";
 import { searchLocal } from "./algolia.mjs";
-import { SECTIONS, sectionState, sectionQuestions, compactSectionQuestions, pickSections, mainConfidence } from "../../public/jev-attributes/attrs.mjs";
-import { keywordSections, pickerSectionMessages, pickerSectionRows } from "../../public/jev-attributes/engines.mjs";
-import { directTransport, systemOne, chatOnce } from "../../public/jev-attributes/client.mjs";
+import { SECTIONS, sectionState, sectionQuestions, pickSections, mainConfidence } from "../../public/jev-attributes/attrs.mjs";
+import { systemOne } from "../../public/jev-attributes/client.mjs";
+import {
+  LAYA, directTransport, chatOnce, compactSectionQuestions, keywordSections, pickerSectionMessages, pickerSectionRows,
+} from "./arms.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -81,7 +83,7 @@ async function arm(name, item) {
     const req = shape === "plain" ? plainRequest(item.q)
       : shape === "compact" ? { state: { question: item.q }, questions: compactSectionQuestions() }
         : { state: sectionState(item.q), questions: sectionQuestions() };
-    const r = await systemOne(post, kind, req.state, req.questions, { keys });
+    const r = await systemOne(post, kind === "laya" ? LAYA : "jev", req.state, req.questions, { keys });
     const rows = pickSections(r.answers);
     return { kept: rows.filter((x) => x.picked).map((x) => x.name), ms: r.ms, inputTokens: r.usage.inputTokens,
       confidence: mainConfidence(r.answers), main: r.answers.main ? r.answers.main.choice : null,

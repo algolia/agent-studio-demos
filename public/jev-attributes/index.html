@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Jev picks the attributes</title>
-<meta name="description" content="Five engines read the question and keep the record sections it needs: Jev, Laya, browser embeddings, keywords and a small LLM. One LLM answers from what each kept, side by side with the full record.">
+<title>Jev trims the record</title>
+<meta name="description" content="A country record has 13&nbsp;sections and a question needs one or two. Jev, the System One model by TypeSafe, reads the question and keeps those. Watch the record shrink.">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,51 +21,39 @@
     document.documentElement.dataset.theme = dark ? "dark" : "light";
   })();
 </script>
-<script src="../shared/md.js"></script>
 </head>
 <body>
 <a class="skip" href="#ask">Skip to the demo</a>
 
 <header class="hero wrap">
-  <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
-  <h1>Jev picks the attributes</h1>
-  <p class="lede">Each country record has 13&nbsp;sections. A question needs one or two. Pick the engines that guess which: one LLM answers from what each kept, next to the full record.</p>
+  <div class="hero-top">
+    <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">
+      <span class="glyph" id="theme-glyph" aria-hidden="true">◐</span>
+      <span id="theme-label">Dark</span>
+    </button>
+  </div>
+  <h1>Jev trims the record</h1>
+  <p class="lede">Each country record has 13&nbsp;sections. A question needs one or two. Jev reads the question and keeps those.</p>
 </header>
 
 <main class="wrap">
-  <section class="mode" id="mode" aria-label="Keys"></section>
-  <p class="vendor" id="vendor" role="note"></p>
+  <section class="keycard" id="keycard" aria-label="Your Jev key"></section>
 
   <form class="ask" id="ask" autocomplete="off">
     <label class="sr-only" for="q">Question</label>
     <input id="q" type="text" maxlength="300" placeholder="Ask about any country">
     <button type="submit" class="btn" id="go">Ask</button>
-    <div class="depth">
-      <span id="depth-l">Keep</span>
-      <div class="seg" role="group" aria-labelledby="depth-l">
-        <button type="button" data-depth="sections" aria-pressed="true" title="Each engine picks whole sections.">Sections</button>
-        <button type="button" data-depth="fields" aria-pressed="false" title="Then the fields inside the kept sections: a second pass per engine.">Fields</button>
-      </div>
-    </div>
   </form>
-  <div class="engines" id="engines" role="group" aria-label="Engines"></div>
-  <div class="model" id="model" aria-live="polite"></div>
   <p class="chips" id="chips"></p>
 
   <ol class="flow" id="flow" aria-label="What happened"></ol>
 
-  <section class="board" id="board" aria-live="polite"></section>
-  <section class="matrix" id="matrix" aria-label="What each engine kept"></section>
-
-  <ul class="legend" aria-hidden="true">
-    <li class="is-search"><i></i>search</li><li class="is-load"><i></i>model load</li><li class="is-engine"><i></i>engine</li>
-    <li class="is-wait"><i></i>waiting for the first token</li><li class="is-stream"><i></i>streaming</li>
-  </ul>
-  <div class="lanes" id="lanes"></div>
+  <section class="stage" id="stage" aria-live="polite"></section>
 </main>
 
 <footer class="wrap foot">
-  <p>Data: CIA World Factbook, public domain. Search: Algolia. Answers: one LLM for every lane.</p>
+  <p>Data: CIA World Factbook, public domain. Search: Algolia. Decisions: Jev by TypeSafe.</p>
 </footer>
 
 <script type="module" src="app.js"></script>

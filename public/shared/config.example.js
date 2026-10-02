@@ -8,6 +8,18 @@ window.DEMO_CONFIG = {
   appId: "YOUR_APP_ID",
   apiKey: "YOUR_API_KEY",
 
+  // Mémoires (/memoires/) — its own app, not the one above. The page creates
+  // and publishes its three comparison agents on first run, so the first
+  // visitor provisions them; the ids are looked up by name after that. host is
+  // where the demo deploys by default; ?env=local on the page overrides it to
+  // http://localhost:8000 and ?env=staging pins the staging host below.
+  memoires: {
+    host: "https://agent-studio.staging.eu.algolia.com",
+    appId: "YOUR_APP_ID",
+    apiKey: "YOUR_API_KEY",
+    providerId: "YOUR_PROVIDER_ID",
+  },
+
   // One published agent per model: /completions takes the model from the agent
   // (per-request `configuration` overrides are rejected with 422
   // "Dynamic configuration not allowed" on most apps).

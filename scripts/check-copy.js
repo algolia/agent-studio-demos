@@ -69,9 +69,8 @@ const PAGES = [
 const JS_FILES = [
   "chat-with-book/app.js", "infinite-conversation/app.js",
   "shared/meter.js", "shared/books.js", "shared/compactor.js", "shared/md.js",
-  "shared/sse.mjs", "shared/format.mjs", "jev-attributes/app.js", "jev-attributes/attrs.mjs",
-  "jev-attributes/engines.mjs", "jev-attributes/run.mjs", "jev-attributes/client.mjs", "jev-attributes/byok.mjs",
-  "jev-attributes/embed.mjs", "jev-attributes/search.mjs",
+  "shared/format.mjs", "jev-attributes/app.js", "jev-attributes/attrs.mjs",
+  "jev-attributes/client.mjs", "jev-attributes/byok.mjs", "jev-attributes/search.mjs",
   "guardrail-battle/app.js", "guardrail-battle/live.js", "guardrail-battle/live-ui.js", "guardrail-battle/race-charts.js",
   "main-demo/app.js", "main-demo/lane.js", "main-demo/configs.mjs", "main-demo/stream.mjs",
   "main-demo/fixture.mjs", "main-demo/fields.mjs", "main-demo/race.mjs", "main-demo/agents.mjs",
