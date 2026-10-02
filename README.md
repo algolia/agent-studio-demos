@@ -9,7 +9,8 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 
 | Demo | Path | Status |
 | --- | --- | --- |
-| Jev trims the record | `/jev-attributes/` | Local; public with your own key once the relay is on |
+| What is Agent Studio? | `/main-demo/` | Live on a review build |
+| Jev trims the record | `/jev-attributes/` | Local; public with your own key once this site forwards it |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
 | Guardrail battle | `/guardrail-battle/` | Live |
@@ -33,6 +34,7 @@ public/                     the deployable root — this is what Cloudflare Page
   assets/convs/             three seeded conversations, plus the manifest every figure derives from
   chat-with-book/           index.html + app.js + style.css
   infinite-conversation/    index.html + app.js + style.css
+  main-demo/                index.html + app.js + lane.js + style.css, and six .mjs modules
   guardrail-battle/         index.html + app.js + style.css, and data/ with frozen results
   memoires/                 index.html + shared.js, three memory configurations side by side
 scripts/                    node, zero dependencies — see § The shelf and § The search index
@@ -43,9 +45,10 @@ scripts/                    node, zero dependencies — see § The shelf and § 
   index-settings.json       the index settings, as reviewable data
   index-settings-languages.json  the per-language overlay on those settings
   measure-tokens.js         characters per token, per book, via /context/trim
-tools/                      node, zero dependencies — bakes the seeded conversations
+tools/                      node, zero dependencies — bakes the seeded conversations,
+                            and main-demo-provision.mjs creates the main demo's agents
 tests/                      node:test smoke tests — no framework, no install
-functions/relay/            the jev-attributes relay, a Cloudflare Pages Function (off unless RELAY_ENABLED=1)
+functions/relay/            passes a jev-attributes visitor's key on to TypeSafe, a Cloudflare Pages Function (off unless RELAY_ENABLED=1)
 eslint.config.js            flat config, rules written out, zero dependencies
 .github/workflows/          ci.yml (lint + tests), deploy.yml (Cloudflare Pages)
 ```
@@ -134,6 +137,110 @@ Open a file over `http://`, not `file://` — the demos load their config and sh
 `config.example.js` documents every field. It is committed; `config.js` is in `.gitignore` at every depth and must never be committed.
 
 **These pages call the API directly from the browser** so the wire log can show you every request. That means the key is visible to anyone who opens devtools. Use a key scoped to exactly what the demo needs, and put a backend in front of it before shipping anything like this.
+
+## The main demo
+
+`/main-demo/` answers "What is Agent Studio?" with a shopping assistant. You ask
+for a product, the agent searches a products index, and it answers with its
+picks grouped on cards. The chat is the InstantSearch
+[Chat widget](https://www.algolia.com/doc/api-reference/widgets/chat/react), bound
+to an agent with a search tool and the Grouped Results tool.
+
+**Search prefetch** means Agent Studio searches the index with your message
+before the model starts, and hands the model those hits, so it can often answer
+without asking for a search itself.
+
+**RAG race** mode is where you see it. Two lanes get the same question at the
+same moment: lane A starts without prefetch, lane B with it. Each lane draws its own
+timeline (first byte, first token, every search and model call, full paint).
+The scoreboard puts both lanes' model calls, tool calls, first token, full paint
+and tokens side by side. A race repeats 1 to 10 times, and the board shows medians and how
+often each lane won. Prefetch loses too: on a question with a budget or an age
+in it, the raw sentence finds little, and the model searches anyway.
+
+### Run it locally
+
+1. Start an Agent Studio backend, for example on `http://127.0.0.1:8000`, with a
+   products index and an agent named `main-demo-base` (model, provider, search
+   tool, Grouped Results tool, prompt).
+2. Create the other agents from it, once:
+
+   ```bash
+   MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs
+   ```
+
+3. Fill `mainDemo` in `public/shared/config.js` (see `config.example.js`): `host`,
+   `appId`, `indexName`, a search-only key in `searchApiKey` and
+   `agentStudioApiKey`, and `fields` if your records name their attributes
+   differently.
+4. Serve `public/` (see [Run it locally](#run-it-locally)) and open `/main-demo/`.
+
+No backend? The page still opens: with nothing answering at `mainDemo.host`, or
+with `?fixture=1`, the lanes replay a recorded stream and label every number as
+a replay.
+
+### How a lane picks its agent
+
+It is the one page here built on ES modules: React 19, React InstantSearch
+7.50.1 and `algoliasearch` 5.59.0 load from esm.sh through an import map, with
+pinned versions and no build step.
+
+A lane's toggles (search prefetch, memory, guardrails, suggestions) select an
+**agent variant**; they never PATCH a live agent. Prefetch off is its own
+variant, an agent whose `searchPrefetch` is `false`: the completions call takes
+no per-request override.
+
+The provisioning script copies `main-demo-base`, layers each variant's config on
+top, adopts any agent that already carries the variant's name, and writes
+`public/main-demo/variants.json` (gitignored). A combination outside the manifest
+is added with `--add 'prefetch=1,memory=1,guardrails=0,suggestions=0'`, and the
+page prints that exact line when a lane asks for a variant nobody created.
+
+A prefetch variant carries the block the product documents in
+`docs/SEARCH_PREFETCH.md`, under the `searchPrefetch` key:
+
+```json
+{ "searchPrefetch": { "enabled": true, "conversationWindow": 1, "minInformativeTokens": 2,
+  "hitsPerPage": 5, "searchParameters": { "queryLanguages": ["en"] } } }
+```
+
+The lane's editor holds every field of that block. `capturedIndexSettings` is
+written by the server after a save: the editor shows it, read-only, once the
+script has read it back, and never sends it or hashes it.
+
+Each prefetch turn streams a `data-search_prefetch` part: `decision`, `nbHits`,
+`latencyMs`, `toolName`, `index`, and `toolCallId` when the hits reached the
+model. The hits ride on the visible search tool call with that id, which the
+lane draws as the passive search. An injected turn sends the part again before
+`finish`, with `agentSearchedAnyway`, and the lane reads that flag from it.
+
+### Public mode
+
+The deployed page needs two things in its config, and nothing else changes:
+
+- **one search-only key**: ACL `search`, the products index only, with an
+  expiry. The browser sends it twice, as `searchApiKey` for InstantSearch and as
+  `agentStudioApiKey` on `/completions`, so every visitor can read it.
+- **the agents map**, in `mainDemo.variants`. `variants.json` is gitignored, so a
+  deploy has none; the page reads `mainDemo.variants` when it is present and
+  fetches `variants.json` only when it is not.
+
+To point the public page at a backend:
+
+1. Provision the agents there, and print the map as JSON (agent ids and names,
+   never a key; progress goes to stderr):
+
+   ```bash
+   MAIN_DEMO_HOST=https://… APP_ID=… ADMIN_KEY=… \
+     node tools/main-demo-provision.mjs --print-config > variants.config.json
+   ```
+
+2. Mint the search-only key.
+3. Add a `mainDemo` block to the deploy config: `host`, `appId`, `indexName`,
+   `fields`, the key in both key fields, and the printed map as `variants`. The
+   backend must answer CORS for the site's origin.
+4. Refresh `DEMO_CONFIG_JS` from that file (see [Deploy](#deploy)), and the next
+   push to `main` serves it.
 
 ## Jev trims the record
 
@@ -233,14 +340,15 @@ own, no `/api`, `shared/config.js` served.
 `?q=…` fills the question in and waits for a click on **Ask**: every run
 sends a question to Jev on someone's key, so a link never starts one.
 
-### Why there is a relay: CORS, measured 2026-10-01
+### Why this site forwards the Jev call: CORS, measured 2026-10-01
 
 | Endpoint | Preflight from a browser origin | `fetch` from the page |
 | --- | --- | --- |
 | `api.typesafe.ai/v1/systemone` | 400 "Disallowed CORS origin" for every origin tried (`agent-studio-demos.pages.dev`, `127.0.0.1`, `localhost`, `typesafe.ai`, `null`) | blocked |
 | `<app>-dsn.algolia.net` (search) | 200, `Access-Control-Allow-Origin: *` | works |
 
-So search runs in the browser, and the Jev call goes through
+So search runs in the browser. TypeSafe does not answer browsers directly, so
+this site forwards the visitor's key to it: the Jev call goes through
 `functions/relay/[[path]].js`, a Cloudflare Pages Function on the site's own
 origin. It is stateless and small enough to audit:
 
@@ -248,33 +356,34 @@ origin. It is stateless and small enough to audit:
   anything else is 404 or 405
 - same-origin callers only; a request without `Authorization: Bearer …` is
   refused, and no key is ever added (the local server's injection is in
-  `server.mjs`, not in the relay)
+  `server.mjs`, not in the forwarding function)
 - forwards `Content-Type` and `Authorization` only: no cookies, no client IP
   headers; the body is capped at 512 KB and streamed back as the vendor sent it
 - no logging, no KV, no cache: there is no `console` in the file (eslint has no
   `console` global there, and a test greps for it), and every response is
   `Cache-Control: no-store`
-- **inert until the Pages project sets `RELAY_ENABLED=1`**, so merging and
-  deploying does not open it
+- **The forwarding is off until the site sets `RELAY_ENABLED=1`; it holds no
+  key of its own, it only passes the visitor's key through.** Merging and
+  deploying does not turn it on.
 
-What the relay cannot promise: Cloudflare terminates TLS for it, as it does for
+What the forwarding cannot promise: Cloudflare terminates TLS for it, as it does for
 the static site, so the key passes through Cloudflare's edge in a header.
 Workers logs are off unless the project enables them; keep them off.
 
-While the relay is off, the page probes it once at startup (a keyless POST
-answers 404, where a live relay answers 401), shows no key field, says the
-relay is off in one line, and keeps Ask disabled.
+While forwarding is off, the page checks once at startup (a keyless POST
+answers 404 while it is off and 401 while it is on), shows no key field, says
+"Forwarding is off on this site" in one line, and keeps Ask disabled.
 
-#### Before enabling the relay
+#### Before turning forwarding on
 
 Setting `RELAY_ENABLED=1` puts a key-forwarding endpoint on a public origin.
 Neither of these is built yet; each is the owner's call, and both come first:
 
 - [ ] **Who may call it:** Cloudflare Access in front of `/jev-attributes/*`
       and `/relay/*` (Okta, Algolia staff only), or Turnstile on the page with
-      the relay checking the token.
+      the forwarding function checking the token.
 - [ ] **How often:** a WAF rate-limiting rule on `/relay/*`, per IP, so a
-      stolen tab cannot turn the relay into a free proxy.
+      stolen tab cannot turn this site into a free proxy.
 
 ### Search in public mode: a secured key
 
@@ -318,7 +427,7 @@ to it. It receives the question and the section descriptions, never a record
 
 What the page showed. *Kept* is the section Jev kept, with its P(yes).
 Characters are counted; tokens are characters ÷ 4, an estimate. *Jev* is the
-time of the one request from the browser, through the local relay; Jev's own
+time of the one request from the browser, forwarded by the local server; Jev's own
 usage was 3,535 to 3,537 input and 366 or 367 output tokens on each.
 
 | Question | Record | Kept | Fields | Characters | ≈ tokens, estimated | Jev |
@@ -419,8 +528,8 @@ blank page.
 Whatever key you configure ends up readable in the browser. Scope it accordingly.
 
 **Functions.** `wrangler pages deploy public/` also compiles `functions/` from
-the directory it runs in (the repo root, in CI), so the jev-attributes relay
-ships with every deploy. It answers 404 until the Pages project has the
+the directory it runs in (the repo root, in CI), so the function that forwards
+jev-attributes keys to TypeSafe ships with every deploy. It answers 404 until the Pages project has the
 environment variable `RELAY_ENABLED=1` (Dashboard → Pages → agent-studio-demos →
 Settings → Variables). Turn it on only when the public mode should work; turn
 Workers logs off for the project if they are on.
