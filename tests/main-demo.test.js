@@ -391,3 +391,28 @@ test("the prefetch block: the product's fields and bounds, captured settings sho
   assert.equal(c.agentConfigPatch({ prefetch: false }).searchPrefetch, false);
   assert.equal(c.agentConfigPatch({ prefetch: true }).search_prefetch, undefined);
 });
+
+test("repeat: the race bar offers 1 to 10 runs, and medians and the tally hold at 10", async () => {
+  const r = await load("race.mjs");
+  assert.equal(Math.min(...r.REPEATS), 1);
+  assert.equal(Math.max(...r.REPEATS), 10);
+  assert.equal(r.MAX_REPEAT, 10);
+  assert.deepEqual([r.clampRepeat(0), r.clampRepeat(7), r.clampRepeat(10), r.clampRepeat(11), r.clampRepeat("x")], [1, 7, 10, 10, 1]);
+
+  // ten runs: B saves one call on 7, ties on 2, loses one on 1; paint medians from 1..10 s
+  const runs = Array.from({ length: 10 }, (_, i) => ({
+    a: { ok: true, modelCalls: 3, total: (i + 1) * 1000 },
+    b: { ok: true, modelCalls: i < 7 ? 2 : i < 9 ? 3 : 4, total: (i + 1) * 1000 - 500 },
+  }));
+  const calls = r.compare(r.METRICS.find((m) => m.id === "modelCalls"), runs);
+  assert.deepEqual(calls.tally, { a: 1, b: 7, even: 2 });
+  assert.equal(calls.n, 10);
+  assert.equal(calls.runs.length, 10);
+  assert.equal(calls.b, 2, "median of seven 2s, two 3s and a 4");
+  assert.equal(calls.delta, -1);
+  const paint = r.compare(r.METRICS.find((m) => m.id === "total"), runs);
+  assert.equal(paint.a, 5500, "even count: the mean of the 5th and 6th");
+  assert.equal(paint.b, 5000);
+  assert.equal(paint.delta, -500);
+  assert.deepEqual(paint.tally, { a: 0, b: 9, even: 1 }, "500 ms on the 10 s run is within 5%: even");
+});

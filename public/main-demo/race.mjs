@@ -10,6 +10,16 @@
 
 import { ms } from "./stream.mjs";
 
+/** the repeat control's choices: 1 to 10 runs of one question */
+export const REPEATS = [1, 2, 3, 5, 10];
+export const MAX_REPEAT = 10;
+
+/** a repeat count the race bar accepts, whatever was asked for */
+export function clampRepeat(n) {
+  const v = Math.round(Number(n));
+  return Number.isFinite(v) ? Math.min(MAX_REPEAT, Math.max(1, v)) : 1;
+}
+
 /** the numbers of one lane's finished turn that a race compares */
 export function summarize(view) {
   if (!view) return null;

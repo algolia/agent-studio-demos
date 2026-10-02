@@ -9,7 +9,7 @@
 import { liteClient } from "algoliasearch/lite";
 import { mountLane } from "./lane.js";
 import { MANIFEST, BASE_TOGGLES, configKey, provisionCommand } from "./configs.mjs";
-import { METRICS, compare, deltaText, summarize } from "./race.mjs";
+import { METRICS, REPEATS, clampRepeat, compare, deltaText, summarize } from "./race.mjs";
 
 const root = window.DEMO_CONFIG || {};
 const CFG = { host: "http://127.0.0.1:8000", indexName: "products", ...(root.mainDemo || {}) };
@@ -20,7 +20,7 @@ const el = {
   lanes: $("lanes"), laneA: $("lane-a"), laneB: $("lane-b"),
   form: $("race-form"), text: $("race-text"), chips: $("chips"), status: $("status"), score: $("score"),
   go: $("race-go"), rerun: $("race-rerun"), clear: $("race-clear"), raceState: $("race-state"),
-  times: [...document.querySelectorAll("[data-times]")],
+  timesGroup: $("race-times"), times: [],
   tabs: [...document.querySelectorAll(".seg [data-mode]")],
 };
 const params = new URLSearchParams(location.search);
@@ -114,8 +114,9 @@ async function oneRun(q) {
   return { a: summarize(seen.a && seen.a.view), b: summarize(seen.b && seen.b.view) };
 }
 
-async function runRace(q, times, { append = false } = {}) {
+async function runRace(q, asked, { append = false } = {}) {
   if (race.running || !q) return;
+  const times = clampRepeat(asked);
   if (!append || q !== race.question) { race.question = q; race.runs = []; }
   race.running = true;
   race.stop = false;
@@ -331,9 +332,16 @@ async function main() {
     ask(el.text.value);
     el.text.value = "";
   });
-  for (const b of el.times) {
-    b.addEventListener("click", () => { race.times = Number(b.dataset.times); renderBar(); });
+  for (const n of REPEATS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.times = String(n);
+    b.textContent = `×${n}`;
+    b.addEventListener("click", () => { race.times = clampRepeat(n); renderBar(); });
+    el.timesGroup.append(b);
+    el.times.push(b);
   }
+  renderBar();
   el.rerun.addEventListener("click", () => runRace(race.question, race.times, { append: true }));
   el.clear.addEventListener("click", clearRace);
   renderChips();

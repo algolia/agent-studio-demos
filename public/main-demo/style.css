@@ -61,6 +61,10 @@
 @media (max-width: 480px) {
   .score th, .score td { padding-right: 12px; font-size: 13px; }
   .score-pf { display: none; }
+  /* ten runs: the strip goes under its tally rather than past the screen edge */
+  .score-strip { display: flex; margin: 3px 0 0; }
+  .score-strip .run { width: 6px; }
+  .score thead .score-w, .score .score-d, .score .score-note-cell { white-space: normal; }
 }
 
 /* ── Lanes ─────────────────────────────────────────────────────── */
