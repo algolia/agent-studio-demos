@@ -144,9 +144,10 @@ It is the one page here built on ES modules: React 19, React InstantSearch
 7.50.1 and `algoliasearch` 5.59.0 load from esm.sh through an import map, with
 pinned versions and no build step.
 
-A lane's toggles (search prefetch and its injection format, memory,
-guardrails, suggestions) select an **agent variant**; they never PATCH a live
-agent. Create the variants once:
+A lane's toggles (search prefetch, memory, guardrails, suggestions) select an
+**agent variant**; they never PATCH a live agent. Prefetch off is its own
+variant, an agent whose `searchPrefetch` is `false`: the completions call takes
+no per-request override. Create the variants once:
 
 ```bash
 MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs
@@ -155,10 +156,26 @@ MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… node tools/main-de
 The script copies `main-demo-base`, layers each variant's config on top, adopts
 any agent that already carries the variant's name, and writes
 `public/main-demo/variants.json` (gitignored). A combination outside the manifest
-is added with `--add 'prefetch=user_fold,memory=1,guardrails=0,suggestions=0'` —
-the page prints that exact line when a lane asks for a variant nobody created.
-Prefetch off on a prefetch agent is applied per request with
-`?searchPrefetch=false`, and the lane says so.
+is added with `--add 'prefetch=1,memory=1,guardrails=0,suggestions=0'`, and the
+page prints that exact line when a lane asks for a variant nobody created.
+
+A prefetch variant carries the block the product documents in
+`docs/SEARCH_PREFETCH.md`, under the `searchPrefetch` key:
+
+```json
+{ "searchPrefetch": { "enabled": true, "conversationWindow": 1, "minInformativeTokens": 2,
+  "hitsPerPage": 5, "searchParameters": { "queryLanguages": ["en"] } } }
+```
+
+The lane's editor holds every field of that block. `capturedIndexSettings` is
+written by the server after a save: the editor shows it, read-only, once the
+script has read it back, and never sends it or hashes it.
+
+Each prefetch turn streams a `data-search_prefetch` part: `decision`, `nbHits`,
+`latencyMs`, `toolName`, `index`, and `toolCallId` when the hits reached the
+model. The hits ride on the visible search tool call with that id, which the
+lane draws as the passive search. An injected turn sends the part again before
+`finish`, with `agentSearchedAnyway`, and the lane reads that flag from it.
 
 Fill `mainDemo` in `public/shared/config.js` (see `config.example.js`). With no
 backend answering at `mainDemo.host`, or with `?fixture=1`, the lanes replay a
