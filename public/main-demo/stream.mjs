@@ -220,8 +220,15 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
 /** the strip's view model: marks along one axis, and the tool rows under it */
 export function viewOf(s) {
   const passiveId = (s.prefetchPart && s.prefetchPart.toolCallId) || null;
+  const searchMs = s.prefetchPart && Number.isFinite(s.prefetchPart.latencyMs) ? s.prefetchPart.latencyMs : null;
   const tools = s.toolOrder.map((id) => {
     const r = s.tools.get(id);
+    if (id === passiveId && searchMs !== null) {
+      // the pair streams after the search finished: its wire time is ~0, the part holds the real one
+      const start = Math.max(0, r.start - searchMs);
+      return { id, name: r.name, start, open: false, end: r.start, duration: r.start - start,
+        error: r.error, passive: true, search: false };
+    }
     // a call still open when the turn ended stops at the turn's end, never past it
     const end = r.end === null ? (s.total !== null ? s.total : null) : Math.min(r.end, s.total ?? r.end);
     return {

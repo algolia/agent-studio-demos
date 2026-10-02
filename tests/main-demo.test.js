@@ -118,6 +118,9 @@ test("the prefetched search is on the wire, as a tool pair before the first mode
   assert.equal(pp.prefetchParts, 2, "sent up front, then again before finish");
   assert.equal(pp.prefetchPart.agentSearchedAnyway, false);
   assert.equal(pp.prefetchPart.hits, undefined);
+  const [passive] = pp.tools;
+  assert.equal(passive.duration, 212.4, "the passive search lasts what the part says, not its wire time");
+  assert.equal(passive.end, pp.tools[0].start + 212.4);
 });
 
 test("a part with toolCallId marks exactly that tool call passive, whatever its id looks like", async () => {

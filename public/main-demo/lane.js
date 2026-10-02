@@ -136,12 +136,12 @@ function Searches({ counts, view, prefetchOn }) {
   const { passive, active, part, searchedAnyway, reported } = counts;
   const done = view.status === "done" || view.status === "error";
   return html`<p class="searches">
-    <span class=${"sc is-passive" + (passive ? " is-on" : "")}>Passive search <b>×${passive}</b></span>
+    <span class="sc-g"><span class=${"sc is-passive" + (passive ? " is-on" : "")}>Passive search <b>×${passive}</b></span>
     ${part && html`<${PrefetchPart} part=${part} />`}
-    ${prefetchOn && !reported && done && html`<span class="sc-src is-missing" title=${NO_PART_TIP}>no part</span>`}
-    <span class="sc is-active">Active searches <b>×${active}</b></span>
+    ${prefetchOn && !reported && done && html`<span class="sc-src is-missing" title=${NO_PART_TIP}>no part</span>`}</span>
+    <span class="sc-g"><span class="sc is-active">Active searches <b>×${active}</b></span>
     ${searchedAnyway !== null && html`<span class=${"sc-src" + (searchedAnyway ? " is-anyway" : " is-confirmed")}
-      title=${ANYWAY_TIP}>${searchedAnyway ? "searched anyway" : "used the prefetch"}</span>`}
+      title=${ANYWAY_TIP}>${searchedAnyway ? "searched anyway" : "used the prefetch"}</span>`}</span>
   </p>`;
 }
 
@@ -178,8 +178,9 @@ function Field({ f, value, error, onValue, disabled }) {
   } else if (f.type === "langs" || f.type === "list" || f.type === "boolOrLangs") {
     input = html`<${ListField} id=${id} value=${value} f=${f} disabled=${disabled} onValue=${onValue} />`;
   } else if (f.type === "readonly") {
-    input = value
-      ? html`<pre id=${id} class="fld-ro">${JSON.stringify(value, null, 1)}</pre>`
+    input = value && typeof value === "object"
+      ? html`<ul id=${id} class="fld-ro">${Object.entries(value).map(([index, c]) => html`<li key=${index}>
+          <code>${index}</code> ${capturedLine(c)}</li>`)}</ul>`
       : html`<span id=${id} class="fld-ro is-empty">none yet</span>`;
   } else if (f.type === "json") {
     input = html`<${JsonField} id=${id} value=${value} disabled=${disabled} onValue=${onValue} />`;
@@ -192,6 +193,13 @@ function Field({ f, value, error, onValue, disabled }) {
     <label for=${id}>${f.label}</label>${input}
     ${(error || hinted) && html`<span class="fld-hint">${error || f.hint}</span>`}
   </div>`;
+}
+
+/** one index's captured settings: its languages, its indexLanguages, and when the server read them */
+function capturedLine(c) {
+  const langs = (xs) => (Array.isArray(xs) && xs.length ? xs.join(", ") : "none");
+  const at = c && c.capturedAt ? String(c.capturedAt).slice(0, 16).replace("T", " ") : "";
+  return `languages ${langs(c && c.languages)} · indexLanguages ${langs(c && c.indexLanguages)}${at ? ` · ${at}` : ""}`;
 }
 
 /** a list typed as comma-separated text, kept as typed so a trailing comma survives */
