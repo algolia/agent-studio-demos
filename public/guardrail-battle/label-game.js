@@ -190,6 +190,18 @@
     return rows.sort((a, b) => b.right - a.right || t(a) - t(b));
   }
 
+  /* the one thing the page remembers: your best round, a number. Never a
+     label, never a message, never a key; private mode just forgets it */
+  const BEST_KEY = "gb-best-round";
+  const best = {
+    read() {
+      try { return parseInt(global.localStorage.getItem(BEST_KEY), 10) || 0; } catch (e) { return 0; }
+    },
+    save(n) {
+      try { if (n > best.read()) global.localStorage.setItem(BEST_KEY, String(n)); } catch (e) { /* private mode */ }
+    },
+  };
+
   /* ── the DOM half ──────────────────────────────────────────────── */
 
   const GLOSS = {
@@ -305,7 +317,7 @@
       S.picking = on;
       R.card.classList.toggle("picking", on);
       R.cats.classList.toggle("picking", on);
-      R.hint.textContent = on ? `Pick a reason, 1 to ${cats.length}. Or press B again for none.` : "";
+      R.hint.textContent = on ? "Pick a reason below, or Block again for none." : "";
     }
 
     function bump(node) {
@@ -346,6 +358,7 @@
       const it = S.cur;
       const rec = { id: it.id, verdict, category: verdict === "blocked" ? category || null : null, ms: Math.round(elapsed()) };
       S.events.push(rec);
+      status("");
       const st = hud(), last = st.rows[st.rows.length - 1];
       bump(R.streak);
       if (last.pts) {
@@ -524,6 +537,6 @@
 
   global.GuardrailGame = {
     ROUND, FAST_MS, GLOSS, sampleRound, replay, commits, lastLabeled, score, median,
-    labelRows, labelsCsv, raceCases, versus, mount,
+    labelRows, labelsCsv, raceCases, versus, best, BEST_KEY, mount,
   };
 })(window);

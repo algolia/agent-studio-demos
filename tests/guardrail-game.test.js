@@ -5,6 +5,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 require("./load.js");
 
@@ -156,4 +157,21 @@ test("a file to label needs only a message column", () => {
   assert.deepEqual(only.cases.map((c) => [c.message, c.expected]), [["hi there", ""]]);
   // the race still insists on a label
   assert.match(C.validate(C.parse("message\nhi\n")).errors[0], /expected/);
+});
+
+test("the game remembers one number, the best round, and nothing else", () => {
+  const src = fs.readFileSync(path.join(DIR, "label-game.js"), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+  const uses = src.match(/localStorage\.\w+\([^)]*\)/g);
+  assert.deepEqual(uses, ["localStorage.getItem(BEST_KEY)", "localStorage.setItem(BEST_KEY, String(n)"]);
+  for (const re of [/sessionStorage/, /indexedDB/, /document\.cookie/, /console\./, /fetch\(/]) assert.equal(re.test(src), false, `${re}`);
+  // no storage at all (Node here, private mode in a browser): reads 0, saving is a no-op
+  assert.equal(G.best.read(), 0);
+  assert.doesNotThrow(() => G.best.save(9));
+  const store = {};
+  globalThis.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; } };
+  try {
+    G.best.save(6); G.best.save(4);
+    assert.equal(G.best.read(), 6);
+    assert.deepEqual(Object.keys(store), [G.BEST_KEY]);
+  } finally { delete globalThis.localStorage; }
 });
