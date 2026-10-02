@@ -9,7 +9,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 
 | Demo | Path | Status |
 | --- | --- | --- |
-| What is Agent Studio? | `/main-demo/` | Local |
+| What is Agent Studio? | `/main-demo/` | Live on a review build |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
 
