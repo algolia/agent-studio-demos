@@ -1,0 +1,3 @@
+# Cloudflare Pages redirects. The page keeps its old address working.
+/guardrail-battle /guardrails-arena/ 301
+/guardrail-battle/* /guardrails-arena/:splat 301
