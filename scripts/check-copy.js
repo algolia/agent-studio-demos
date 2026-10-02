@@ -72,6 +72,7 @@ const JS_FILES = [
   "shared/format.mjs", "jev-attributes/app.js", "jev-attributes/attrs.mjs",
   "jev-attributes/client.mjs", "jev-attributes/byok.mjs", "jev-attributes/search.mjs",
   "guardrail-battle/app.js", "guardrail-battle/live.js", "guardrail-battle/live-ui.js", "guardrail-battle/race-charts.js",
+  "guardrail-battle/label-game.js",
 ];
 
 /* ── Text extraction ──────────────────────────────────────────── */
