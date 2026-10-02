@@ -12,8 +12,9 @@
 
    LOCAL adds what a visitor would bring: when a /relay request carries no
    Authorization header, the owner's Jev key (JEV_API_KEY) goes on it here.
-   It also answers /api/status (how the page knows it is local) and
-   /api/search (Algolia with the owner's search key, else factbook.jsonl).
+   It also answers /api/status (how the page knows it is local), /api/search
+   and /api/object (Algolia with the owner's search key, else
+   factbook.jsonl).
    It never serves shared/config.js. It binds loopback only, and answers 403
    to any Host header but 127.0.0.1, localhost or [::1] on its own port.
 
@@ -29,7 +30,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { load, describe } from "./keys.mjs";
-import { search } from "./algolia.mjs";
+import { search, getObject } from "./algolia.mjs";
 import { relay, MAX_BODY } from "../../functions/relay/[[path]].js";
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "public");
@@ -159,10 +160,22 @@ export function createServer({ mode = "local", keys = {} } = {}) {
   }
 
   async function apiSearch(req, res) {
-    const q = String(new URL(req.url, "http://x").searchParams.get("q") || "").trim().slice(0, MAX_QUESTION);
+    const sp = new URL(req.url, "http://x").searchParams;
+    const q = String(sp.get("q") || "").trim().slice(0, MAX_QUESTION);
+    const kind = sp.get("kind") === "records" ? "records" : "fields";
     if (!q) return send(res, 400, { error: "empty question" }, "application/json");
     try {
-      send(res, 200, await search(searchKeys, q), "application/json");
+      send(res, 200, await search(searchKeys, q, kind), "application/json");
+    } catch (err) {
+      send(res, 502, { error: err.message }, "application/json");
+    }
+  }
+
+  async function apiObject(req, res) {
+    const id = String(new URL(req.url, "http://x").searchParams.get("id") || "");
+    if (!/^[A-Za-z0-9_-]{1,16}$/.test(id)) return send(res, 400, { error: "bad objectID" }, "application/json");
+    try {
+      send(res, 200, await getObject(searchKeys, id), "application/json");
     } catch (err) {
       send(res, 502, { error: err.message }, "application/json");
     }
@@ -180,6 +193,7 @@ export function createServer({ mode = "local", keys = {} } = {}) {
       }, "application/json");
     }
     if (mode === "local" && u.pathname === "/api/search" && req.method === "GET") return void apiSearch(req, res);
+    if (mode === "local" && u.pathname === "/api/object" && req.method === "GET") return void apiObject(req, res);
     if (u.pathname === "/") { res.writeHead(302, { Location: "/jev-attributes/" }); return res.end(); }
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed");
     serveStatic(req, res, mode);

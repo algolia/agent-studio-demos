@@ -20,7 +20,7 @@
 import { ms, grouped } from "../shared/format.mjs";
 import { SECTIONS, sectionState, sectionQuestions, pickSections, sectionSizes, trimTotals } from "./attrs.mjs";
 import { relayTransport, systemOne } from "./client.mjs";
-import { createBrowserSearch } from "./search.mjs";
+import { createBrowserCatalog } from "./search.mjs";
 import { createKeyStore, jwtExpiry } from "./byok.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -52,7 +52,7 @@ const SCENARIOS = [
   "What languages are spoken in Switzerland?",
 ];
 
-const MAX_RECORDS = 2;
+const MAX_RECORDS = 3;
 /* the stage's scale: the sections of the biggest record on screen add up to STAGE_PX; style.css sets the floor a block never goes under */
 const STAGE_PX = 300;
 const RELAY_SRC = "https://github.com/algolia/agent-studio-demos/blob/main/functions/relay/%5B%5Bpath%5D%5D.js";
@@ -95,7 +95,7 @@ async function detectMode() {
     app.mode = "local";
     app.localKey = Boolean(local.ready && local.ready.jev);
     app.search = async (q) => {
-      const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const r = await fetch(`/api/search?q=${encodeURIComponent(q)}&kind=fields`);
       if (!r.ok) throw new Error(`search HTTP ${r.status}`);
       return r.json();
     };
@@ -111,8 +111,9 @@ async function detectMode() {
     document.head.append(s);
   });
   const cfg = window.DEMO_CONFIG && window.DEMO_CONFIG.jevAttributes;
-  app.search = cfg && cfg.appId && cfg.searchKey
-    ? createBrowserSearch(cfg)
+  const catalog = cfg && cfg.appId && cfg.searchKey ? createBrowserCatalog(cfg) : null;
+  app.search = catalog
+    ? (q) => catalog.search(q, "fields")
     : async () => { throw new Error("This site has no Factbook search key yet."); };
 }
 
