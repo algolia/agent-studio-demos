@@ -140,7 +140,7 @@ function keyState() {
 /** why Ask cannot run right now, or null */
 function blocked() {
   if (app.mode === "local") return app.localKey ? null : "The local server has no Jev key.";
-  if (app.relay !== "on") return "The relay is off on this site.";
+  if (app.relay !== "on") return "Forwarding is off on this site.";
   const st = keyState().cls;
   if (st === "missing") return "Add your Jev key first.";
   if (st === "expired") return "Your Jev key has expired.";
@@ -157,8 +157,8 @@ function renderKeycard() {
       k.append(h("p.kc-line", null, h(`span.pill.is-${app.localKey ? "set" : "missing"}`, null, app.localKey ? "set" : "not set"),
         app.localKey ? "Key held by the local server." : "The local server has no Jev key. Set JEV_API_KEY, then restart it."));
     } else {
-      k.append(h("p.kc-line", null, h("span.pill.is-off", null, "relay off"),
-        "The relay is off on this site, so Jev is out of reach here. ",
+      k.append(h("p.kc-line", null, h("span.pill.is-off", null, "forwarding off"),
+        "Forwarding is off on this site, so Jev is out of reach here. ",
         h("a", { href: README_RUN, target: "_blank", rel: "noopener" }, "Run it locally"), " to try it."));
     }
     return;
@@ -189,8 +189,9 @@ function renderKeycard() {
       h("label.sr-only", { for: "keep" }, "Where to keep it"), keep,
       h("button.linkish", { type: "button", onclick: () => { app.keys.forget(); renderKeycard(); updateGo(); } }, "Forget")),
     h("p.kc-help", null, "Get a key at ", h("a", { href: TYPESAFE, target: "_blank", rel: "noopener" }, "typesafe.ai"),
-      "; it leaves this browser only to reach TypeSafe through ",
-      h("a", { href: RELAY_SRC, target: "_blank", rel: "noopener" }, "this site's relay"), "."));
+      "; it leaves this browser only to reach TypeSafe. ",
+      h("a", { href: RELAY_SRC, target: "_blank", rel: "noopener" }, "This site forwards it"),
+      ", because TypeSafe does not answer browsers directly."));
 }
 
 function paintKeyState() {
@@ -270,7 +271,7 @@ function plainError(message) {
   const m = String(message).match(/HTTP (\d{3})/);
   const code = m ? Number(m[1]) : null;
   if (code === 401 || code === 403) return `Jev refused the key (HTTP ${code}).`;
-  if (code === 404) return "The relay is off on this site (HTTP 404).";
+  if (code === 404) return "Forwarding is off on this site (HTTP 404).";
   if (code === 429) return "Jev is rate limiting this key (HTTP 429). Try again in a minute.";
   return String(message).slice(0, 160);
 }
