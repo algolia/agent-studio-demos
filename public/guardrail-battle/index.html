@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guardrail battle&nbsp;— Agent Studio demos</title>
+<meta name="description" content="Race up to ten models on the same guardrail rules and the same test messages, on your own Agent Studio app, with intervals and paired tests on the result.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/tokens.css">
+<link rel="stylesheet" href="style.css">
+<script>
+  /* Resolve the theme before first paint, or the page flashes the wrong one.
+     Same storage key as the other demos, so a choice carries across the site. */
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
+    var dark = saved ? saved === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+</head>
+<body>
+<a class="skip" href="#panels">Skip to the content</a>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="masthead-tools">
+      <a class="theme-toggle" href="../"><span class="glyph" aria-hidden="true">←</span> All demos</a>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">
+        <span class="glyph" id="theme-glyph" aria-hidden="true">◐</span>
+        <span id="theme-label">Dark</span>
+      </button>
+    </div>
+    <p class="eyebrow">Agent Studio · guardrails</p>
+    <h1>Guardrail battle</h1>
+    <p class="lede">
+      Give several models the same guardrail rules and the same test messages.
+      See which one blocks the right ones, how sure that result is, and how fast.
+    </p>
+  </div>
+</header>
+
+<main class="page" id="panels">
+  <div class="tabs" role="tablist" aria-label="Page section">
+    <button class="tab" role="tab" id="tab-howto" data-mode="howto" aria-controls="howto" aria-selected="true">How-to</button>
+    <button class="tab" role="tab" id="tab-live" data-mode="live" aria-controls="live" aria-selected="false">Live demo</button>
+  </div>
+
+  <section id="howto" role="tabpanel" aria-labelledby="tab-howto">
+    <p class="scope">One tuning run on a synthetic outdoor shop. Same five steps on your app in the Live demo.</p>
+    <ol class="steps" id="howto-steps"><li><p class="wait">Loading the run…</p></li></ol>
+    <div class="toolbar">
+      <button class="primary" type="button" data-mode="live">Race models on your app</button>
+      <span class="meta">Synthetic exam, one run. Intervals are 95%, axes run 0–100%.</span>
+    </div>
+  </section>
+
+  <section id="live" role="tabpanel" aria-labelledby="tab-live" hidden>
+    <ul class="honesty safe">
+      <li>Use a test app and a short-lived key. Delete the key after.</li>
+      <li>The key and your messages stay in this tab and go only to your app.</li>
+      <li>Synthetic or public messages only. Each allowed message runs a full answer and uses tokens.</li>
+    </ul>
+
+    <h2>1 · Connect your app</h2>
+    <div class="lv-form">
+      <label>Region
+        <select id="lv-region"><option value="eu">EU</option><option value="us">US</option></select>
+      </label>
+      <label>Application ID <input id="lv-app" type="text" spellcheck="false" autocomplete="off"></label>
+      <label>API key <input id="lv-key" type="password" spellcheck="false" autocomplete="off"></label>
+      <p class="note wide">The key needs search and editSettings. Racing your own agents needs search only.</p>
+      <div class="wide lv-row">
+        <button type="button" id="lv-connect">Connect app</button>
+        <button type="button" id="lv-forget">Forget keys</button>
+        <span class="meta" id="lv-conn" role="status"></span>
+      </div>
+    </div>
+
+    <h2>2 · Pick the fighters</h2>
+    <div class="lv-form">
+      <label class="radio"><input type="radio" name="lv-mode" id="lv-mode-temp" checked> Models, each on a temporary agent</label>
+      <label class="radio"><input type="radio" name="lv-mode" id="lv-mode-own"> My own agents</label>
+    </div>
+    <div id="lv-temp">
+      <div class="lv-form">
+        <label>Guardrail rules for every model
+          <select id="lv-rules"><option value="demo:final">Tuned rules (final)</option><option value="demo:r0">Starting rules (round 0)</option></select>
+        </label>
+        <label>Filter models <input id="lv-mq" type="search" spellcheck="false" placeholder="name or provider"></label>
+        <div class="lv-row lv-end">
+          <button type="button" id="lv-suggest">Suggest a lineup</button>
+          <button type="button" id="lv-none">Clear</button>
+          <span class="meta" id="lv-count"></span>
+        </div>
+      </div>
+      <div class="lv-list" id="lv-models"></div>
+      <p class="note">Up to ten. Each one races on its own agent named EVAL_GUARDRAILS_…, deleted after the race.
+        <button type="button" id="lv-cleanup">Delete leftovers</button></p>
+    </div>
+    <div id="lv-own" hidden>
+      <div class="lv-form">
+        <label class="wide">Search your agents <input id="lv-q" type="search" spellcheck="false" placeholder="name, model or ID"></label>
+      </div>
+      <div class="lv-list" id="lv-list"></div>
+      <div class="lv-form">
+        <label class="wide">Agent IDs, ticked above or pasted, up to ten
+          <textarea id="lv-agents" rows="3" spellcheck="false" placeholder="one agent ID per line"></textarea>
+        </label>
+      </div>
+    </div>
+
+    <h2>3 · Pick the exam</h2>
+    <div class="lv-form">
+      <label class="radio"><input type="radio" name="lv-src" id="lv-src-ex" checked> The how-to's synthetic exam</label>
+      <label class="radio"><input type="radio" name="lv-src" id="lv-src-csv"> My CSV
+        <input type="file" id="lv-file" accept=".csv,text/csv"></label>
+      <div class="lv-row"><button type="button" id="lv-download">Download the example CSV</button></div>
+      <label>Messages per fighter <input id="lv-size" type="number" min="1" max="200" value="40"></label>
+      <label>Reruns <input id="lv-reps" type="number" min="1" max="5" value="2"></label>
+    </div>
+    <p class="note">CSV columns: message, expected (allowed or blocked), category, note. Read in this tab, never uploaded. Two reruns or more show how stable each verdict is.</p>
+    <div id="lv-preview"></div>
+
+    <h2>4 · Race</h2>
+    <div class="toolbar">
+      <button class="primary" type="button" id="lv-run">Start the race</button>
+      <button type="button" id="lv-stop" disabled>Stop</button>
+      <button type="button" id="lv-more" disabled>Rerun once more</button>
+      <button type="button" id="lv-export" disabled>Download results (CSV)</button>
+      <span class="meta" id="lv-status" role="status"></span>
+    </div>
+    <div id="lv-lanes"></div>
+    <div id="lv-summary"></div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="page">
+    <p>
+      The how-to is a frozen synthetic run, served from <code>data/</code> next
+      to this page. Only the live demo calls a model: yours.
+    </p>
+  </div>
+</footer>
+
+<script src="csv.js"></script>
+<script src="stats.js"></script>
+<script src="live.js"></script>
+<script src="race-charts.js"></script>
+<script src="app.js"></script>
+<script src="live-ui.js"></script>
+</body>
+</html>
