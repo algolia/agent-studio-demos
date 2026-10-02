@@ -190,6 +190,17 @@
     return rows.sort((a, b) => b.right - a.right || t(a) - t(b));
   }
 
+  /* ── the exam, shared by the Arena and the Game; each page fetches it ── */
+
+  /** the exam as game items: the gold rides along for the reveal, never on screen before it */
+  const examItems = (data) => data.cases.map((c, i) => ({
+    id: i, text: c.text, gold: c.gold, expected: c.gold, category: c.category, note: c.slice,
+    difficulty: c.difficulty, slice: c.slice,
+  }));
+  /** the exam's reasons, keyed 1 to 6 in the order of the Arena's rules */
+  const EXAM_CATS = ["off_topic", "competitor_promotion", "pii_solicitation", "unauthorized_commitment", "jailbreak", "harmful_content"]
+    .map((name) => ({ name }));
+
   /* the one thing the page remembers: your best round, a number. Never a
      label, never a message, never a key; private mode just forgets it */
   const BEST_KEY = "gb-best-round";
@@ -220,6 +231,28 @@
   const wait = (t) => new Promise((r) => setTimeout(r, t));
   const now = () => performance.now();
   const calm = () => global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /** the round's misses, each with the right answer; an unsure answer counts as a miss */
+  function missedHtml(items, labels) {
+    const missed = items.filter((it) => { const l = labels.get(it.id); return l && l.verdict !== it.gold; });
+    if (!missed.length) return "<p>No misses. Try another round.</p>";
+    return `<h3>What you missed (${missed.length})</h3><ol class="gm-miss">${missed.map((it) => {
+      const l = labels.get(it.id);
+      return `<li><p>${esc(it.text)}</p><span class="lab ${l.verdict === "unsure" ? "sl" : l.verdict}">you: ${l.verdict}</span>` +
+        `<span class="lab ${it.gold}">answer: ${it.gold}${it.gold === "blocked" ? ` · ${esc(human(it.category))}` : ""}</span>` +
+        `<span class="lab sl">${esc(it.difficulty)} · ${esc(human(it.slice))}</span></li>`;
+    }).join("")}</ol>`;
+  }
+
+  /** hand the reader a file made in this tab; nothing leaves it */
+  function save(name, text, type = "text/csv") {
+    const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: name });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   /* one game takes the keyboard at a time: the last one started or touched */
   let active = null;
@@ -537,6 +570,6 @@
 
   global.GuardrailGame = {
     ROUND, FAST_MS, GLOSS, sampleRound, replay, commits, lastLabeled, score, median,
-    labelRows, labelsCsv, raceCases, versus, best, BEST_KEY, mount,
+    labelRows, labelsCsv, raceCases, versus, best, BEST_KEY, examItems, EXAM_CATS, missedHtml, save, mount,
   };
 })(window);

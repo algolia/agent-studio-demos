@@ -35,7 +35,6 @@
   const ci = (r) => (r && r.ci ? `${p1(r.ci[0])}–${p1(r.ci[1])}` : "–");
   const ms = (x) => (x == null ? "–" : x >= 10000 ? `${(x / 1000).toFixed(1)}\u00a0s` : `${Math.round(x)}\u00a0ms`);
   const secs = (x) => (x == null ? "–" : `${(x / 1000).toFixed(1)}\u00a0s`);
-  const human = (x) => String(x || "").replace(/_/g, " ");
   const f = (...a) => window.fetch(...a);
   const MAX_CALLS = 4000;
 
@@ -64,23 +63,9 @@
   };
   const exampleCases = async () => (await heldoutData()).cases
     .map((c) => ({ message: c.text, expected: c.gold, category: c.category, note: c.slice }));
-  /** the exam as game items: the gold rides along for the reveal, never on screen before it */
-  const examItems = async () => (await heldoutData()).cases.map((c, i) => ({
-    id: i, text: c.text, gold: c.gold, expected: c.gold, category: c.category, note: c.slice,
-    difficulty: c.difficulty, slice: c.slice,
-  }));
-  /** the exam's reasons, keyed 1 to 6 in the order of the Arena's rules */
-  const DEMO_CATS = ["off_topic", "competitor_promotion", "pii_solicitation", "unauthorized_commitment", "jailbreak", "harmful_content"]
-    .map((name) => ({ name }));
-
-  function download(name, text) {
-    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
-    const a = Object.assign(document.createElement("a"), { href: url, download: name });
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
+  const examItems = async () => Gm.examItems(await heldoutData());
+  const DEMO_CATS = Gm.EXAM_CATS;
+  const download = (name, text) => Gm.save(name, text);
 
   /** half allowed, half blocked where the set allows it, so both error rates get an n */
   function pick(cases, k) {
@@ -579,15 +564,7 @@
         ? '<p class="nudge">Connected. Play again and the models take the same 10 as you.</p>'
         : '<p class="nudge">Connect your app above to see models take the same 10.</p>';
     }
-    const missed = items.filter((it) => { const l = labels.get(it.id); return l && l.verdict !== it.gold; });
-    h += missed.length
-      ? `<h3>What you missed (${missed.length})</h3><ol class="gm-miss">${missed.map((it) => {
-        const l = labels.get(it.id);
-        return `<li><p>${esc(it.text)}</p><span class="lab ${l.verdict === "unsure" ? "sl" : l.verdict}">you: ${l.verdict}</span>` +
-          `<span class="lab ${it.gold}">answer: ${it.gold}${it.gold === "blocked" ? ` · ${esc(human(it.category))}` : ""}</span>` +
-          `<span class="lab sl">${esc(it.difficulty)} · ${esc(human(it.slice))}</span></li>`;
-      }).join("")}</ol>`
-      : "<p>No misses. Try another round.</p>";
+    h += Gm.missedHtml(items, labels);
     h += '<div class="toolbar"><button type="button" class="primary" data-act="again">Play again</button>' +
       '<button type="button" data-r="undo">Undo the last answer</button></div>';
     game.endEl.innerHTML = h;
