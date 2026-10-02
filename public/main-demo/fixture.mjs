@@ -48,40 +48,53 @@ const ANSWER = [
 /* check-copy: on */
 
 /**
- * The event script for one turn. With `prefetch` on, the search ran before
- * the model was called, so the first model step goes straight to grouping
- * the hits. The backend streams that search as a regular tool call and
- * result, its call id starting with `prefetch_`, before the first model step.
+ * The event script for one turn. With `prefetch` on, the stream opens with a
+ * `data-search_prefetch` part, then the search the backend ran before the
+ * model was called, as a regular tool call and result whose id is the part's
+ * `toolCallId` (it starts with `prefetch_`). The first model step goes
+ * straight to grouping the hits, and the part comes again before `finish`
+ * with `agentSearchedAnyway`.
  *
  * `missed` plays the other outcome: the prefetched hits were poor, so the
  * model searched anyway and prefetch cost time instead of saving it. The
  * replay treats a question with a budget or an age as one (see `prefetchMisses`).
+ * A question under two words is skipped, as the backend's token gate does.
  */
 export function fixtureEvents({ prefetch = false, query = "", missed = false } = {}) {
   const ev = [];
   let t = 160;
   const at = (dt, e) => { t += dt; ev.push([t, e]); };
+  const q = query || "running shoes under 100";
+  const tool = "algolia_search_index_products";
+  const skipped = prefetch && fixtureSkips(q);
+  const injected = prefetch && !skipped;
+  const id = "prefetch_fx";
+  const part = (extra) => ({ type: "data-search_prefetch", id: "search_prefetch", data: {
+    decision: skipped ? "skipped_too_few_tokens" : "injected_candidate",
+    nbHits: skipped ? 0 : FIXTURE_HITS.length, latencyMs: skipped ? 0.4 : 212.4,
+    ...(skipped ? {} : { toolName: tool, index: "products", toolCallId: id }), ...extra } });
   at(0, { type: "start", messageId: "fx-msg" });
-  if (prefetch) {
-    const id = "prefetch_fx";
-    at(0, { type: "tool-input-available", toolCallId: id, toolName: "algolia_search_index",
-      input: { index: "products", query: query || "running shoes under 100" } });
+  if (prefetch) at(skipped ? 5 : 210, part({}));
+  if (injected) {
+    at(0, { type: "tool-input-start", toolCallId: id, toolName: tool });
+    at(0, { type: "tool-input-delta", toolCallId: id, inputTextDelta: JSON.stringify({ query: q }) });
+    at(0, { type: "tool-input-available", toolCallId: id, toolName: tool, input: { query: q },
+      providerMetadata: { agentStudio: { source: "prefetch" } } });
     at(0, { type: "tool-output-available", toolCallId: id,
       output: { hits: FIXTURE_HITS, nbHits: FIXTURE_HITS.length } });
   }
-  // the prefetched search runs before the model's first call, and costs its time either way
-  at(prefetch ? 60 : 10, { type: "start-step" });
-  if (!prefetch || missed) {
-    at(620, { type: "tool-input-start", toolCallId: "fx-call-search", toolName: "algolia_search_index" });
+  at(10, { type: "start-step" });
+  const searches = !injected || missed;
+  if (searches) {
+    at(620, { type: "tool-input-start", toolCallId: "fx-call-search", toolName: tool });
     at(60, { type: "tool-input-delta", toolCallId: "fx-call-search", inputTextDelta: "{\"query\":" });
-    at(40, { type: "tool-input-available", toolCallId: "fx-call-search", toolName: "algolia_search_index",
-      input: { index: "products", query: query || "running shoes under 100" } });
+    at(40, { type: "tool-input-available", toolCallId: "fx-call-search", toolName: tool, input: { query: q } });
     at(380, { type: "tool-output-available", toolCallId: "fx-call-search",
       output: { hits: FIXTURE_HITS, nbHits: FIXTURE_HITS.length, queryID: "fx-query" } });
     at(10, { type: "finish-step" });
     at(10, { type: "start-step" });
   }
-  const groupStart = !prefetch || missed ? 700 : 540;
+  const groupStart = searches ? 700 : 540;
   at(groupStart, { type: "tool-input-start", toolCallId: "fx-call-group", toolName: "algolia_grouped_results" });
   // the model writes this payload token by token, and the widget draws it as it grows
   const raw = JSON.stringify({ intro: INTRO, groups: GROUPS });
@@ -98,6 +111,7 @@ export function fixtureEvents({ prefetch = false, query = "", missed = false } =
   for (const d of ANSWER) at(90, { type: "text-delta", id: "fx-text", delta: d });
   at(20, { type: "text-end", id: "fx-text" });
   at(10, { type: "finish-step" });
+  if (injected) at(5, part({ agentSearchedAnyway: Boolean(missed) }));
   at(10, { type: "finish" });
   ev.push([t + 5, "[DONE]"]);
   return ev;
@@ -109,6 +123,11 @@ export function fixtureEvents({ prefetch = false, query = "", missed = false } =
  */
 export function prefetchMisses(query) {
   return /\b(under|budget)\b|\byears? old\b/i.test(String(query || ""));
+}
+
+/** fewer than two words of three letters or more: the replay's stand-in for the token gate */
+export function fixtureSkips(query) {
+  return String(query || "").split(/\s+/).filter((w) => w.length > 2).length < 2;
 }
 
 /** a fetch that answers every completions call with the script above */

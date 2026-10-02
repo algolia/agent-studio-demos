@@ -22,7 +22,7 @@ import {
   resolveCustom, customKey, customName,
 } from "./configs.mjs";
 import { apiClient, ensureCustomAgent, loadLocal, saveLocal } from "./agents.mjs";
-import { createSseParser, createTurn, ms, searchCounts } from "./stream.mjs";
+import { createSseParser, createTurn, decisionLabel, ms, searchCounts } from "./stream.mjs";
 import { createFixtureFetch } from "./fixture.mjs";
 import { pick, imageCandidates, fieldsFrom, priceText, lineText } from "./fields.mjs";
 import { decode as decodeBlurhash } from "blurhash";
@@ -90,7 +90,7 @@ function Timeline({ view, fixture }) {
       <p class="tl-legend">Timings appear here after the first message.</p></div>`;
   }
   const pct = (t) => `${Math.min(100, Math.max(0, (t / view.span) * 100))}%`;
-  const kind = (x) => (x.error ? " is-error" : x.prefetched ? " is-prefetch" : x.search ? " is-search" : " is-other");
+  const kind = (x) => (x.error ? " is-error" : x.passive ? " is-prefetch" : x.search ? " is-search" : " is-other");
   let n = 0;
   const numbered = view.tools.map((x) => ({ ...x, nth: x.search ? ++n : 0 }));
   return html`<div class=${"tl is-" + view.status}>
@@ -121,7 +121,10 @@ function Timeline({ view, fixture }) {
 
 /* ── Prefetch: which lane has it, and what it did ─────────────── */
 
-const INFERRED_TIP = "Read off this lane's config. The backend does not stream its prefetch decision yet.";
+/* check-copy: off */
+const NO_PART_TIP = "This lane's agent has prefetch on, but the backend streamed no data-search_prefetch part.";
+const ANYWAY_TIP = "agentSearchedAnyway, from the prefetch part the backend sends again at the end of the turn.";
+/* check-copy: on */
 
 /** who searched this turn: the platform before the model (passive), or the model itself (active) */
 function Searches({ counts, view, prefetchOn }) {
@@ -130,29 +133,28 @@ function Searches({ counts, view, prefetchOn }) {
       ? "Searches once before the model's first call, then lets the model search more"
       : "The model runs every search itself"}</p>`;
   }
-  const { passive, active, confirmed, part } = counts;
+  const { passive, active, part, searchedAnyway, reported } = counts;
+  const done = view.status === "done" || view.status === "error";
   return html`<p class="searches">
     <span class=${"sc is-passive" + (passive ? " is-on" : "")}>Passive search <b>×${passive}</b></span>
-    ${prefetchOn && !confirmed && html`<span class="sc-src" title=${INFERRED_TIP}>inferred</span>`}
-    <${PrefetchPart} part=${part} />
+    ${part && html`<${PrefetchPart} part=${part} />`}
+    ${prefetchOn && !reported && done && html`<span class="sc-src is-missing" title=${NO_PART_TIP}>no part</span>`}
     <span class="sc is-active">Active searches <b>×${active}</b></span>
+    ${searchedAnyway !== null && html`<span class=${"sc-src" + (searchedAnyway ? " is-anyway" : " is-confirmed")}
+      title=${ANYWAY_TIP}>${searchedAnyway ? "searched anyway" : "used the prefetch"}</span>`}
   </p>`;
 }
 
-/**
- * The backend's own account of the prefetch, from a `data-search_prefetch`
- * part: { decision, nbHits, latencyMs, injectionFormat, injected, toolName, index }.
- * Draws nothing until that part exists.
- */
+/** the backend's own account of the prefetch, from its `data-search_prefetch` part */
 function PrefetchPart({ part }) {
-  if (!part) return null;
+  const injected = Boolean(part.toolCallId);
   const bits = [
-    Number.isFinite(part.nbHits) && `${part.nbHits}\u00a0hits`,
+    decisionLabel(part.decision),
+    injected && Number.isFinite(part.nbHits) && `${part.nbHits}\u00a0hits`,
     Number.isFinite(part.latencyMs) && ms(part.latencyMs),
-    part.injectionFormat && String(part.injectionFormat),
   ].filter(Boolean);
-  return html`<span class="sc-src is-confirmed"
-    title=${[part.decision, part.toolName, part.index].filter(Boolean).join(" · ")}>${bits.join(" · ") || "reported"}</span>`;
+  return html`<span class=${"sc-src" + (injected ? " is-confirmed" : " is-skipped")}
+    title=${[part.decision, part.toolName, part.index, part.toolCallId].filter(Boolean).join(" · ")}>${bits.join(" · ")}</span>`;
 }
 
 /* ── The config panel ─────────────────────────────────────────── */
@@ -469,7 +471,6 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
   const busy = view && (view.status === "sending" || view.status === "streaming");
   const chatKey = `${resolution.status}:${resolution.agentId || resolution.key}:${fixture ? "fx" : "live"}:${epoch}`;
   const counts = searchCounts(prefetchOn, view);
-  const evidence = view && view.prefetch;
   useEffect(() => { if (onView) onView({ label, view, counts, prefetchOn, seq: seq.current }); });
 
   return html`<div class=${"lane-inner" + (prefetchOn ? " has-prefetch" : "")}>
@@ -477,7 +478,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
       <div class="lane-id">
         <p class="lane-label">${label}</p>
         <button type="button" class=${"pf-pill" + (prefetchOn ? " is-on" : "")} aria-haspopup="true"
-          title=${evidence ? `${evidence.source}: ${String(evidence.detail || "")}` : "Edit the prefetch block"}
+          title=${counts.part ? decisionLabel(counts.part.decision) : "Edit the prefetch block"}
           onClick=${() => openEditor("search_prefetch")}>
           ${prefetchOn ? "Prefetch on" : "Prefetch off"}
           ${edits && edits.search_prefetch && html`<span class="pf-edited">edited</span>`}</button>

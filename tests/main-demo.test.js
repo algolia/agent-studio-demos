@@ -101,34 +101,56 @@ async function replay(prefetch) {
 test("a base turn: two tool calls with durations, hits, grouped results, then text", async () => {
   const v = await replay(false);
   assert.equal(v.status, "done");
-  assert.deepEqual(v.tools.map((x) => x.name), ["algolia_search_index", "algolia_grouped_results"]);
+  assert.deepEqual(v.tools.map((x) => x.name), ["algolia_search_index_products", "algolia_grouped_results"]);
   assert.ok(v.tools.every((x) => x.duration > 0));
   assert.equal(v.hits.length, 6);
-  assert.equal(v.hitsTool, "algolia_search_index");
+  assert.equal(v.hitsTool, "algolia_search_index_products");
   assert.equal(v.grouped.groups.length, 2);
   assert.ok(v.ttfb < v.ttft && v.ttft < v.total);
-  assert.equal(v.prefetch, null, "no badge without evidence");
+  assert.equal(v.prefetchPart, null, "a prefetch-off agent streams no part");
 });
 
 test("the prefetched search is on the wire, as a tool pair before the first model step", async () => {
   const pp = await replay(true);
-  assert.deepEqual(pp.tools.map((x) => x.name), ["algolia_search_index", "algolia_grouped_results"]);
-  assert.equal(pp.hits.length, 6);
-  assert.ok(pp.tools[0].prefetched);
-  assert.ok(!pp.tools[1].prefetched);
+  assert.deepEqual(pp.tools.map((x) => x.name), ["algolia_search_index_products", "algolia_grouped_results"]);
+  assert.equal(pp.hits.length, 6, "the hits ride on the visible tool output, never on the part");
+  assert.deepEqual(pp.tools.map((x) => x.passive), [true, false]);
+  assert.equal(pp.prefetchParts, 2, "sent up front, then again before finish");
+  assert.equal(pp.prefetchPart.agentSearchedAnyway, false);
+  assert.equal(pp.prefetchPart.hits, undefined);
 });
 
-test("the prefetch badge reads the header and a search_prefetch stream part", async () => {
+test("a part with toolCallId marks exactly that tool call passive, whatever its id looks like", async () => {
   const { createTurn, isPrefetchPart } = await load("stream.mjs");
-  const a = createTurn();
-  a.headers(10, { status: 200, get: (h) => (h === "x-search-prefetch" ? "injected" : null) });
-  assert.deepEqual(a.view().prefetch, { source: "header", detail: "injected" });
+  const t = createTurn();
+  t.observe(1, { type: "data-search_prefetch", id: "search_prefetch",
+    data: { decision: "injected_candidate", nbHits: 3, latencyMs: 180.2, toolName: "algolia_search_index_products",
+      index: "products", toolCallId: "prefetch_abc" } });
+  for (const id of ["prefetch_abc", "prefetch_other", "call_1"]) {
+    t.observe(2, { type: "tool-input-start", toolCallId: id, toolName: "algolia_search_index_products" });
+    t.observe(3, { type: "tool-output-available", toolCallId: id, output: { hits: [] } });
+  }
+  t.finish(10);
+  const v = t.view();
+  assert.deepEqual(v.tools.map((x) => [x.id, x.passive]), [["prefetch_abc", true], ["prefetch_other", false], ["call_1", false]]);
+  assert.equal(v.searches, 2, "only the part's tool call is the passive search");
+  assert.equal(v.toolCalls, 2, "the passive search is not a call the model wrote");
 
-  const b = createTurn();
-  b.observe(5, { type: "data-search-prefetch", data: { nbHits: 7 } });
-  assert.equal(b.view().prefetch.source, "stream");
-  assert.ok(isPrefetchPart({ type: "search_prefetch" }));
+  assert.ok(isPrefetchPart({ type: "data-search_prefetch" }));
   assert.ok(!isPrefetchPart({ type: "data-suggestions" }));
+});
+
+test("the second prefetch part's agentSearchedAnyway wins", async () => {
+  const { createTurn, searchCounts } = await load("stream.mjs");
+  const first = { decision: "injected_candidate", nbHits: 6, latencyMs: 212.4, toolName: "s", index: "products", toolCallId: "prefetch_1" };
+  const t = createTurn();
+  t.observe(1, { type: "data-search_prefetch", id: "search_prefetch", data: first });
+  assert.equal(searchCounts(true, t.view()).searchedAnyway, null, "unknown until the turn ends");
+  t.observe(9, { type: "data-search_prefetch", id: "search_prefetch", data: { ...first, agentSearchedAnyway: true } });
+  const c = searchCounts(true, t.view());
+  assert.equal(c.searchedAnyway, true);
+  assert.equal(c.passive, 1);
+  assert.equal(t.view().prefetchParts, 2);
 });
 
 test("ms() prints milliseconds under a second and seconds above", async () => {
@@ -188,29 +210,37 @@ test("search calls: the model's own are counted, the prefetched pair and grouped
   assert.equal((await replay(true)).searches, 0, "the prefetched pair is not the model's call");
 });
 
-test("search counts: passive for the prefetch, active for the model's own calls, gated means 0", async () => {
-  const { searchCounts, createTurn } = await load("stream.mjs");
-  const { fixtureEvents, prefetchMisses } = await load("fixture.mjs");
-  assert.deepEqual(searchCounts(false, await replay(false)), { passive: 0, active: 1, confirmed: false, part: null });
+test("search counts: passive from the part, active for the model's own calls, skipped means 0", async () => {
+  const { searchCounts, createTurn, decisionLabel } = await load("stream.mjs");
+  const { fixtureEvents, prefetchMisses, fixtureSkips } = await load("fixture.mjs");
+  assert.deepEqual(searchCounts(false, await replay(false)),
+    { passive: 0, active: 1, part: null, searchedAnyway: null, reported: false, expected: false });
   const used = searchCounts(true, await replay(true));
-  assert.equal(used.passive, 1);
-  assert.equal(used.active, 0);
-  assert.equal(used.confirmed, true, "the pair is on the wire");
+  assert.deepEqual([used.passive, used.active, used.searchedAnyway, used.reported], [1, 0, false, true]);
 
   assert.ok(prefetchMisses("A video game for a 10 year old, under $30"));
   assert.ok(!prefetchMisses("A portable bluetooth speaker for the beach"));
-  const script = fixtureEvents({ prefetch: true, missed: true });
-  const turn = createTurn();
-  for (const [t, e] of script) if (e !== "[DONE]") turn.observe(t, e);
-  turn.finish(script[script.length - 1][0]);
-  assert.deepEqual([searchCounts(true, turn.view()).passive, searchCounts(true, turn.view()).active], [1, 1]);
+  const play = (opts) => {
+    const script = fixtureEvents(opts);
+    const turn = createTurn();
+    for (const [t, e] of script) if (e !== "[DONE]") turn.observe(t, e);
+    turn.finish(script[script.length - 1][0]);
+    return searchCounts(true, turn.view());
+  };
+  const missed = play({ prefetch: true, missed: true });
+  assert.deepEqual([missed.passive, missed.active, missed.searchedAnyway], [1, 1, true]);
 
-  const gated = createTurn();
-  gated.observe(5, { type: "data-search_prefetch", data: { decision: "too_few_tokens", injected: false, latencyMs: null } });
-  assert.equal(searchCounts(true, gated.view()).passive, 0);
-  const ran = createTurn();
-  ran.observe(5, { type: "data-search_prefetch", data: { decision: "injected", injected: true, latencyMs: 44, nbHits: 7 } });
-  assert.deepEqual([searchCounts(true, ran.view()).passive, searchCounts(true, ran.view()).confirmed], [1, true]);
+  assert.ok(fixtureSkips("hi"));
+  const skipped = play({ prefetch: true, query: "hi" });
+  assert.deepEqual([skipped.passive, skipped.active, skipped.searchedAnyway], [0, 1, null]);
+  assert.equal(skipped.part.decision, "skipped_too_few_tokens");
+  assert.equal(decisionLabel(skipped.part.decision), "skipped: too few words");
+  assert.equal(decisionLabel("injected_candidate"), "injected");
+  assert.equal(decisionLabel("a_new_reason"), "a_new_reason", "an unknown decision prints as itself");
+
+  // a prefetch agent on a backend that streams no part
+  const silent = searchCounts(true, (await replay(false)));
+  assert.deepEqual([silent.passive, silent.reported, silent.expected], [0, false, true]);
 });
 
 test("model work: LLM steps, the model's tool calls, its tool-input errors, and usage when streamed", async () => {

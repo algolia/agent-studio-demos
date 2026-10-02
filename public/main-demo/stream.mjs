@@ -31,10 +31,37 @@ export function createSseParser(onEvent) {
   };
 }
 
-/** a stream part that says the backend prefetched, in any spelling it may take */
+/**
+ * The backend's account of the prefetch: one `data-search_prefetch` part per
+ * user turn on a prefetch agent, skipped turns included. An injected turn
+ * sends it twice, the second time just before `finish` with
+ * `agentSearchedAnyway`; the same `id` makes the second replace the first.
+ *
+ *   { decision, nbHits, latencyMs, toolName, index, toolCallId, agentSearchedAnyway }
+ *
+ * It never carries hits: the visible search tool parts do, and the
+ * prefetched search is the tool call whose id is `toolCallId`.
+ */
 export function isPrefetchPart(evt) {
-  const t = String((evt && evt.type) || "").toLowerCase().replace(/-/g, "_");
-  return t === "search_prefetch" || t === "data_search_prefetch";
+  return Boolean(evt) && evt.type === "data-search_prefetch";
+}
+
+/* check-copy: off */
+const DECISIONS = {
+  injected_candidate: "injected",
+  skipped_eval_mode: "skipped: eval mode",
+  skipped_no_mcp_tool: "skipped: no MCP search tool",
+  skipped_no_user_turn: "skipped: no user turn",
+  skipped_too_few_tokens: "skipped: too few words",
+  skipped_no_index: "skipped: no index",
+  skipped_no_hits: "skipped: no hits",
+  error: "error",
+};
+/* check-copy: on */
+
+/** a decision as the lane prints it; an unknown one prints as itself */
+export function decisionLabel(decision) {
+  return DECISIONS[decision] || String(decision || "reported");
 }
 
 /** the agent's own search tool, in any of its names (native, per-index, MCP); memory search is not one */
@@ -92,10 +119,10 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
     total: null,
     httpStatus: null,
     cache: null,             // X-Cache, when the backend served a stored answer
-    prefetch: null,          // { source: "header" | "stream" | "persisted-pair", detail }
-    prefetchPart: null,      // payload of a data-search_prefetch part, once the backend streams one
+    prefetchPart: null,      // payload of the latest data-search_prefetch part
+    prefetchParts: 0,        // how many came: 2 on an injected turn, the last with agentSearchedAnyway
     modelCalls: 0,           // start-step events: one per LLM call
-    toolCalls: 0,            // tool-input-start events: calls the model itself wrote
+    started: [],             // tool-input-start ids; the prefetched one is left out of the model's calls
     toolErrors: 0,           // tool-input-error events: calls the model wrote wrong, each one a wasted step
     usage: null,             // { inputTokens, outputTokens }, when the agent streams usage (see usageOf)
     tools: new Map(),        // toolCallId → { name, start, end, error, input }
@@ -126,8 +153,6 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
       s.ttfb = t;
       s.httpStatus = status;
       s.status = status >= 200 && status < 300 ? "streaming" : "error";
-      const pf = get("x-search-prefetch");
-      if (pf) s.prefetch = { source: "header", detail: pf };
       const cache = get("x-cache");
       if (cache) s.cache = cache;
     },
@@ -145,7 +170,7 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
           break;
         case "tool-input-start":
           tool(evt.toolCallId, evt.toolName, t);
-          if (!String(evt.toolCallId || "").startsWith("prefetch_")) s.toolCalls += 1;
+          if (!s.started.includes(evt.toolCallId)) s.started.push(evt.toolCallId);
           break;
         case "tool-input-available": {
           const rec = tool(evt.toolCallId, evt.toolName, t);
@@ -177,14 +202,11 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
           s.errors.push(evt.errorText || "stream error");
           break;
         default:
-          if (isPrefetchPart(evt)) {
-            if (!s.prefetch) s.prefetch = { source: "stream", detail: evt.data || null };
-            if (evt.data && typeof evt.data === "object") s.prefetchPart = evt.data;
+          if (isPrefetchPart(evt) && evt.data && typeof evt.data === "object") {
+            s.prefetchParts += 1;
+            // same id as the first: the turn-end part replaces it, as it does in the Chat widget
+            s.prefetchPart = evt.data;
           }
-      }
-      // persisted_tool_pair streams the fabricated call; its id says what it is
-      if (!s.prefetch && typeof evt.toolCallId === "string" && evt.toolCallId.startsWith("prefetch_")) {
-        s.prefetch = { source: "persisted-pair", detail: evt.toolCallId };
       }
     },
     finish(t, { error } = {}) {
@@ -197,6 +219,7 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
 
 /** the strip's view model: marks along one axis, and the tool rows under it */
 export function viewOf(s) {
+  const passiveId = (s.prefetchPart && s.prefetchPart.toolCallId) || null;
   const tools = s.toolOrder.map((id) => {
     const r = s.tools.get(id);
     // a call still open when the turn ended stops at the turn's end, never past it
@@ -204,8 +227,8 @@ export function viewOf(s) {
     return {
       id, name: r.name, start: r.start, open: r.end === null,
       end, duration: end === null ? null : Math.max(0, end - r.start),
-      error: r.error, prefetched: id.startsWith("prefetch_"),
-      search: !id.startsWith("prefetch_") && isSearchTool(r.name),
+      error: r.error, passive: id === passiveId,
+      search: id !== passiveId && isSearchTool(r.name),
     };
   });
   const span = s.total !== null ? s.total
@@ -219,8 +242,8 @@ export function viewOf(s) {
   return {
     status: s.status, span, marks, tools, searches: tools.filter((x) => x.search).length,
     ttfb: s.ttfb, ttft: s.ttft, total: s.total,
-    prefetch: s.prefetch, prefetchPart: s.prefetchPart, cache: s.cache, errors: s.errors,
-    modelCalls: s.modelCalls, toolCalls: s.toolCalls, toolErrors: s.toolErrors, usage: s.usage,
+    prefetchPart: s.prefetchPart, prefetchParts: s.prefetchParts, cache: s.cache, errors: s.errors,
+    modelCalls: s.modelCalls, toolCalls: s.started.filter((id) => id !== passiveId).length, toolErrors: s.toolErrors, usage: s.usage,
     hits: s.hits, hitsTool: s.hitsTool, grouped: s.grouped,
     httpStatus: s.httpStatus,
   };
@@ -229,22 +252,22 @@ export function viewOf(s) {
 /**
  * The turn's searches, split by who ran them.
  *
- *   passive: the prefetch, run by the platform before the model's first call
+ *   passive: the prefetch, run by the platform before the model's first call;
+ *            1 when the part names the tool call it injected (`toolCallId`)
  *   active:  search calls the model wrote itself
- *   confirmed: the backend said the prefetch ran (a data-search_prefetch part,
- *              or the persisted pair on the wire); otherwise it is inferred
- *              from the lane's config
+ *   searchedAnyway: the turn-end part's `agentSearchedAnyway`, null until it comes
+ *   reported: a part came; a prefetch lane without one is on a backend that
+ *            does not stream it
  *
- * A prefetch the backend gated (too few informative tokens, say) never ran:
- * its part carries no latency, and the passive count is 0.
+ * A prefetch the backend skipped (too few words, no hits) injected nothing:
+ * its part has no toolCallId, and the passive count is 0.
  */
 export function searchCounts(prefetchOn, view) {
   const active = view ? view.searches : 0;
-  const part = view && view.prefetchPart;
-  const onWire = Boolean(view && view.prefetch && view.prefetch.source === "persisted-pair");
-  if (!prefetchOn) return { passive: 0, active, confirmed: false, part: null };
-  if (part) return { passive: Number.isFinite(part.latencyMs) ? 1 : 0, active, confirmed: true, part };
-  return { passive: 1, active, confirmed: onWire, part: null };
+  const part = (view && view.prefetchPart) || null;
+  if (!part) return { passive: 0, active, part: null, searchedAnyway: null, reported: false, expected: prefetchOn };
+  const searchedAnyway = typeof part.agentSearchedAnyway === "boolean" ? part.agentSearchedAnyway : null;
+  return { passive: part.toolCallId ? 1 : 0, active, part, searchedAnyway, reported: true, expected: prefetchOn };
 }
 
 /** "412 ms", "1.9 s" — one rule, so the strip and the report agree */
