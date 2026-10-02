@@ -17,7 +17,7 @@ import { createRoot } from "react-dom/client";
 import htm from "htm";
 import { InstantSearch, Chat, ChatInlineLayout } from "react-instantsearch";
 import {
-  TOGGLES, PREFETCH_FORMATS, BLOCKS, normalize, resolveVariant, completionQuery, agentName,
+  TOGGLES, BLOCKS, normalize, resolveVariant, completionQuery, agentName,
   blockValues, blockFrom, validateBlock, toggleBlocks, effectiveBlocks, isCustom, canonical,
   resolveCustom, customKey, customName,
 } from "./configs.mjs";
@@ -155,15 +155,6 @@ function PrefetchPart({ part }) {
     title=${[part.decision, part.toolName, part.index].filter(Boolean).join(" · ")}>${bits.join(" · ") || "reported"}</span>`;
 }
 
-/** carousels hydrate from search results the page received; tool_pair keeps them server-side */
-function OrphanGroups({ view }) {
-  if (!view || view.status !== "done" || !view.grouped || view.hits.length) return null;
-  const picked = (view.grouped.groups || []).reduce((k, g) => k + ((g && g.results) || []).length, 0);
-  if (!picked) return null;
-  return html`<p class="lane-note">The model grouped <b>${picked}</b> prefetched products. This format keeps
-    those hits on the server, so the carousels have nothing to draw.</p>`;
-}
-
 /* ── The config panel ─────────────────────────────────────────── */
 
 const BLOCK_OF = { prefetch: "search_prefetch", memory: "memory", guardrails: "guardrail", suggestions: "suggestions" };
@@ -238,15 +229,7 @@ function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled,
   const flip = (tgId, id, on) => {
     if (id === "sendUsage") return onEdits({ ...(edits || {}), sendUsage: on });
     if (edits && edits[id]) return onEdits({ ...edits, [id]: { ...edits[id], enabled: on } });
-    if (tgId === "prefetch") return onToggles(normalize({ ...toggles, prefetch: on ? (toggles.lastFormat || "tool_pair") : "off" }));
     return onToggles(normalize({ ...toggles, [tgId]: on }));
-  };
-  const setFormat = (fmt) => {
-    if (edits && edits.search_prefetch) {
-      const v = { ...blockValues("search_prefetch", edits.search_prefetch), injectionFormat: fmt };
-      return onEdits({ ...edits, search_prefetch: blockFrom("search_prefetch", v) });
-    }
-    return onToggles(normalize({ ...toggles, prefetch: fmt }));
   };
   const entry = resolution.entry || {};
   const custom = Boolean(resolution.custom || resolution.status === "custom");
@@ -255,7 +238,6 @@ function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled,
         : html`no agent yet`;
   const rows = [...TOGGLES.map((tg) => ({ tg, id: BLOCK_OF[tg.id], label: tg.label })),
     { tg: null, id: "sendUsage", label: "Stream token usage" }];
-  const sp = blocks.search_prefetch || {};
   return html`<details class="cfg" open=${open} onToggle=${(e) => setOpen(e.target.open)}>
     <summary><span class="cfg-h">Config</span>${custom && html` <span class="badge is-custom">edited</span>`}
       <span class="cfg-how">${how}</span></summary>
@@ -264,11 +246,6 @@ function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled,
         <div class="cfg-row">
           <label class="sw"><input type="checkbox" disabled=${disabled} checked=${enabledOf(id)}
             onChange=${(e) => flip(tg && tg.id, id, e.target.checked)} /><span>${label}</span></label>
-          ${id === "search_prefetch" && html`<select aria-label="Injection format" disabled=${disabled || !enabledOf(id)}
-            value=${sp.enabled ? sp.injectionFormat || "tool_pair" : toggles.lastFormat || "tool_pair"}
-            onChange=${(e) => setFormat(e.target.value)}>
-            ${PREFETCH_FORMATS.map((f) => html`<option key=${f} value=${f}>${f}</option>`)}
-          </select>`}
           ${edits && edits[id] !== undefined && id !== "sendUsage" && html`<span class="badge is-custom">edited</span>`}
           ${id !== "sendUsage" && html`<button type="button" class="btn-link" aria-expanded=${editing === id}
             onClick=${() => setEditing(editing === id ? null : id)}>${editing === id ? "Close" : "Edit"}</button>`}
@@ -370,8 +347,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     if (fixture) return { status: "agent", key: customKey(blocks), agentId: "fixture", entry: { name: customName(blocks) }, custom: true };
     return resolveCustom(blocks, variants, local);
   }, [custom, toggles, variants, blocks, local, fixture]);
-  const sp = blocks.search_prefetch || {};
-  const prefetchFormat = sp.enabled ? sp.injectionFormat || "tool_pair" : "off";
+  const prefetchOn = Boolean(blocks.search_prefetch && blocks.search_prefetch.enabled);
 
   // one redraw per frame, however fast the events come
   const frame = useRef(0);
@@ -384,7 +360,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     if (resolution.status === "missing" || resolution.status === "custom") return null;
     const q = new URLSearchParams(completionQuery()).toString();
     const api = `${cfg.host}/1/agents/${resolution.agentId}/completions?${q}`;
-    const upstream = fixture ? createFixtureFetch({ prefetch: prefetchFormat }) : window.fetch.bind(window);
+    const upstream = fixture ? createFixtureFetch({ prefetch: prefetchOn }) : window.fetch.bind(window);
     const observed = async (url, init) => {
       let text = "";
       try {
@@ -447,7 +423,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
       },
       fetch: observed,
     };
-  }, [resolution.status, resolution.agentId, cfg, fixture, prefetchFormat, redraw]);
+  }, [resolution.status, resolution.agentId, cfg, fixture, prefetchOn, redraw]);
 
   // the page drives the lane through this object, never through React
   useEffect(() => {
@@ -463,8 +439,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
 
   const view = turn ? turn.view() : null;
   const onToggles = (next) => {
-    const lastFormat = next.prefetch !== "off" ? next.prefetch : toggles.prefetch !== "off" ? toggles.prefetch : toggles.lastFormat;
-    setToggles({ ...next, lastFormat });
+    setToggles(next);
     setTurn(null);
   };
   const onEdits = (next) => {
@@ -493,7 +468,6 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
   const openEditor = (id) => { setCfgOpen(true); setEditing(id); };
   const busy = view && (view.status === "sending" || view.status === "streaming");
   const chatKey = `${resolution.status}:${resolution.agentId || resolution.key}:${fixture ? "fx" : "live"}:${epoch}`;
-  const prefetchOn = prefetchFormat !== "off";
   const counts = searchCounts(prefetchOn, view);
   const evidence = view && view.prefetch;
   useEffect(() => { if (onView) onView({ label, view, counts, prefetchOn, seq: seq.current }); });
@@ -505,7 +479,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
         <button type="button" class=${"pf-pill" + (prefetchOn ? " is-on" : "")} aria-haspopup="true"
           title=${evidence ? `${evidence.source}: ${String(evidence.detail || "")}` : "Edit the prefetch block"}
           onClick=${() => openEditor("search_prefetch")}>
-          ${prefetchOn ? html`Prefetch on <code>${prefetchFormat}</code>` : "Prefetch off"}
+          ${prefetchOn ? "Prefetch on" : "Prefetch off"}
           ${edits && edits.search_prefetch && html`<span class="pf-edited">edited</span>`}</button>
       </div>
       <${Searches} counts=${counts} view=${view} prefetchOn=${prefetchOn} />
@@ -529,7 +503,6 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
           ? html`<${CreateAgent} resolution=${resolution} state=${creating} onCreate=${create} />`
           : html`<${Missing} resolution=${resolution} />`}
     </div>
-    <${OrphanGroups} view=${view} />
     <${HitsPanel} view=${view} Card=${Card} />
     <${Wire} turn=${turn} />
   </div>`;

@@ -48,23 +48,21 @@ const ANSWER = [
 /* check-copy: on */
 
 /**
- * The event script for one turn. `prefetch` is the lane's injection format,
- * or "off". With prefetch the search ran before the model was called, so the
- * first model step goes straight to grouping the hits. Only
- * persisted_tool_pair streams that search to the client (its call id starts
- * with `prefetch_`); tool_pair and user_fold keep it server-side, so the
- * client sees no search at all — the same as the real backend.
+ * The event script for one turn. With `prefetch` on, the search ran before
+ * the model was called, so the first model step goes straight to grouping
+ * the hits. The backend streams that search as a regular tool call and
+ * result, its call id starting with `prefetch_`, before the first model step.
  *
  * `missed` plays the other outcome: the prefetched hits were poor, so the
  * model searched anyway and prefetch cost time instead of saving it. The
  * replay treats a question with a budget or an age as one (see `prefetchMisses`).
  */
-export function fixtureEvents({ prefetch = "off", query = "", missed = false } = {}) {
+export function fixtureEvents({ prefetch = false, query = "", missed = false } = {}) {
   const ev = [];
   let t = 160;
   const at = (dt, e) => { t += dt; ev.push([t, e]); };
   at(0, { type: "start", messageId: "fx-msg" });
-  if (prefetch === "persisted_tool_pair") {
+  if (prefetch) {
     const id = "prefetch_fx";
     at(0, { type: "tool-input-available", toolCallId: id, toolName: "algolia_search_index",
       input: { index: "products", query: query || "running shoes under 100" } });
@@ -72,8 +70,8 @@ export function fixtureEvents({ prefetch = "off", query = "", missed = false } =
       output: { hits: FIXTURE_HITS, nbHits: FIXTURE_HITS.length } });
   }
   // the prefetched search runs before the model's first call, and costs its time either way
-  at(prefetch === "off" ? 10 : 60, { type: "start-step" });
-  if (prefetch === "off" || missed) {
+  at(prefetch ? 60 : 10, { type: "start-step" });
+  if (!prefetch || missed) {
     at(620, { type: "tool-input-start", toolCallId: "fx-call-search", toolName: "algolia_search_index" });
     at(60, { type: "tool-input-delta", toolCallId: "fx-call-search", inputTextDelta: "{\"query\":" });
     at(40, { type: "tool-input-available", toolCallId: "fx-call-search", toolName: "algolia_search_index",
@@ -83,7 +81,7 @@ export function fixtureEvents({ prefetch = "off", query = "", missed = false } =
     at(10, { type: "finish-step" });
     at(10, { type: "start-step" });
   }
-  const groupStart = prefetch === "off" || missed ? 700 : 540;
+  const groupStart = !prefetch || missed ? 700 : 540;
   at(groupStart, { type: "tool-input-start", toolCallId: "fx-call-group", toolName: "algolia_grouped_results" });
   // the model writes this payload token by token, and the widget draws it as it grows
   const raw = JSON.stringify({ intro: INTRO, groups: GROUPS });
@@ -114,7 +112,7 @@ export function prefetchMisses(query) {
 }
 
 /** a fetch that answers every completions call with the script above */
-export function createFixtureFetch({ prefetch = "off" } = {}) {
+export function createFixtureFetch({ prefetch = false } = {}) {
   return async function fixtureFetch(url, init = {}) {
     let query = "";
     try {
@@ -122,7 +120,7 @@ export function createFixtureFetch({ prefetch = "off" } = {}) {
       const last = (body.messages || []).filter((m) => m.role === "user").pop();
       query = last ? (last.parts || []).filter((p) => p.type === "text").map((p) => p.text).join(" ") : "";
     } catch (_) { /* no body */ }
-    const script = fixtureEvents({ prefetch, query, missed: prefetch !== "off" && prefetchMisses(query) });
+    const script = fixtureEvents({ prefetch, query, missed: prefetch && prefetchMisses(query) });
     const signal = init.signal;
     const enc = new TextEncoder();
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));

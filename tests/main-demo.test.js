@@ -25,14 +25,16 @@ test("every manifest variant has a canonical key, a unique name, and round-trips
   }
   assert.equal(names.size, c.MANIFEST.length);
   assert.equal(keys.size, c.MANIFEST.length);
-  assert.throws(() => c.parseKey("prefetch=off,memory=1"), /canonical/);
+  assert.throws(() => c.parseKey("prefetch=0,memory=1"), /canonical/);
+  assert.throws(() => c.parseKey("prefetch=tool_pair,memory=0,guardrails=0,suggestions=0"), /unknown toggle/,
+    "prefetch is on or off: there is one injection format");
   assert.throws(() => c.parseKey("color=blue"), /unknown toggle/);
 });
 
 test("a combination outside the manifest gets a stable, readable name", async () => {
   const c = await load("configs.mjs");
-  const t = { prefetch: "user_fold", memory: true, guardrails: false, suggestions: true };
-  assert.equal(c.agentName(t), "main-demo-prefetch-user-fold-memory-suggestions");
+  const t = { prefetch: true, memory: true, guardrails: false, suggestions: true };
+  assert.equal(c.agentName(t), "main-demo-prefetch-memory-suggestions");
 });
 
 test("the config a variant writes reads back as the same toggles", async () => {
@@ -42,16 +44,17 @@ test("the config a variant writes reads back as the same toggles", async () => {
     assert.equal(c.configKey(c.togglesFromAgentConfig(cfg)), c.configKey(m.toggles), m.name);
   }
   // the spellings the backend may hand back
-  assert.equal(c.togglesFromAgentConfig({ searchPrefetch: true }).prefetch, "tool_pair");
-  assert.equal(c.togglesFromAgentConfig({ search_prefetch: { enabled: false } }).prefetch, "off");
-  assert.equal(c.togglesFromAgentConfig({ search_prefetch: { injection_format: "User-Fold" } }).prefetch, "user_fold");
-  assert.equal(c.togglesFromAgentConfig({}).prefetch, "off");
+  assert.equal(c.togglesFromAgentConfig({ searchPrefetch: true }).prefetch, true);
+  assert.equal(c.togglesFromAgentConfig({ search_prefetch: { enabled: false } }).prefetch, false);
+  assert.equal(c.togglesFromAgentConfig({ search_prefetch: { injectionFormat: "user_fold" } }).prefetch, true,
+    "a key an older backend wrote still reads as on");
+  assert.equal(c.togglesFromAgentConfig({}).prefetch, false);
 });
 
 test("resolution: the exact agent or a command, and prefetch off is its own agent", async () => {
   const c = await load("configs.mjs");
   const base = c.configKey(c.BASE_TOGGLES);
-  const pf = c.configKey({ ...c.BASE_TOGGLES, prefetch: "tool_pair" });
+  const pf = c.configKey({ ...c.BASE_TOGGLES, prefetch: true });
   const table = { [pf]: { agentId: "pf-id", name: "main-demo-prefetch" } };
 
   // no per-request override: a prefetch agent never stands in for its prefetch-off twin
@@ -68,9 +71,9 @@ test("resolution: the exact agent or a command, and prefetch off is its own agen
   assert.equal(miss.status, "missing");
   assert.match(miss.command, /node tools\/main-demo-provision\.mjs$/, "a manifest variant needs no --add");
   const combo = c.resolveVariant({ ...c.BASE_TOGGLES, memory: true, suggestions: true }, table);
-  assert.match(combo.command, /node tools\/main-demo-provision\.mjs --add 'prefetch=off,memory=1,guardrails=0,suggestions=1'$/);
+  assert.match(combo.command, /node tools\/main-demo-provision\.mjs --add 'prefetch=0,memory=1,guardrails=0,suggestions=1'$/);
   // a prefetch lane never borrows a prefetch-off agent
-  assert.equal(c.resolveVariant({ ...c.BASE_TOGGLES, prefetch: "user_fold" }, table).status, "missing");
+  assert.equal(c.resolveVariant({ ...c.BASE_TOGGLES, prefetch: true }, { [base]: { agentId: "base-id" } }).status, "missing");
 });
 
 test("the SSE parser survives events split across chunks", async () => {
@@ -96,7 +99,7 @@ async function replay(prefetch) {
 }
 
 test("a base turn: two tool calls with durations, hits, grouped results, then text", async () => {
-  const v = await replay("off");
+  const v = await replay(false);
   assert.equal(v.status, "done");
   assert.deepEqual(v.tools.map((x) => x.name), ["algolia_search_index", "algolia_grouped_results"]);
   assert.ok(v.tools.every((x) => x.duration > 0));
@@ -107,16 +110,12 @@ test("a base turn: two tool calls with durations, hits, grouped results, then te
   assert.equal(v.prefetch, null, "no badge without evidence");
 });
 
-test("tool_pair keeps the prefetched search off the wire; persisted_tool_pair shows it", async () => {
-  const tp = await replay("tool_pair");
-  assert.deepEqual(tp.tools.map((x) => x.name), ["algolia_grouped_results"]);
-  assert.equal(tp.hits.length, 0);
-  assert.equal(tp.prefetch, null);
-
-  const pp = await replay("persisted_tool_pair");
-  assert.equal(pp.prefetch.source, "persisted-pair");
+test("the prefetched search is on the wire, as a tool pair before the first model step", async () => {
+  const pp = await replay(true);
+  assert.deepEqual(pp.tools.map((x) => x.name), ["algolia_search_index", "algolia_grouped_results"]);
   assert.equal(pp.hits.length, 6);
   assert.ok(pp.tools[0].prefetched);
+  assert.ok(!pp.tools[1].prefetched);
 });
 
 test("the prefetch badge reads the header and a search_prefetch stream part", async () => {
@@ -185,24 +184,22 @@ test("search calls: the model's own are counted, the prefetched pair and grouped
   assert.ok(isSearchTool("algolia_search_index_prod_ecom"));
   assert.ok(!isSearchTool("algolia_grouped_results"));
   assert.ok(!isSearchTool("algolia_memory_search"));
-  assert.equal((await replay("off")).searches, 1);
-  assert.equal((await replay("tool_pair")).searches, 0);
-  assert.equal((await replay("persisted_tool_pair")).searches, 0, "the prefetched pair is not the model's call");
+  assert.equal((await replay(false)).searches, 1);
+  assert.equal((await replay(true)).searches, 0, "the prefetched pair is not the model's call");
 });
 
 test("search counts: passive for the prefetch, active for the model's own calls, gated means 0", async () => {
   const { searchCounts, createTurn } = await load("stream.mjs");
   const { fixtureEvents, prefetchMisses } = await load("fixture.mjs");
-  assert.deepEqual(searchCounts(false, await replay("off")), { passive: 0, active: 1, confirmed: false, part: null });
-  const used = searchCounts(true, await replay("tool_pair"));
+  assert.deepEqual(searchCounts(false, await replay(false)), { passive: 0, active: 1, confirmed: false, part: null });
+  const used = searchCounts(true, await replay(true));
   assert.equal(used.passive, 1);
   assert.equal(used.active, 0);
-  assert.equal(used.confirmed, false, "inferred from the config, not reported");
-  assert.equal(searchCounts(true, await replay("persisted_tool_pair")).confirmed, true, "the pair is on the wire");
+  assert.equal(used.confirmed, true, "the pair is on the wire");
 
   assert.ok(prefetchMisses("A video game for a 10 year old, under $30"));
   assert.ok(!prefetchMisses("A portable bluetooth speaker for the beach"));
-  const script = fixtureEvents({ prefetch: "tool_pair", missed: true });
+  const script = fixtureEvents({ prefetch: true, missed: true });
   const turn = createTurn();
   for (const [t, e] of script) if (e !== "[DONE]") turn.observe(t, e);
   turn.finish(script[script.length - 1][0]);
@@ -218,11 +215,10 @@ test("search counts: passive for the prefetch, active for the model's own calls,
 
 test("model work: LLM steps, the model's tool calls, its tool-input errors, and usage when streamed", async () => {
   const { createTurn, usageOf } = await load("stream.mjs");
-  const base = await replay("off");
-  const pf = await replay("tool_pair");
+  const base = await replay(false);
+  const pf = await replay(true);
   assert.deepEqual([base.modelCalls, base.toolCalls, base.toolErrors], [3, 2, 0]);
   assert.deepEqual([pf.modelCalls, pf.toolCalls], [2, 1], "prefetch saves a step and a call");
-  assert.equal((await replay("persisted_tool_pair")).toolCalls, 1, "the prefetched pair is not the model's call");
   const t = createTurn();
   t.observe(1, { type: "tool-input-error", toolCallId: "x", toolName: "algolia_search_index", errorText: "bad args" });
   t.observe(2, { type: "data-total-usage", data: { usage: { inputTokens: 1200, outputTokens: 80 } }, transient: true });
@@ -279,11 +275,11 @@ test("race: medians, paired deltas and a tally across repeated runs", async () =
 
 test("edited configs: defaults pruned, hashed by content, resolved or named for creation", async () => {
   const c = await load("configs.mjs");
-  const pf = { ...c.BASE_TOGGLES, prefetch: "tool_pair" };
-  assert.deepEqual(c.toggleBlocks(pf).search_prefetch, { enabled: true }, "tool_pair is the default format");
+  const pf = { ...c.BASE_TOGGLES, prefetch: true };
+  assert.deepEqual(c.toggleBlocks(pf).search_prefetch, { enabled: true });
   assert.equal(c.isCustom(pf, null), false);
   // applying the editor without a change is no edit
-  const same = c.blockFrom("search_prefetch", c.blockValues("search_prefetch", { enabled: true, injectionFormat: "tool_pair" }));
+  const same = c.blockFrom("search_prefetch", c.blockValues("search_prefetch", { enabled: true }));
   assert.equal(c.isCustom(pf, { search_prefetch: same }), false);
 
   const v = c.blockValues("search_prefetch", c.toggleBlocks(pf).search_prefetch);

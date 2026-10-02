@@ -263,7 +263,7 @@ function noteView(which, report) {
 function ensureLane(which) {
   if (lanes[which]) return lanes[which];
   const node = which === "a" ? el.laneA : el.laneB;
-  const toggles = which === "a" ? BASE_TOGGLES : { ...BASE_TOGGLES, prefetch: "tool_pair" };
+  const toggles = which === "a" ? BASE_TOGGLES : { ...BASE_TOGGLES, prefetch: true };
   lanes[which] = mountLane(node, {
     label: which === "a" ? "Lane A" : "Lane B",
     cfg: CFG, variants: ctx.variants, searchClient: ctx.searchClient,

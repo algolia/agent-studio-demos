@@ -238,11 +238,6 @@
 .hits-h { margin: 0; font-size: 13px; color: var(--ink-2); }
 .hits summary { cursor: pointer; }
 .hits[open] summary { margin-bottom: 8px; }
-.lane-note {
-  margin: 0; padding: 8px 12px; font-size: 13px; color: var(--ink-2); max-width: 65ch;
-  background: var(--surface-2); border: 1px dashed var(--line-strong); border-radius: 6px;
-}
-.lane-note b { font-family: var(--mono); color: var(--ink); }
 .hits-h b { font-family: var(--mono); }
 .hits-row {
   display: grid; grid-auto-flow: column; grid-auto-columns: 150px; gap: 10px;

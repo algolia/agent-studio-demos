@@ -3,7 +3,7 @@
    main-demo-provision.mjs — one agent per toggle set, created once.
 
      MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… \
-       node tools/main-demo-provision.mjs [--add 'prefetch=user_fold,memory=1,…']
+       node tools/main-demo-provision.mjs [--add 'prefetch=1,memory=1,…']
          [--config '{"search_prefetch":{…},…}'] [--sync-instructions] [--dry-run]
 
    Reads the variant manifest from public/main-demo/configs.mjs (the same
