@@ -4,6 +4,7 @@
 
      node scripts/index-factbook.mjs          # dry run: counts, calls nothing
      node scripts/index-factbook.mjs --push   # settings, then records
+     node scripts/index-factbook.mjs --push --settings-only   # settings, no record sent
 
    Tries `demo_factbook` first and falls back to `esci_demo_factbook` when the
    key is refused (the keys on this app are scoped to esci_*). Prints which
@@ -16,6 +17,7 @@ import { INDEX_NAMES, RECORDS_FILE, setSettings, batch, waitTask } from "../tool
 import { load, describe } from "../tools/jev-attributes/keys.mjs";
 
 const PUSH = process.argv.includes("--push");
+const SETTINGS_ONLY = process.argv.includes("--settings-only");
 const CHUNK = 40;
 
 const records = fs.readFileSync(RECORDS_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
@@ -42,6 +44,10 @@ if (!index) {
   process.exit(1);
 }
 console.log(`settings applied to ${index}`);
+if (SETTINGS_ONLY) {
+  console.log("--settings-only: no record sent");
+  process.exit(0);
+}
 let last = null;
 for (let i = 0; i < records.length; i += CHUNK) {
   const r = await batch(app, key, index, records.slice(i, i + CHUNK));
