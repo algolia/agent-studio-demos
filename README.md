@@ -10,7 +10,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 | Demo | Path | Status |
 | --- | --- | --- |
 | What is Agent Studio? | `/main-demo/` | Live on a review build |
-| Jev trims the record | `/jev-attributes/` | Local; public with your own key once the relay is on |
+| Jev trims the record | `/jev-attributes/` | Local; public with your own key once this site forwards it |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
 | Guardrail battle | `/guardrail-battle/` | Live |
@@ -48,7 +48,7 @@ scripts/                    node, zero dependencies — see § The shelf and § 
 tools/                      node, zero dependencies — bakes the seeded conversations,
                             and main-demo-provision.mjs creates the main demo's agents
 tests/                      node:test smoke tests — no framework, no install
-functions/relay/            the jev-attributes relay, a Cloudflare Pages Function (off unless RELAY_ENABLED=1)
+functions/relay/            passes a jev-attributes visitor's key on to TypeSafe, a Cloudflare Pages Function (off unless RELAY_ENABLED=1)
 eslint.config.js            flat config, rules written out, zero dependencies
 .github/workflows/          ci.yml (lint + tests), deploy.yml (Cloudflare Pages)
 ```
@@ -307,14 +307,15 @@ own, no `/api`, `shared/config.js` served.
 `?q=…` fills the question in and waits for a click on **Ask**: every run
 sends a question to Jev on someone's key, so a link never starts one.
 
-### Why there is a relay: CORS, measured 2026-10-01
+### Why this site forwards the Jev call: CORS, measured 2026-10-01
 
 | Endpoint | Preflight from a browser origin | `fetch` from the page |
 | --- | --- | --- |
 | `api.typesafe.ai/v1/systemone` | 400 "Disallowed CORS origin" for every origin tried (`agent-studio-demos.pages.dev`, `127.0.0.1`, `localhost`, `typesafe.ai`, `null`) | blocked |
 | `<app>-dsn.algolia.net` (search) | 200, `Access-Control-Allow-Origin: *` | works |
 
-So search runs in the browser, and the Jev call goes through
+So search runs in the browser. TypeSafe does not answer browsers directly, so
+this site forwards the visitor's key to it: the Jev call goes through
 `functions/relay/[[path]].js`, a Cloudflare Pages Function on the site's own
 origin. It is stateless and small enough to audit:
 
@@ -322,33 +323,34 @@ origin. It is stateless and small enough to audit:
   anything else is 404 or 405
 - same-origin callers only; a request without `Authorization: Bearer …` is
   refused, and no key is ever added (the local server's injection is in
-  `server.mjs`, not in the relay)
+  `server.mjs`, not in the forwarding function)
 - forwards `Content-Type` and `Authorization` only: no cookies, no client IP
   headers; the body is capped at 512 KB and streamed back as the vendor sent it
 - no logging, no KV, no cache: there is no `console` in the file (eslint has no
   `console` global there, and a test greps for it), and every response is
   `Cache-Control: no-store`
-- **inert until the Pages project sets `RELAY_ENABLED=1`**, so merging and
-  deploying does not open it
+- **The forwarding is off until the site sets `RELAY_ENABLED=1`; it holds no
+  key of its own, it only passes the visitor's key through.** Merging and
+  deploying does not turn it on.
 
-What the relay cannot promise: Cloudflare terminates TLS for it, as it does for
+What the forwarding cannot promise: Cloudflare terminates TLS for it, as it does for
 the static site, so the key passes through Cloudflare's edge in a header.
 Workers logs are off unless the project enables them; keep them off.
 
-While the relay is off, the page probes it once at startup (a keyless POST
-answers 404, where a live relay answers 401), shows no key field, says the
-relay is off in one line, and keeps Ask disabled.
+While forwarding is off, the page checks once at startup (a keyless POST
+answers 404 while it is off and 401 while it is on), shows no key field, says
+"Forwarding is off on this site" in one line, and keeps Ask disabled.
 
-#### Before enabling the relay
+#### Before turning forwarding on
 
 Setting `RELAY_ENABLED=1` puts a key-forwarding endpoint on a public origin.
 Neither of these is built yet; each is the owner's call, and both come first:
 
 - [ ] **Who may call it:** Cloudflare Access in front of `/jev-attributes/*`
       and `/relay/*` (Okta, Algolia staff only), or Turnstile on the page with
-      the relay checking the token.
+      the forwarding function checking the token.
 - [ ] **How often:** a WAF rate-limiting rule on `/relay/*`, per IP, so a
-      stolen tab cannot turn the relay into a free proxy.
+      stolen tab cannot turn this site into a free proxy.
 
 ### Search in public mode: a secured key
 
@@ -392,7 +394,7 @@ to it. It receives the question and the section descriptions, never a record
 
 What the page showed. *Kept* is the section Jev kept, with its P(yes).
 Characters are counted; tokens are characters ÷ 4, an estimate. *Jev* is the
-time of the one request from the browser, through the local relay; Jev's own
+time of the one request from the browser, forwarded by the local server; Jev's own
 usage was 3,535 to 3,537 input and 366 or 367 output tokens on each.
 
 | Question | Record | Kept | Fields | Characters | ≈ tokens, estimated | Jev |
@@ -493,8 +495,8 @@ blank page.
 Whatever key you configure ends up readable in the browser. Scope it accordingly.
 
 **Functions.** `wrangler pages deploy public/` also compiles `functions/` from
-the directory it runs in (the repo root, in CI), so the jev-attributes relay
-ships with every deploy. It answers 404 until the Pages project has the
+the directory it runs in (the repo root, in CI), so the function that forwards
+jev-attributes keys to TypeSafe ships with every deploy. It answers 404 until the Pages project has the
 environment variable `RELAY_ENABLED=1` (Dashboard → Pages → agent-studio-demos →
 Settings → Variables). Turn it on only when the public mode should work; turn
 Workers logs off for the project if they are on.
