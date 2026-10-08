@@ -52,8 +52,7 @@ const ANSWER = [
  * `data-search_prefetch` part, then the search the backend ran before the
  * model was called, as a regular tool call and result whose id is the part's
  * `toolCallId` (it starts with `prefetch_`). The first model step goes
- * straight to grouping the hits, and the part comes again before `finish`
- * with `agentSearchedAnyway`.
+ * straight to grouping the hits.
  *
  * `missed` plays the other outcome: the prefetched hits were poor, so the
  * model searched anyway and prefetch cost time instead of saving it. The
@@ -69,12 +68,12 @@ export function fixtureEvents({ prefetch = false, query = "", missed = false } =
   const skipped = prefetch && fixtureSkips(q);
   const injected = prefetch && !skipped;
   const id = "prefetch_fx";
-  const part = (extra) => ({ type: "data-search_prefetch", id: "search_prefetch", data: {
+  const part = () => ({ type: "data-search_prefetch", id: "search_prefetch", data: {
     decision: skipped ? "skipped_too_few_tokens" : "injected_candidate",
     nbHits: skipped ? 0 : FIXTURE_HITS.length, latencyMs: skipped ? 0.4 : 212.4,
-    ...(skipped ? {} : { toolName: tool, index: "products", toolCallId: id }), ...extra } });
+    ...(skipped ? {} : { toolName: tool, index: "products", toolCallId: id }) } });
   at(0, { type: "start", messageId: "fx-msg" });
-  if (prefetch) at(skipped ? 5 : 210, part({}));
+  if (prefetch) at(skipped ? 5 : 210, part());
   if (injected) {
     at(0, { type: "tool-input-start", toolCallId: id, toolName: tool });
     at(0, { type: "tool-input-delta", toolCallId: id, inputTextDelta: JSON.stringify({ query: q }) });
@@ -111,7 +110,6 @@ export function fixtureEvents({ prefetch = false, query = "", missed = false } =
   for (const d of ANSWER) at(90, { type: "text-delta", id: "fx-text", delta: d });
   at(20, { type: "text-end", id: "fx-text" });
   at(10, { type: "finish-step" });
-  if (injected) at(5, part({ agentSearchedAnyway: Boolean(missed) }));
   at(10, { type: "finish" });
   ev.push([t + 5, "[DONE]"]);
   return ev;

@@ -27,13 +27,17 @@ export const BASE_TOGGLES = Object.freeze({
 /** the toggles' ids, in key order */
 const FLAGS = TOGGLES.map((tg) => tg.id);
 
-/** the variants the script creates without being asked */
+/**
+ * Every agent this demo makes is named DEMO_main-demo-…: the prefix marks a
+ * demo agent on a shared production app, and the rest keeps it findable.
+ */
+export const NAME_PREFIX = "DEMO_main-demo-";
+export const BASE_AGENT = `${NAME_PREFIX}base`;
+
+/** the variants the script creates without being asked: the race's two arms */
 export const MANIFEST = [
-  { name: "main-demo-base", toggles: { ...BASE_TOGGLES } },
-  { name: "main-demo-prefetch", toggles: { ...BASE_TOGGLES, prefetch: true } },
-  { name: "main-demo-memory", toggles: { ...BASE_TOGGLES, memory: true } },
-  { name: "main-demo-guardrails", toggles: { ...BASE_TOGGLES, guardrails: true } },
-  { name: "main-demo-suggestions", toggles: { ...BASE_TOGGLES, suggestions: true } },
+  { name: BASE_AGENT, toggles: { ...BASE_TOGGLES } },
+  { name: `${NAME_PREFIX}prefetch`, toggles: { ...BASE_TOGGLES, prefetch: true } },
 ];
 
 /** toggles with every field present and every value legal */
@@ -74,7 +78,7 @@ export function agentName(toggles) {
   const t = normalize(toggles);
   const bits = [];
   for (const k of FLAGS) if (t[k]) bits.push(k);
-  return `main-demo-${bits.join("-")}`;
+  return `${NAME_PREFIX}${bits.join("-")}`;
 }
 
 /* check-copy: off */
@@ -116,13 +120,6 @@ export function storedPrefetch(config) {
   return c.search_prefetch !== undefined ? c.search_prefetch : c.searchPrefetch;
 }
 
-/** what the server wrote into the prefetch block on save, by index name; null when nothing yet */
-export function capturedSettings(config) {
-  const sp = storedPrefetch(config);
-  const cap = sp && typeof sp === "object" ? sp.capturedIndexSettings || sp.captured_index_settings : null;
-  return cap && typeof cap === "object" && Object.keys(cap).length ? cap : null;
-}
-
 /** read a stored agent config back into toggles, whatever spelling it used */
 export function togglesFromAgentConfig(config) {
   const c = config || {};
@@ -140,7 +137,7 @@ export function togglesFromAgentConfig(config) {
  *
  * `variants` is the `variants` map of variants.json: key → { agentId, ... }.
  */
-export function resolveVariant(toggles, variants, { commandPrefix } = {}) {
+export function resolveVariant(toggles, variants, { host } = {}) {
   const t = normalize(toggles);
   const key = configKey(t);
   const table = variants || {};
@@ -149,7 +146,7 @@ export function resolveVariant(toggles, variants, { commandPrefix } = {}) {
   }
   // a manifest variant needs no --add: the plain run creates every one of them
   const inManifest = MANIFEST.some((m) => configKey(m.toggles) === key);
-  return { status: "missing", key, command: provisionCommand(inManifest ? [] : [key], commandPrefix) };
+  return { status: "missing", key, command: provisionCommand(inManifest ? [] : [key], { host }) };
 }
 
 /**
@@ -169,7 +166,7 @@ export function configVariants(mainDemo) {
 
 /** variants.json's map as a config block: what the page reads, without the run's status */
 export function shareableVariants(variants) {
-  const keep = ["agentId", "name", "model", "provider", "capturedIndexSettings"];
+  const keep = ["agentId", "name", "model", "provider"];
   const out = {};
   for (const [key, entry] of Object.entries(variants || {})) {
     if (!entry || !entry.agentId) continue;
@@ -179,11 +176,49 @@ export function shareableVariants(variants) {
   return out;
 }
 
-/** the exact shell line that creates a missing variant */
-export function provisionCommand(keys, prefix) {
-  const env = prefix || "MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY";
+/* ── Where the agents live ──────────────────────────────────────
+   Production serves an app's agents from its region's host. The page and
+   the script name the same host, so the command the page prints targets
+   the backend the page talks to. */
+
+/** Agent Studio production, by region */
+export const HOSTS = Object.freeze({
+  eu: "https://agent-studio.eu.algolia.com",
+  us: "https://agent-studio.us.algolia.com",
+});
+export const LOCAL_HOST = "http://127.0.0.1:8000";
+
+/** mainDemo.host when set, else the production host of mainDemo.region, else a local backend */
+export function demoHost(mainDemo) {
+  const md = mainDemo || {};
+  if (typeof md.host === "string" && md.host.trim()) return md.host.trim().replace(/\/+$/, "");
+  const region = String(md.region || "").trim().toLowerCase();
+  return HOSTS[region] || LOCAL_HOST;
+}
+
+/** the region whose production host this is; null for any other backend */
+export function regionOf(host) {
+  const h = String(host || "").replace(/\/+$/, "");
+  return Object.keys(HOSTS).find((r) => HOSTS[r] === h) || null;
+}
+
+/** a backend on this machine: the only place the page itself may create agents */
+export function isLocalHost(host) {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/.test(String(host || ""));
+}
+
+/** the shell prefix that points the script at `host`; the key stays a variable */
+function commandEnv(host) {
+  const region = regionOf(host);
+  const keys = "APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY";
+  return region ? { env: keys, flag: ` --region ${region}` } : { env: `MAIN_DEMO_HOST=${host || LOCAL_HOST} ${keys}`, flag: "" };
+}
+
+/** the exact shell line that creates a missing variant on `host` */
+export function provisionCommand(keys, { host } = {}) {
+  const { env, flag } = commandEnv(host);
   const adds = (keys || []).map((k) => ` --add '${k}'`).join("");
-  return `${env} node tools/main-demo-provision.mjs${adds}`;
+  return `${env} node tools/main-demo-provision.mjs${flag}${adds}`;
 }
 
 /** query parameters the completions URL carries */
@@ -194,8 +229,8 @@ export function completionQuery() {
 
 /* ── Edited configs: one agent per content hash ─────────────────
    A lane may edit the blocks a toggle set writes. The edited config names
-   its own agent, main-demo-<hash of the config>, created once from
-   main-demo-base and never PATCHed: two lanes with the same config share
+   its own agent, DEMO_main-demo-<hash of the config>, created once from
+   DEMO_main-demo-base and never PATCHed: two lanes with the same config share
    it, and no edit can change an agent another lane is running. */
 
 /* check-copy: off */
@@ -210,20 +245,8 @@ export const BLOCKS = [
       hint: "shorter queries skip prefetch" },
     { path: "hitsPerPage", label: "Hits per page", type: "int", min: 1, max: 100, def: null, nullable: true,
       hint: "empty: the search tool's value" },
-    { group: "Search parameters", path: "searchParameters.queryLanguages", label: "Query languages", type: "langs", def: null,
-      hint: "empty: the index's languages" },
-    { path: "searchParameters.naturalLanguages", label: "Natural languages", type: "langs", def: null },
-    { path: "searchParameters.removeStopWords", label: "Remove stop words", type: "boolOrLangs", def: null,
-      hint: "true, false, or languages" },
-    { path: "searchParameters.ignorePlurals", label: "Ignore plurals", type: "boolOrLangs", def: null,
-      hint: "true, false, or languages" },
-    { path: "searchParameters.typoTolerance", label: "Typo tolerance", type: "enum", options: [null, true, false, "min", "strict"], def: null },
-    { path: "searchParameters.removeWordsIfNoResults", label: "Remove words if no results", type: "enum",
-      options: ["none", "lastWords", "firstWords", "allOptional"], def: "allOptional" },
-    { path: "searchParameters.restrictSearchableAttributes", label: "Restrict to attributes", type: "list", def: null,
-      hint: "empty: every searchable attribute" },
-    { path: "capturedIndexSettings", label: "Captured index settings", type: "readonly", def: null,
-      hint: "written by the server on save, never sent" },
+    { path: "timeoutMs", label: "Timeout (ms)", type: "int", min: 0, max: 5000, def: 1000,
+      hint: "search budget; 0 turns prefetch off" },
   ] },
   { id: "memory", label: "Memory", fields: [
     { path: "enabled", label: "Enabled", type: "bool", def: false },
@@ -280,9 +303,6 @@ export function blockValues(blockId, stored) {
   return out;
 }
 
-/** Algolia language codes: two letters, or a region form such as pt-br */
-const isLangs = (v) => Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string" && /^[a-z]{2}(-[a-z]{2})?$/.test(x));
-
 /** the problems with a block's values, by field path; empty when the backend would accept it */
 export function validateBlock(blockId, values) {
   const b = BLOCKS.find((x) => x.id === blockId);
@@ -295,11 +315,6 @@ export function validateBlock(blockId, values) {
     }
     if (f.type === "enum" && !f.options.includes(v)) errors[f.path] = "not an option";
     if (f.type === "json" && !Array.isArray(v)) errors[f.path] = "a JSON list";
-    if (f.type === "langs" && !unset && !isLangs(v)) errors[f.path] = "language codes, like en, fr";
-    if (f.type === "boolOrLangs" && !unset && typeof v !== "boolean" && !isLangs(v)) errors[f.path] = "true, false, or codes";
-    if (f.type === "list" && !unset && !(Array.isArray(v) && v.length && v.every((x) => typeof x === "string" && x))) {
-      errors[f.path] = "names, comma separated";
-    }
   }
   return errors;
 }
@@ -310,7 +325,6 @@ export function blockFrom(blockId, values) {
   if (b.scalar) return Boolean(values[""]);
   const out = {};
   for (const f of b.fields) {
-    if (f.type === "readonly") continue; // server-written: shown, never sent, never hashed
     const v = values[f.path];
     const empty = v === null || v === undefined || v === "";
     if (f.path === "enabled") { setPath(out, f.path, Boolean(v)); continue; }
@@ -366,21 +380,21 @@ export function isCustom(toggles, edits) {
 }
 
 export const customKey = (blocks) => `custom=${hashConfig(blocks)}`;
-export const customName = (blocks) => `main-demo-${hashConfig(blocks)}`;
+export const customName = (blocks) => `${NAME_PREFIX}${hashConfig(blocks)}`;
 
 /**
  * Resolve an edited config: an agent the page or the script already made
  * for this hash, or `{ status: "custom" }` with the name to create and the
  * command that creates it.
  */
-export function resolveCustom(blocks, variants, local, { commandPrefix } = {}) {
+export function resolveCustom(blocks, variants, local, { host } = {}) {
   const key = customKey(blocks);
   const hit = (variants && variants[key]) || (local && local[key]);
   if (hit && hit.agentId) return { status: "agent", key, agentId: hit.agentId, entry: hit, custom: true };
-  const env = commandPrefix || "MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY";
+  const { env, flag } = commandEnv(host);
   return {
     status: "custom", key, name: customName(blocks), blocks,
-    command: `${env} node tools/main-demo-provision.mjs --config '${canonical(blocks)}'`,
+    command: `${env} node tools/main-demo-provision.mjs${flag} --config '${canonical(blocks)}'`,
   };
 }
 
@@ -392,7 +406,7 @@ export function baseTemplate(base) {
   return t;
 }
 
-/** the create body for an agent with these config blocks over main-demo-base */
+/** the create body for an agent with these config blocks over the base agent */
 export function customAgentBody(base, blocks, name = customName(blocks)) {
   const config = { ...(base.config || {}) };
   delete config.searchPrefetch;

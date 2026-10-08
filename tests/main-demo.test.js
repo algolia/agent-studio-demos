@@ -29,12 +29,14 @@ test("every manifest variant has a canonical key, a unique name, and round-trips
   assert.throws(() => c.parseKey("prefetch=tool_pair,memory=0,guardrails=0,suggestions=0"), /unknown toggle/,
     "prefetch is on or off: there is one injection format");
   assert.throws(() => c.parseKey("color=blue"), /unknown toggle/);
+  assert.deepEqual(c.MANIFEST.map((m) => m.name), ["DEMO_main-demo-base", "DEMO_main-demo-prefetch"], "the race's two arms");
+  for (const m of c.MANIFEST) assert.ok(m.name.startsWith("DEMO_"), "a demo agent on a shared app says so in its name");
 });
 
 test("a combination outside the manifest gets a stable, readable name", async () => {
   const c = await load("configs.mjs");
   const t = { prefetch: true, memory: true, guardrails: false, suggestions: true };
-  assert.equal(c.agentName(t), "main-demo-prefetch-memory-suggestions");
+  assert.equal(c.agentName(t), "DEMO_main-demo-prefetch-memory-suggestions");
 });
 
 test("the config a variant writes reads back as the same toggles", async () => {
@@ -55,7 +57,7 @@ test("resolution: the exact agent or a command, and prefetch off is its own agen
   const c = await load("configs.mjs");
   const base = c.configKey(c.BASE_TOGGLES);
   const pf = c.configKey({ ...c.BASE_TOGGLES, prefetch: true });
-  const table = { [pf]: { agentId: "pf-id", name: "main-demo-prefetch" } };
+  const table = { [pf]: { agentId: "pf-id", name: "DEMO_main-demo-prefetch" } };
 
   // no per-request override: a prefetch agent never stands in for its prefetch-off twin
   const off = c.resolveVariant(c.BASE_TOGGLES, table);
@@ -67,9 +69,11 @@ test("resolution: the exact agent or a command, and prefetch off is its own agen
   assert.equal(exact.status, "agent");
   assert.equal(exact.agentId, "base-id");
 
-  const miss = c.resolveVariant({ ...c.BASE_TOGGLES, memory: true }, table);
+  const miss = c.resolveVariant(c.BASE_TOGGLES, table);
   assert.equal(miss.status, "missing");
   assert.match(miss.command, /node tools\/main-demo-provision\.mjs$/, "a manifest variant needs no --add");
+  const memory = c.resolveVariant({ ...c.BASE_TOGGLES, memory: true }, table);
+  assert.match(memory.command, /--add 'prefetch=0,memory=1,guardrails=0,suggestions=0'$/, "outside the two arms, one --add");
   const combo = c.resolveVariant({ ...c.BASE_TOGGLES, memory: true, suggestions: true }, table);
   assert.match(combo.command, /node tools\/main-demo-provision\.mjs --add 'prefetch=0,memory=1,guardrails=0,suggestions=1'$/);
   // a prefetch lane never borrows a prefetch-off agent
@@ -115,8 +119,7 @@ test("the prefetched search is on the wire, as a tool pair before the first mode
   assert.deepEqual(pp.tools.map((x) => x.name), ["algolia_search_index_products", "algolia_grouped_results"]);
   assert.equal(pp.hits.length, 6, "the hits ride on the visible tool output, never on the part");
   assert.deepEqual(pp.tools.map((x) => x.passive), [true, false]);
-  assert.equal(pp.prefetchParts, 2, "sent up front, then again before finish");
-  assert.equal(pp.prefetchPart.agentSearchedAnyway, false);
+  assert.equal(pp.prefetchParts, 1, "one part per user turn, sent up front");
   assert.equal(pp.prefetchPart.hits, undefined);
   const [passive] = pp.tools;
   assert.equal(passive.duration, 212.4, "the passive search lasts what the part says, not its wire time");
@@ -143,17 +146,24 @@ test("a part with toolCallId marks exactly that tool call passive, whatever its 
   assert.ok(!isPrefetchPart({ type: "data-suggestions" }));
 });
 
-test("the second prefetch part's agentSearchedAnyway wins", async () => {
+test("searched anyway: read off the stream, after an injected prefetch only", async () => {
   const { createTurn, searchCounts } = await load("stream.mjs");
   const first = { decision: "injected_candidate", nbHits: 6, latencyMs: 212.4, toolName: "s", index: "products", toolCallId: "prefetch_1" };
   const t = createTurn();
   t.observe(1, { type: "data-search_prefetch", id: "search_prefetch", data: first });
-  assert.equal(searchCounts(true, t.view()).searchedAnyway, null, "unknown until the turn ends");
-  t.observe(9, { type: "data-search_prefetch", id: "search_prefetch", data: { ...first, agentSearchedAnyway: true } });
+  assert.equal(searchCounts(true, t.view()).searchedAnyway, null, "unknown while the turn runs");
+  t.observe(5, { type: "tool-input-start", toolCallId: "call_1", toolName: "algolia_search_index_products" });
+  t.observe(6, { type: "tool-output-available", toolCallId: "call_1", output: { hits: [] } });
+  assert.equal(searchCounts(true, t.view()).searchedAnyway, true, "the model's own search settles it");
+  t.finish(9);
   const c = searchCounts(true, t.view());
-  assert.equal(c.searchedAnyway, true);
-  assert.equal(c.passive, 1);
-  assert.equal(t.view().prefetchParts, 2);
+  assert.deepEqual([c.passive, c.active, c.searchedAnyway], [1, 1, true]);
+  assert.equal(t.view().prefetchParts, 1);
+
+  const quiet = createTurn();
+  quiet.observe(1, { type: "data-search_prefetch", id: "search_prefetch", data: first });
+  quiet.finish(4);
+  assert.equal(searchCounts(true, quiet.view()).searchedAnyway, false, "a finished turn with no search of its own used the prefetch");
 });
 
 test("ms() prints milliseconds under a second and seconds above", async () => {
@@ -167,9 +177,33 @@ test("config.example.js documents every mainDemo field the page reads", () => {
   const { loadExampleConfig } = require("./load.js");
   const md = loadExampleConfig().mainDemo;
   assert.ok(md, "config.example.js has no mainDemo block");
-  for (const f of ["host", "appId", "searchApiKey", "agentStudioApiKey", "indexName"]) {
+  for (const f of ["region", "appId", "searchApiKey", "agentStudioApiKey", "indexName"]) {
     assert.ok(typeof md[f] === "string" && md[f], `mainDemo.${f} is missing`);
   }
+  const src = require("node:fs").readFileSync(path.join(__dirname, "..", "public", "shared", "config.example.js"), "utf8");
+  assert.match(src, /\/\/ host: "http:\/\/127\.0\.0\.1:8000"/, "host is documented, and left to override region");
+});
+
+test("host: mainDemo.host wins, then production in mainDemo.region, then a local backend", async () => {
+  const c = await load("configs.mjs");
+  assert.equal(c.demoHost({ region: "eu" }), "https://agent-studio.eu.algolia.com");
+  assert.equal(c.demoHost({ region: "US" }), "https://agent-studio.us.algolia.com");
+  assert.equal(c.demoHost({ region: "eu", host: "http://127.0.0.1:8000/" }), "http://127.0.0.1:8000");
+  assert.equal(c.demoHost({ region: "mars" }), c.LOCAL_HOST);
+  assert.equal(c.demoHost(undefined), c.LOCAL_HOST);
+  assert.equal(c.regionOf("https://agent-studio.us.algolia.com/"), "us");
+  assert.equal(c.regionOf("https://agent-studio.staging.eu.algolia.com"), null);
+  assert.ok(c.isLocalHost("http://localhost:8000") && c.isLocalHost(c.LOCAL_HOST));
+  assert.ok(!c.isLocalHost(c.HOSTS.eu), "production is never local: the page does not create agents there");
+
+  // the command a lane prints targets the backend the page talks to
+  const pf = { ...c.BASE_TOGGLES, prefetch: true };
+  assert.equal(c.resolveVariant(pf, {}, { host: c.HOSTS.us }).command,
+    "APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY node tools/main-demo-provision.mjs --region us");
+  assert.equal(c.provisionCommand(["k=1"], { host: "http://127.0.0.1:9000" }),
+    "MAIN_DEMO_HOST=http://127.0.0.1:9000 APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY node tools/main-demo-provision.mjs --add 'k=1'");
+  const blocks = c.effectiveBlocks(pf, { searchPrefetch: { enabled: true, timeoutMs: 1500 } });
+  assert.match(c.resolveCustom(blocks, {}, {}, { host: c.HOSTS.eu }).command, /provision\.mjs --region eu --config '\{/);
 });
 
 test("a deploy's variant map comes from mainDemo.variants, and variants.json is the fallback", async () => {
@@ -178,9 +212,9 @@ test("a deploy's variant map comes from mainDemo.variants, and variants.json is 
   assert.equal(c.configVariants({}), null, "no variants field: fetch variants.json");
   assert.equal(c.configVariants({ variants: {} }), null, "an empty map is no map");
   assert.equal(c.configVariants({ variants: [] }), null);
-  assert.equal(c.configVariants({ variants: { [key]: { name: "main-demo-prefetch" } } }), null,
+  assert.equal(c.configVariants({ variants: { [key]: { name: "DEMO_main-demo-prefetch" } } }), null,
     "an entry without an agentId names no agent");
-  const map = c.configVariants({ variants: { [key]: { agentId: "a1", name: "main-demo-prefetch" }, x: { agentId: "" } } });
+  const map = c.configVariants({ variants: { [key]: { agentId: "a1", name: "DEMO_main-demo-prefetch" }, x: { agentId: "" } } });
   assert.deepEqual(Object.keys(map), [key]);
   assert.equal(c.resolveVariant({ prefetch: true }, map).agentId, "a1", "the lane resolves it like variants.json");
 });
@@ -188,13 +222,13 @@ test("a deploy's variant map comes from mainDemo.variants, and variants.json is 
 test("--print-config output: the variants map without the run's status", async () => {
   const c = await load("configs.mjs");
   const shared = c.shareableVariants({
-    a: { agentId: "a1", name: "main-demo-base", model: "gpt-4.1", provider: "openai", status: "adopted" },
-    b: { agentId: "b1", name: "main-demo-prefetch", model: null, status: "created", capturedIndexSettings: { x: 1 } },
+    a: { agentId: "a1", name: "DEMO_main-demo-base", model: "gpt-4.1", provider: "openai", status: "adopted" },
+    b: { agentId: "b1", name: "DEMO_main-demo-prefetch", model: null, status: "created" },
     c: { name: "no-id" },
   });
   assert.deepEqual(shared, {
-    a: { agentId: "a1", name: "main-demo-base", model: "gpt-4.1", provider: "openai" },
-    b: { agentId: "b1", name: "main-demo-prefetch", capturedIndexSettings: { x: 1 } },
+    a: { agentId: "a1", name: "DEMO_main-demo-base", model: "gpt-4.1", provider: "openai" },
+    b: { agentId: "b1", name: "DEMO_main-demo-prefetch" },
   });
   assert.deepEqual(c.configVariants({ variants: shared }), shared, "what it prints, the page reads back");
 });
@@ -356,16 +390,15 @@ test("edited configs: defaults pruned, hashed by content, resolved or named for 
 
   const v = c.blockValues("searchPrefetch", c.toggleBlocks(pf).searchPrefetch);
   assert.equal(v.conversationWindow, 1);
-  assert.equal(v["searchParameters.removeWordsIfNoResults"], "allOptional");
+  assert.equal(v.timeoutMs, 1000);
   v.conversationWindow = 3;
   v.hitsPerPage = 5;
-  v["searchParameters.queryLanguages"] = ["fr"];
+  v.timeoutMs = 1500;
   const edited = { searchPrefetch: c.blockFrom("searchPrefetch", v) };
-  assert.deepEqual(edited.searchPrefetch,
-    { enabled: true, conversationWindow: 3, hitsPerPage: 5, searchParameters: { queryLanguages: ["fr"] } });
+  assert.deepEqual(edited.searchPrefetch, { enabled: true, conversationWindow: 3, hitsPerPage: 5, timeoutMs: 1500 });
   assert.ok(c.isCustom(pf, edited));
   const blocks = c.effectiveBlocks(pf, edited);
-  assert.match(c.customName(blocks), /^main-demo-[0-9a-f]{8}$/);
+  assert.match(c.customName(blocks), /^DEMO_main-demo-[0-9a-f]{8}$/);
   assert.equal(c.hashConfig(blocks), c.hashConfig(JSON.parse(JSON.stringify(blocks))), "stable");
   assert.equal(c.canonical({ b: 1, a: [2, { d: 1, c: 0 }] }), '{"a":[2,{"c":0,"d":1}],"b":1}');
 
@@ -378,7 +411,7 @@ test("edited configs: defaults pruned, hashed by content, resolved or named for 
   const local = { [c.customKey(blocks)]: { agentId: "id-1", name: c.customName(blocks) } };
   assert.equal(c.resolveCustom(blocks, {}, local).agentId, "id-1");
 
-  const base = { name: "main-demo-base", instructions: "new prompt", model: "m", providerId: "p", tools: [1], config: { searchPrefetch: true, x: 1 }, id: "no" };
+  const base = { name: "DEMO_main-demo-base", instructions: "new prompt", model: "m", providerId: "p", tools: [1], config: { searchPrefetch: true, x: 1 }, id: "no" };
   const body = c.customAgentBody(base, blocks);
   assert.equal(body.instructions, "new prompt", "instructions come from base at creation");
   assert.equal(body.id, undefined);
@@ -388,42 +421,34 @@ test("edited configs: defaults pruned, hashed by content, resolved or named for 
   const off = c.customAgentBody(base, c.effectiveBlocks(c.BASE_TOGGLES, { sendUsage: true }));
   assert.equal(off.config.searchPrefetch, false, "a disabled prefetch block is sent as false");
   assert.equal(off.config.sendUsage, true);
-  // what the backend stores reads back as the same hash: snake key, captured settings and all
+  // what the backend stores reads back as the same hash: snake key, and keys it ignores left out
   const { searchPrefetch, ...rest } = body.config;
-  const stored = { ...rest, search_prefetch: { ...searchPrefetch, capturedIndexSettings: { products: { languages: ["en"] } } }, enableAlgoliaMcp: true };
+  const stored = { ...rest, search_prefetch: { ...searchPrefetch, injectionFormat: "tool_pair" }, enableAlgoliaMcp: true };
   assert.equal(c.customKey(c.blocksFromConfig(stored)), c.customKey(blocks));
   assert.equal(c.customKey(c.blocksFromConfig(off.config)), c.customKey(c.effectiveBlocks(c.BASE_TOGGLES, { sendUsage: true })));
 });
 
-test("the prefetch block: the product's fields and bounds, captured settings shown and never sent", async () => {
+test("the prefetch block: the shipped fields and bounds, nothing else", async () => {
   const c = await load("configs.mjs");
-  const ids = c.BLOCKS.find((b) => b.id === "searchPrefetch").fields.map((f) => f.path);
-  assert.deepEqual(ids, ["enabled", "indexName", "conversationWindow", "minInformativeTokens", "hitsPerPage",
-    "searchParameters.queryLanguages", "searchParameters.naturalLanguages", "searchParameters.removeStopWords",
-    "searchParameters.ignorePlurals", "searchParameters.typoTolerance", "searchParameters.removeWordsIfNoResults",
-    "searchParameters.restrictSearchableAttributes", "capturedIndexSettings"]);
-  assert.ok(!ids.includes("injectionFormat"));
+  const fields = c.BLOCKS.find((b) => b.id === "searchPrefetch").fields;
+  // common/models/search_prefetch_config.py, SearchPrefetchConfig, as merged in conversational-ai #1761
+  assert.deepEqual(fields.map((f) => f.path),
+    ["enabled", "indexName", "conversationWindow", "minInformativeTokens", "hitsPerPage", "timeoutMs"]);
+  const timeout = fields.find((f) => f.path === "timeoutMs");
+  assert.deepEqual([timeout.min, timeout.max, timeout.def], [0, 5000, 1000]);
 
-  const captured = { products: { languages: ["en"], indexLanguages: [], capturedAt: "2026-10-02T12:00:00Z" } };
-  const stored = { enabled: true, minInformativeTokens: 0, capturedIndexSettings: captured };
-  const v = c.blockValues("searchPrefetch", stored);
-  assert.deepEqual(v.capturedIndexSettings, captured, "the editor shows what the server wrote");
-  assert.deepEqual(c.blockFrom("searchPrefetch", v), { enabled: true, minInformativeTokens: 0 }, "and never sends it");
-  assert.deepEqual(c.capturedSettings({ search_prefetch: stored }), captured);
-  assert.equal(c.capturedSettings({ search_prefetch: true }), null);
-  assert.equal(c.customKey(c.blocksFromConfig({ search_prefetch: stored })),
-    c.customKey(c.blocksFromConfig({ searchPrefetch: { enabled: true, minInformativeTokens: 0 } })),
-    "a capture on save does not change the agent's hash");
+  const v = c.blockValues("searchPrefetch", { enabled: true, minInformativeTokens: 0 });
+  assert.deepEqual(c.blockFrom("searchPrefetch", v), { enabled: true, minInformativeTokens: 0 });
+  const unshipped = { enabled: true, searchParameters: { queryLanguages: ["fr"] }, capturedIndexSettings: { products: {} } };
+  assert.deepEqual(c.blockFrom("searchPrefetch", c.blockValues("searchPrefetch", unshipped)), { enabled: true },
+    "keys the shipped block does not have are never sent, and never hashed");
+  assert.equal(c.customKey(c.blocksFromConfig({ search_prefetch: unshipped })),
+    c.customKey(c.blocksFromConfig({ searchPrefetch: { enabled: true } })));
 
-  const bad = c.validateBlock("searchPrefetch", { ...v, hitsPerPage: 0, "searchParameters.queryLanguages": ["French"],
-    "searchParameters.removeStopWords": "yes", "searchParameters.typoTolerance": "max",
-    "searchParameters.restrictSearchableAttributes": [""] });
-  assert.deepEqual(Object.keys(bad).sort(), ["hitsPerPage", "searchParameters.queryLanguages",
-    "searchParameters.removeStopWords", "searchParameters.restrictSearchableAttributes", "searchParameters.typoTolerance"]);
-  const good = c.validateBlock("searchPrefetch", { ...v, hitsPerPage: null, "searchParameters.removeStopWords": ["pt-br", "en"],
-    "searchParameters.ignorePlurals": true, "searchParameters.typoTolerance": false,
-    "searchParameters.restrictSearchableAttributes": ["title", "brand"] });
-  assert.deepEqual(good, {}, "hitsPerPage may be empty; booleans and language lists both pass");
+  const bad = c.validateBlock("searchPrefetch", { ...v, hitsPerPage: 0, timeoutMs: 6000 });
+  assert.deepEqual(Object.keys(bad).sort(), ["hitsPerPage", "timeoutMs"]);
+  assert.deepEqual(c.validateBlock("searchPrefetch", { ...v, hitsPerPage: null, timeoutMs: 0 }), {},
+    "hitsPerPage may be empty, and 0 ms is the product's off switch");
 
   // the toggle writes the wire key, and the off lane is an agent with prefetch false
   assert.deepEqual(c.agentConfigPatch({ prefetch: true }).searchPrefetch, { enabled: true });
@@ -462,7 +487,7 @@ test("provision --print-config: stdout is the map, the progress goes to stderr, 
   const fs = require("node:fs");
   const { execFile } = require("node:child_process");
   const SECRET = "test-admin-key-never-printed";
-  const agents = [{ id: "base-id", name: "main-demo-base", model: "m", providerId: "p", config: { searchPrefetch: false } }];
+  const agents = [{ id: "base-id", name: "DEMO_main-demo-base", model: "m", providerId: "p", config: { searchPrefetch: false } }];
   const uas = new Set();
   const server = http.createServer((req, res) => {
     uas.add(req.headers["user-agent"]);
@@ -497,7 +522,7 @@ test("provision --print-config: stdout is the map, the progress goes to stderr, 
     const map = JSON.parse(stdout);
     const c = await load("configs.mjs");
     assert.deepEqual(Object.keys(map).sort(), c.MANIFEST.map((m) => c.configKey(m.toggles)).sort());
-    assert.equal(map[c.configKey(c.BASE_TOGGLES)].agentId, "base-id", "main-demo-base is adopted, not copied");
+    assert.equal(map[c.configKey(c.BASE_TOGGLES)].agentId, "base-id", "the base is adopted, not copied");
     assert.equal(agents.length, c.MANIFEST.length, "the other manifest variants are created");
     for (const e of Object.values(map)) assert.equal(e.status, undefined, "the run's status stays in variants.json");
     assert.match(stderr, /wrote .*variants\.json/);

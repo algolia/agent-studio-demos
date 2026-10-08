@@ -1,8 +1,8 @@
 /* ───────────────────────────────────────────────────────────────
    agents.mjs — the page makes the agent an edited config names.
 
-   Create or adopt, never PATCH: an edited config is main-demo-<hash>,
-   copied from main-demo-base at creation (model, provider, tools and the
+   Create or adopt, never PATCH: an edited config is DEMO_main-demo-<hash>,
+   copied from DEMO_main-demo-base at creation (model, provider, tools and the
    base's current instructions) with the edited blocks on top, then
    published. An agent that already carries the name is adopted as is.
    What the page made is remembered in this browser, next to what
@@ -10,7 +10,7 @@
    from a shell, for a key without write rights.
    ─────────────────────────────────────────────────────────────── */
 
-import { customName, customAgentBody } from "./configs.mjs";
+import { BASE_AGENT, customName, customAgentBody } from "./configs.mjs";
 
 const STORE = "main-demo:custom-variants";
 
@@ -73,9 +73,9 @@ export async function listAgents(call) {
 
 /**
  * The agent for these blocks: adopted by name when it exists, otherwise
- * created from main-demo-base and published. Returns { agentId, name, status }.
+ * created from the base agent and published. Returns { agentId, name, status }.
  */
-export async function ensureCustomAgent(call, blocks, { baseName = "main-demo-base" } = {}) {
+export async function ensureCustomAgent(call, blocks, { baseName = BASE_AGENT } = {}) {
   const name = customName(blocks);
   const agents = await listAgents(call);
   const found = agents.find((a) => a.name === name);

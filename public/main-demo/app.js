@@ -8,12 +8,13 @@
 
 import { liteClient } from "algoliasearch/lite";
 import { mountLane } from "./lane.js";
-import { MANIFEST, BASE_TOGGLES, configKey, configVariants, provisionCommand } from "./configs.mjs";
+import { MANIFEST, BASE_TOGGLES, configKey, configVariants, demoHost, provisionCommand } from "./configs.mjs";
 import { METRICS, REPEATS, clampRepeat, compare, deltaText, summarize } from "./race.mjs";
 
 const root = window.DEMO_CONFIG || {};
-const CFG = { host: "http://127.0.0.1:8000", indexName: "products", ...(root.mainDemo || {}) };
-CFG.host = String(CFG.host).replace(/\/+$/, "");
+const CFG = { indexName: "products", ...(root.mainDemo || {}) };
+// mainDemo.host, else production in mainDemo.region, else a local backend
+CFG.host = demoHost(root.mainDemo);
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -321,7 +322,7 @@ async function main() {
       ? ["Replaying a fixture stream. Timings are not measurements."]
       : ["No backend at ", code(CFG.host), ", so lanes replay a fixture. Timings are not measurements."]);
   } else if (!Object.keys(variants).length) {
-    say(el.status, ["No agents yet. Set ", code("mainDemo.variants"), " or run ", code(provisionCommand([]))]);
+    say(el.status, ["No agents yet. Set ", code("mainDemo.variants"), " or run ", code(provisionCommand([], { host: CFG.host }))]);
   } else if (!CFG.agentStudioApiKey) {
     say(el.status, ["Set ", code("mainDemo.agentStudioApiKey"), " in ", code("shared/config.js"), "."]);
   }

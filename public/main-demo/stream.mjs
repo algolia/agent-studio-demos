@@ -33,11 +33,10 @@ export function createSseParser(onEvent) {
 
 /**
  * The backend's account of the prefetch: one `data-search_prefetch` part per
- * user turn on a prefetch agent, skipped turns included. An injected turn
- * sends it twice, the second time just before `finish` with
- * `agentSearchedAnyway`; the same `id` makes the second replace the first.
+ * user turn on a prefetch agent, skipped turns included, sent before the
+ * prefetched search (docs/SEARCH_PREFETCH.md, "Stream part").
  *
- *   { decision, nbHits, latencyMs, toolName, index, toolCallId, agentSearchedAnyway }
+ *   { decision, nbHits, latencyMs, toolName, index, toolCallId }
  *
  * It never carries hits: the visible search tool parts do, and the
  * prefetched search is the tool call whose id is `toolCallId`.
@@ -120,7 +119,7 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
     httpStatus: null,
     cache: null,             // X-Cache, when the backend served a stored answer
     prefetchPart: null,      // payload of the latest data-search_prefetch part
-    prefetchParts: 0,        // how many came: 2 on an injected turn, the last with agentSearchedAnyway
+    prefetchParts: 0,        // how many came: 1 per user turn on a prefetch agent
     modelCalls: 0,           // start-step events: one per LLM call
     started: [],             // tool-input-start ids; the prefetched one is left out of the model's calls
     toolErrors: 0,           // tool-input-error events: calls the model wrote wrong, each one a wasted step
@@ -204,7 +203,7 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
         default:
           if (isPrefetchPart(evt) && evt.data && typeof evt.data === "object") {
             s.prefetchParts += 1;
-            // same id as the first: the turn-end part replaces it, as it does in the Chat widget
+            // a fixed id: a repeat replaces the first, as it does in the Chat widget
             s.prefetchPart = evt.data;
           }
       }
@@ -262,7 +261,8 @@ export function viewOf(s) {
  *   passive: the prefetch, run by the platform before the model's first call;
  *            1 when the part names the tool call it injected (`toolCallId`)
  *   active:  search calls the model wrote itself
- *   searchedAnyway: the turn-end part's `agentSearchedAnyway`, null until it comes
+ *   searchedAnyway: after an injected prefetch, whether the model searched
+ *            itself too; read off the stream, null until the turn settles it
  *   reported: a part came; a prefetch lane without one is on a backend that
  *            does not stream it
  *
@@ -273,8 +273,10 @@ export function searchCounts(prefetchOn, view) {
   const active = view ? view.searches : 0;
   const part = (view && view.prefetchPart) || null;
   if (!part) return { passive: 0, active, part: null, searchedAnyway: null, reported: false, expected: prefetchOn };
-  const searchedAnyway = typeof part.agentSearchedAnyway === "boolean" ? part.agentSearchedAnyway : null;
-  return { passive: part.toolCallId ? 1 : 0, active, part, searchedAnyway, reported: true, expected: prefetchOn };
+  const passive = part.toolCallId ? 1 : 0;
+  const done = view.status === "done" || view.status === "error";
+  const searchedAnyway = !passive ? null : active > 0 ? true : done ? false : null;
+  return { passive, active, part, searchedAnyway, reported: true, expected: prefetchOn };
 }
 
 /** "412 ms", "1.9 s" — one rule, so the strip and the report agree */

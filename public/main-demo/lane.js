@@ -19,7 +19,7 @@ import { InstantSearch, Chat, ChatInlineLayout } from "react-instantsearch";
 import {
   TOGGLES, BLOCKS, normalize, resolveVariant, completionQuery, agentName,
   blockValues, blockFrom, validateBlock, toggleBlocks, effectiveBlocks, isCustom, canonical,
-  resolveCustom, customKey, customName,
+  resolveCustom, customKey, customName, isLocalHost,
 } from "./configs.mjs";
 import { apiClient, ensureCustomAgent, loadLocal, saveLocal } from "./agents.mjs";
 import { createSseParser, createTurn, decisionLabel, ms, searchCounts } from "./stream.mjs";
@@ -123,7 +123,7 @@ function Timeline({ view, fixture }) {
 
 /* check-copy: off */
 const NO_PART_TIP = "This lane's agent has prefetch on, but the backend streamed no data-search_prefetch part.";
-const ANYWAY_TIP = "agentSearchedAnyway, from the prefetch part the backend sends again at the end of the turn.";
+const ANYWAY_TIP = "Read off the stream: did the model run its own search after the prefetched one?";
 /* check-copy: on */
 
 /** who searched this turn: the platform before the model (passive), or the model itself (active) */
@@ -175,13 +175,6 @@ function Field({ f, value, error, onValue, disabled }) {
     input = html`<select id=${id} value=${String(f.options.indexOf(value))} disabled=${disabled}
       onChange=${(e) => onValue(f.options[Number(e.target.value)])}>
       ${f.options.map((o, i) => html`<option key=${i} value=${String(i)}>${o === null ? "unset" : String(o)}</option>`)}</select>`;
-  } else if (f.type === "langs" || f.type === "list" || f.type === "boolOrLangs") {
-    input = html`<${ListField} id=${id} value=${value} f=${f} disabled=${disabled} onValue=${onValue} />`;
-  } else if (f.type === "readonly") {
-    input = value && typeof value === "object"
-      ? html`<ul id=${id} class="fld-ro">${Object.entries(value).map(([index, c]) => html`<li key=${index}>
-          <code>${index}</code> ${capturedLine(c)}</li>`)}</ul>`
-      : html`<span id=${id} class="fld-ro is-empty">none yet</span>`;
   } else if (f.type === "json") {
     input = html`<${JsonField} id=${id} value=${value} disabled=${disabled} onValue=${onValue} />`;
   } else {
@@ -189,30 +182,10 @@ function Field({ f, value, error, onValue, disabled }) {
       onChange=${(e) => onValue(e.target.value === "" ? null : e.target.value)} />`;
   }
   const hinted = f.hint && f.type !== "text";
-  return html`<div class=${"fld" + (error ? " is-bad" : "") + (f.type === "readonly" ? " is-wide" : "")}>
+  return html`<div class=${"fld" + (error ? " is-bad" : "")}>
     <label for=${id}>${f.label}</label>${input}
     ${(error || hinted) && html`<span class="fld-hint">${error || f.hint}</span>`}
   </div>`;
-}
-
-/** one index's captured settings: its languages, its indexLanguages, and when the server read them */
-function capturedLine(c) {
-  const langs = (xs) => (Array.isArray(xs) && xs.length ? xs.join(", ") : "none");
-  const at = c && c.capturedAt ? String(c.capturedAt).slice(0, 16).replace("T", " ") : "";
-  return `languages ${langs(c && c.languages)} · indexLanguages ${langs(c && c.indexLanguages)}${at ? ` · ${at}` : ""}`;
-}
-
-/** a list typed as comma-separated text, kept as typed so a trailing comma survives */
-function ListField({ id, value, f, onValue, disabled }) {
-  const [text, setText] = useState(() => (Array.isArray(value) ? value.join(", ") : value === null || value === undefined ? "" : String(value)));
-  const parse = (t) => {
-    const v = t.trim();
-    if (!v) return null;
-    if (f.type === "boolOrLangs" && (v === "true" || v === "false")) return v === "true";
-    return v.split(",").map((x) => x.trim()).filter(Boolean);
-  };
-  return html`<input id=${id} type="text" value=${text} disabled=${disabled} spellcheck="false"
-    onChange=${(e) => { setText(e.target.value); onValue(parse(e.target.value)); }} />`;
 }
 
 /** a JSON list typed as text; only a list that parses reaches the block */
@@ -276,24 +249,33 @@ function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled,
             onClick=${() => setEditing(editing === id ? null : id)}>${editing === id ? "Close" : "Edit"}</button>`}
         </div>
         ${editing === id && html`<${BlockEditor} key=${id + canonical(blocks[id] ?? null)} blockId=${id}
-          stored=${id === "searchPrefetch" && entry.capturedIndexSettings
-            ? { ...(blocks[id] || {}), capturedIndexSettings: entry.capturedIndexSettings } : blocks[id]} edited=${Boolean(edits && edits[id])} disabled=${disabled}
+          stored=${blocks[id]} edited=${Boolean(edits && edits[id])} disabled=${disabled}
           onApply=${(b) => { onEdits({ ...(edits || {}), [id]: b }); setEditing(null); }}
           onReset=${() => { const n = { ...edits }; delete n[id]; onEdits(n); setEditing(null); }}
           onClose=${() => setEditing(null)} />`}
       </div>`)}
       <p class="cfg-model">${entry.model
         ? html`<code>${entry.model}</code>${entry.provider ? html` · ${entry.provider}` : ""}`
-        : custom ? "model, tools and instructions copied from main-demo-base" : "model unknown"}</p>
+        : custom ? "model, tools and instructions copied from the base agent" : "model unknown"}</p>
     </div>
   </details>`;
 }
 
-/** an edited config with no agent yet: make it here, or copy the command */
-function CreateAgent({ resolution, state, onCreate }) {
+/**
+ * An edited config with no agent yet: make it here, or copy the command.
+ * Only against a local backend: on production the page never writes an agent,
+ * whatever its key allows, so the shell is the one way.
+ */
+function CreateAgent({ resolution, state, onCreate, canCreate }) {
+  if (!canCreate) {
+    return html`<div class="missing">
+      <p><b>No agent for this config yet.</b> Create <code>${resolution.name}</code> from a shell:</p>
+      <pre><code>${resolution.command}</code></pre>
+    </div>`;
+  }
   return html`<div class="missing">
     <p><b>No agent for this config yet.</b> The page creates <code>${resolution.name}</code> from
-      main-demo-base with these blocks, and never changes an agent a lane already runs.</p>
+      the base agent with these blocks, and never changes an agent a lane already runs.</p>
     <button type="button" class="btn" disabled=${state.busy} onClick=${onCreate}>
       ${state.busy ? "Creating…" : `Create ${resolution.name}`}</button>
     ${state.error && html`<p class="missing-err" role="alert">${state.error}</p>`}
@@ -369,10 +351,10 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
   const custom = isCustom(toggles, edits);
   const blocks = useMemo(() => effectiveBlocks(toggles, edits), [toggles, edits]);
   const resolution = useMemo(() => {
-    if (!custom) return resolveVariant(toggles, variants);
+    if (!custom) return resolveVariant(toggles, variants, { host: cfg.host });
     if (fixture) return { status: "agent", key: customKey(blocks), agentId: "fixture", entry: { name: customName(blocks) }, custom: true };
-    return resolveCustom(blocks, variants, local);
-  }, [custom, toggles, variants, blocks, local, fixture]);
+    return resolveCustom(blocks, variants, local, { host: cfg.host });
+  }, [custom, toggles, variants, blocks, local, fixture, cfg.host]);
   const prefetchOn = Boolean(blocks.searchPrefetch && blocks.searchPrefetch.enabled);
 
   // one redraw per frame, however fast the events come
@@ -480,6 +462,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     setTurn(null);
   };
   const create = async () => {
+    if (!isLocalHost(cfg.host)) return;
     setCreating({ busy: true, error: "" });
     try {
       const call = apiClient({ host: cfg.host, appId: cfg.appId, apiKey: cfg.agentStudioApiKey });
@@ -525,7 +508,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
               }} />
           </${InstantSearch}>`
         : resolution.status === "custom"
-          ? html`<${CreateAgent} resolution=${resolution} state=${creating} onCreate=${create} />`
+          ? html`<${CreateAgent} resolution=${resolution} state=${creating} onCreate=${create} canCreate=${isLocalHost(cfg.host)} />`
           : html`<${Missing} resolution=${resolution} />`}
     </div>
     <${HitsPanel} view=${view} Card=${Card} />
