@@ -7,13 +7,18 @@
        node tools/main-demo-provision.mjs [--add 'prefetch=1,memory=1,…']
          [--config '{"searchPrefetch":{…},…}'] [--sync-instructions] [--dry-run]
          [--base NAME] [--out FILE] [--print-config]
-         [--seed --provider NAME --model ID [--index NAME]]
+         [--seed --provider NAME --model ID [--index NAME]] [--converge]
 
    --seed creates the base agent when the host has none: a shopping
    assistant on --index (products by default) with the Algolia search and
    grouped-results tools, on --provider NAME with --model ID, Algolia MCP
    on (search prefetch only runs through it) and prefetch off. Run without
    --provider, it lists the providers named TEST_… to pick from.
+
+   An adopted agent is checked against what the shipped backend reads: a
+   prefetch block with keys it ignores, or Algolia MCP not on, is reported.
+   --converge rewrites the config of such an agent, or of one whose config
+   no longer reads as its name, to the variant's, then republishes it.
 
    --region targets Agent Studio production in that region; auto asks both
    hosts and keeps the one where the app has providers. On any host that is
@@ -34,8 +39,8 @@
 
    --sync-instructions copies DEMO_main-demo-base's instructions and system
    prompt to every other DEMO_main-demo-* agent that differs, then republishes
-   it. It never writes the base, and it is the only write this script
-   makes to an existing agent.
+   it. It never writes the base. With --converge, these are the only writes
+   this script makes to an existing agent.
 
    Then writes public/main-demo/variants.json (gitignored): config key →
    agent id. Idempotent: a second run creates nothing.
@@ -55,7 +60,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
   MANIFEST, NAME_PREFIX, BASE_AGENT, BASE_TOGGLES, HOSTS, isLocalHost, configKey, parseKey, agentName, agentConfigPatch, togglesFromAgentConfig,
-  baseTemplate, customAgentBody, customKey, customName, blocksFromConfig, shareableVariants,
+  BLOCKS, storedPrefetch, baseTemplate, customAgentBody, customKey, customName, blocksFromConfig, shareableVariants,
 } from "../public/main-demo/configs.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -74,6 +79,7 @@ function parseArgs(argv) {
     else if (a === "--base") out.base = argv[++i];
     else if (a === "--region") out.region = String(argv[++i] || "").toLowerCase();
     else if (a === "--seed") out.seed = true;
+    else if (a === "--converge") out.converge = true;
     else if (a === "--provider") out.provider = argv[++i];
     else if (a === "--model") out.model = argv[++i];
     else if (a === "--index") out.index = argv[++i];
@@ -210,6 +216,30 @@ export function seedProvider(providers, name, { local }) {
   if (!found) throw new Error(`no provider named ${name}; ${hint}`);
   if (!local && !isTestProvider(found[1])) throw new Error(`refused: ${name} is not a TEST_ provider; ${hint}`);
   return found[0];
+}
+
+/* ── Drift: what the shipped backend reads, against what is stored ── */
+
+const SHIPPED_PREFETCH = new Set(BLOCKS.find((b) => b.id === "searchPrefetch").fields.map((f) => f.path));
+const camel = (k) => k.replace(/_([a-z])/g, (_, x) => x.toUpperCase());
+
+/** why a stored config would not race as this demo means it to; empty when it would */
+export function configDrift(config) {
+  const c = config || {};
+  const issues = [];
+  if (c.enableAlgoliaMcp !== true) issues.push("Algolia MCP is not on in its config, so prefetch runs only if the app's flag turns it on");
+  const sp = storedPrefetch(c);
+  const ignored = sp && typeof sp === "object" ? Object.keys(sp).map(camel).filter((k) => !SHIPPED_PREFETCH.has(k)) : [];
+  if (ignored.length) issues.push(`its prefetch block holds keys the shipped backend ignores: ${ignored.join(", ")}`);
+  return issues;
+}
+
+/** the stored config with the variant's blocks and Algolia MCP on: what --converge writes */
+export function convergedConfig(config, toggles) {
+  const c = { ...(config || {}) };
+  delete c.searchPrefetch;
+  delete c.search_prefetch;
+  return { ...c, enableAlgoliaMcp: true, ...agentConfigPatch(toggles) };
 }
 
 function client({ host, appId, key }) {
@@ -350,13 +380,34 @@ async function main() {
     return key;
   };
 
+  const publish = async (id) => {
+    try {
+      await call("POST", `/1/agents/${id}/publish`);
+    } catch (err) {
+      if (err.status !== 409) log(`       publish: ${err.message}`);
+    }
+  };
+
   for (const [key, toggles] of wanted) {
     const name = agentName(toggles);
     const found = byName.get(name);
     if (found) {
-      const full = found.config ? found : await call("GET", `/1/agents/${found.id}`);
+      let full = found.config ? found : await call("GET", `/1/agents/${found.id}`);
+      const issues = configDrift(full.config);
+      const reads = configKey(togglesFromAgentConfig(full.config));
+      if (reads !== key) issues.push(`its config reads as ${reads}`);
+      if (issues.length && args.converge && !args.dryRun) {
+        await call("PATCH", `/1/agents/${found.id}`, { config: convergedConfig(full.config, toggles) });
+        await publish(found.id);
+        full = await call("GET", `/1/agents/${found.id}`);
+        if (found.id === base.id) base = full; // the variants still to create copy the fixed config
+        record(full, "converged");
+        log(`fix    ${name}  (${issues.join("; ")})`);
+        continue;
+      }
       const actual = record(full, found.id === seeded ? "created" : "adopted");
-      if (found.id !== seeded) log(`adopt  ${name}${actual === key ? "" : `  (its config reads as ${actual}, keyed by that)`}`);
+      if (found.id !== seeded) log(`adopt  ${name}${actual === key ? "" : `  (keyed as ${actual})`}`);
+      for (const why of issues) log(`  warn ${why}${args.converge ? "" : " (--converge rewrites it)"}`);
       continue;
     }
     if (args.dryRun) { log(`create ${name}  (dry run: skipped)`); continue; }
@@ -370,14 +421,6 @@ async function main() {
     record(full, "created");
     log(`create ${name}`);
   }
-
-  const publish = async (id) => {
-    try {
-      await call("POST", `/1/agents/${id}/publish`);
-    } catch (err) {
-      if (err.status !== 409) log(`       publish: ${err.message}`);
-    }
-  };
 
   // edited configs: the ones asked for, and every DEMO_main-demo-<hash> already there
   const customs = new Map(args.configs.map((b) => [customKey(b), b]));

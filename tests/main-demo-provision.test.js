@@ -94,6 +94,12 @@ async function withFakeHost(state, args, fn) {
         return send(a);
       }
       if (one && one[2]) return send({});
+      if (one && req.method === "PATCH") {
+        const a = state.agents.find((x) => x.id === one[1]);
+        (state.patches = state.patches || []).push(a.name);
+        Object.assign(a, JSON.parse(body));
+        return send(a);
+      }
       if (one) return send(state.agents.find((a) => a.id === one[1]));
       res.statusCode = 404;
       send({ detail: "not here" });
@@ -159,4 +165,41 @@ test("--seed asks for what it lacks, and names only TEST_ providers", async () =
   assert.throws(() => p.seedProvider(providers, "Customer key", { local: false }), /not a TEST_ provider/);
   assert.equal(p.seedProvider(providers, "Customer key", { local: true }), "c", "a local backend may use any provider");
   assert.equal(p.seedProvider(providers, "TEST_openai", { local: false }), "t");
+});
+
+test("drift: what the shipped backend ignores is reported, and --converge writes the variant's config", async () => {
+  const p = await load();
+  assert.deepEqual(p.configDrift({ enableAlgoliaMcp: true, search_prefetch: { enabled: true, timeout_ms: 800 } }), []);
+  const old = { search_prefetch: { enabled: true, searchParameters: { queryLanguages: ["en"] }, capturedIndexSettings: {} }, x: 1 };
+  const issues = p.configDrift(old);
+  assert.equal(issues.length, 2);
+  assert.match(issues[0], /Algolia MCP is not on/);
+  assert.match(issues[1], /ignores: searchParameters, capturedIndexSettings/);
+  const fixed = p.convergedConfig(old, { prefetch: true });
+  assert.deepEqual([fixed.search_prefetch, fixed.searchPrefetch, fixed.enableAlgoliaMcp, fixed.x], [undefined, { enabled: true }, true, 1]);
+  assert.deepEqual(p.configDrift(fixed), []);
+
+  const drifted = () => ({
+    providers: PROVIDERS,
+    agents: [
+      { id: "b", name: "DEMO_main-demo-base", providerId: "t", model: "m", config: { searchPrefetch: false } },
+      { id: "f", name: "DEMO_main-demo-prefetch", providerId: "t", model: "m", config: old },
+    ],
+  });
+  const looked = drifted();
+  await withFakeHost(looked, [], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.equal(looked.patches, undefined, "without --converge nothing is written");
+    assert.match(run.stdout, /warn its prefetch block holds keys the shipped backend ignores: searchParameters/);
+    assert.match(run.stdout, /--converge rewrites it/);
+  });
+  const fixedRun = drifted();
+  await withFakeHost(fixedRun, ["--converge"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(fixedRun.patches, ["DEMO_main-demo-base", "DEMO_main-demo-prefetch"]);
+    const [base, prefetch] = fixedRun.agents;
+    assert.deepEqual([base.config.enableAlgoliaMcp, base.config.searchPrefetch], [true, false]);
+    assert.deepEqual(prefetch.config.searchPrefetch, { enabled: true });
+    assert.equal(prefetch.config.search_prefetch, undefined);
+  });
 });
