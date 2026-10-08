@@ -2,10 +2,17 @@
 /* ───────────────────────────────────────────────────────────────
    main-demo-provision.mjs — one agent per toggle set, created once.
 
+     APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs --region eu|us|auto
      MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… \
        node tools/main-demo-provision.mjs [--add 'prefetch=1,memory=1,…']
          [--config '{"searchPrefetch":{…},…}'] [--sync-instructions] [--dry-run]
          [--base NAME] [--out FILE] [--print-config]
+
+   --region targets Agent Studio production in that region; auto asks both
+   hosts and keeps the one where the app has providers. On any host that is
+   not this machine, a write fence holds: a new agent must be named DEMO_…
+   or EVAL_…, only such agents are ever written, and the base agent's
+   provider must be one named TEST_…, which every variant then inherits.
 
    Reads the variant manifest from public/main-demo/configs.mjs (the same
    module the page uses), lists the agents on HOST, and for each variant:
@@ -31,7 +38,8 @@
    The progress lines move to stderr, so stdout is only the map.
 
    Environment, never printed: MAIN_DEMO_HOST (or HOST when it is a URL —
-   zsh sets HOST to the machine name), APP_ID, ADMIN_KEY.
+   zsh sets HOST to the machine name; --region wins over both), APP_ID,
+   ADMIN_KEY.
    Node 20+, no dependencies.
    ─────────────────────────────────────────────────────────────── */
 
@@ -39,7 +47,7 @@ import { readFile, writeFile, access } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
-  MANIFEST, NAME_PREFIX, BASE_AGENT, configKey, parseKey, agentName, agentConfigPatch, togglesFromAgentConfig,
+  MANIFEST, NAME_PREFIX, BASE_AGENT, HOSTS, isLocalHost, configKey, parseKey, agentName, agentConfigPatch, togglesFromAgentConfig,
   baseTemplate, customAgentBody, customKey, customName, blocksFromConfig, shareableVariants,
 } from "../public/main-demo/configs.mjs";
 
@@ -57,6 +65,7 @@ function parseArgs(argv) {
     else if (a === "--sync-instructions") out.sync = true;
     else if (a === "--out") out.out = path.resolve(argv[++i]);
     else if (a === "--base") out.base = argv[++i];
+    else if (a === "--region") out.region = String(argv[++i] || "").toLowerCase();
     else if (a === "--help" || a === "-h") out.help = true;
     else throw new Error(`unknown argument: ${a}`);
   }
@@ -71,6 +80,70 @@ function env() {
   const missing = [!appId && "APP_ID", !key && "ADMIN_KEY"].filter(Boolean);
   if (missing.length) throw new Error(`set ${missing.join(" and ")} in the environment`);
   return { host, appId, key };
+}
+
+const itemsOf = (j) => (j && (j.data || j.agents || j.providers || j.items)) || [];
+
+/**
+ * The regions whose production host lists providers for this app. Another
+ * region answers too, with an empty list, so an answer alone proves nothing.
+ */
+export async function probeRegions(callFor, hosts = HOSTS) {
+  const found = [];
+  for (const [region, host] of Object.entries(hosts)) {
+    try {
+      if (itemsOf(await callFor(host)("GET", "/1/providers?limit=100")).length) found.push(region);
+    } catch (_) { /* not this region */ }
+  }
+  return found;
+}
+
+/** --region to a host: eu and us name one, auto takes the only region that knows the app */
+export async function hostForRegion(region, callFor, hosts = HOSTS) {
+  if (hosts[region]) return { region, host: hosts[region] };
+  if (region !== "auto") throw new Error(`--region takes ${Object.keys(hosts).join(", ")} or auto, not ${region || "nothing"}`);
+  const found = await probeRegions(callFor, hosts);
+  if (found.length !== 1) {
+    throw new Error(`--region auto found the app's providers in ${found.length ? found.join(" and ") : "no region"}; pass --region ${Object.keys(hosts).join(" or ")}`);
+  }
+  return { region: found[0], host: hosts[found[0]] };
+}
+
+export const isDemoName = (name) => /^(DEMO|EVAL)_/.test(String(name || ""));
+export const isTestProvider = (provider) => Boolean(provider) && /^TEST_/.test(String(provider.name || ""));
+
+/**
+ * Off this machine, every write goes through here: a new agent must carry a
+ * demo name, and an existing one is written only when its listed name is
+ * this demo's (DEMO_main-demo-…) or this run made it.
+ */
+export function fenced(call, { local }) {
+  const owned = new Set();
+  const guarded = async (method, p, body) => {
+    if (!local && method !== "GET") {
+      const route = p.split("?")[0];
+      if (method === "POST" && route === "/1/agents") {
+        if (!isDemoName(body && body.name)) throw new Error(`refused: a new agent here must be named DEMO_… or EVAL_…, not ${body && body.name}`);
+      } else {
+        const id = (route.match(/^\/1\/agents\/([^/]+)/) || [])[1];
+        if (!id || !owned.has(id)) throw new Error(`refused: ${method} ${route} writes an agent that is not ${NAME_PREFIX}…`);
+      }
+    }
+    const j = await call(method, p, body);
+    if (method === "POST" && p === "/1/agents" && j && j.id) owned.add(j.id);
+    return j;
+  };
+  guarded.own = (agent) => { if (agent && String(agent.name || "").startsWith(NAME_PREFIX)) owned.add(agent.id); };
+  return guarded;
+}
+
+/** off this machine the base must run on a TEST_ provider; the variants copy its providerId */
+export function checkProvider(base, providers, { local }) {
+  if (local) return;
+  const p = providers.get(base.providerId);
+  if (!isTestProvider(p)) {
+    throw new Error(`refused: ${base.name} runs on provider ${p ? p.name : base.providerId || "none"}; use one named TEST_…`);
+  }
 }
 
 function client({ host, appId, key }) {
@@ -115,11 +188,11 @@ async function listAgents(call) {
   return all;
 }
 
-async function providerLabels(call) {
+/** id → { name, label }: the name the app gave it, and its vendor as the page shows it */
+async function listProviders(call) {
   try {
-    const j = await call("GET", "/1/providers?limit=100");
-    const items = (j && (j.data || j.providers || j.items)) || [];
-    return new Map(items.map((p) => [p.id, p.providerName || p.name || null]));
+    const items = itemsOf(await call("GET", "/1/providers?limit=100"));
+    return new Map(items.map((p) => [p.id, { name: p.name || null, label: p.providerName || p.name || null }]));
   } catch (_) {
     return new Map();
   }
@@ -153,26 +226,34 @@ async function main() {
     return;
   }
   const e = env();
-  const call = client(e);
-  log(`host ${e.host} · app ${e.appId.slice(0, 3)}… · key from env`);
+  if (args.region !== undefined) {
+    const picked = await hostForRegion(args.region, (host) => client({ ...e, host }));
+    e.host = picked.host;
+    log(`region ${picked.region}: set mainDemo.region to "${picked.region}" in the deploy's config`);
+  }
+  const local = isLocalHost(e.host);
+  const call = fenced(client(e), { local });
+  log(`host ${e.host} · app ${e.appId.slice(0, 3)}… · key from env${local ? "" : " · DEMO_ names and TEST_ providers only"}`);
 
   const wanted = new Map();
   for (const m of MANIFEST) wanted.set(configKey(m.toggles), m.toggles);
   for (const k of args.add) wanted.set(k, parseKey(k));
 
   const agents = await listAgents(call);
+  for (const a of agents) call.own(a);
   const byName = new Map(agents.map((a) => [a.name, a]));
+  const providers = await listProviders(call);
   const baseRow = byName.get(args.base);
   if (!baseRow) throw new Error(`no agent named ${args.base} on ${e.host}; create it first`);
   const base = await call("GET", `/1/agents/${baseRow.id}`);
-  const providers = await providerLabels(call);
+  checkProvider(base, providers, { local });
 
   const variants = {};
   const record = (agent, status) => {
     const key = configKey(togglesFromAgentConfig(agent.config));
     variants[key] = {
       agentId: agent.id, name: agent.name, model: agent.model || null,
-      provider: providers.get(agent.providerId) || null, status,
+      provider: (providers.get(agent.providerId) || {}).label || null, status,
     };
     return key;
   };
@@ -255,7 +336,8 @@ async function main() {
   log(`wrote ${path.relative(process.cwd(), out)} · ${Object.keys(variants).length} variants`);
 }
 
-main().catch((err) => {
+// run as a script; imported, it only hands its helpers to the tests
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch((err) => {
   console.error(`main-demo-provision: ${err.message}`);
   process.exitCode = 1;
 });
