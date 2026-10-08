@@ -27,13 +27,17 @@ export const BASE_TOGGLES = Object.freeze({
 /** the toggles' ids, in key order */
 const FLAGS = TOGGLES.map((tg) => tg.id);
 
-/** the variants the script creates without being asked */
+/**
+ * Every agent this demo makes is named DEMO_main-demo-…: the prefix marks a
+ * demo agent on a shared production app, and the rest keeps it findable.
+ */
+export const NAME_PREFIX = "DEMO_main-demo-";
+export const BASE_AGENT = `${NAME_PREFIX}base`;
+
+/** the variants the script creates without being asked: the race's two arms */
 export const MANIFEST = [
-  { name: "main-demo-base", toggles: { ...BASE_TOGGLES } },
-  { name: "main-demo-prefetch", toggles: { ...BASE_TOGGLES, prefetch: true } },
-  { name: "main-demo-memory", toggles: { ...BASE_TOGGLES, memory: true } },
-  { name: "main-demo-guardrails", toggles: { ...BASE_TOGGLES, guardrails: true } },
-  { name: "main-demo-suggestions", toggles: { ...BASE_TOGGLES, suggestions: true } },
+  { name: BASE_AGENT, toggles: { ...BASE_TOGGLES } },
+  { name: `${NAME_PREFIX}prefetch`, toggles: { ...BASE_TOGGLES, prefetch: true } },
 ];
 
 /** toggles with every field present and every value legal */
@@ -74,7 +78,7 @@ export function agentName(toggles) {
   const t = normalize(toggles);
   const bits = [];
   for (const k of FLAGS) if (t[k]) bits.push(k);
-  return `main-demo-${bits.join("-")}`;
+  return `${NAME_PREFIX}${bits.join("-")}`;
 }
 
 /* check-copy: off */
@@ -187,8 +191,8 @@ export function completionQuery() {
 
 /* ── Edited configs: one agent per content hash ─────────────────
    A lane may edit the blocks a toggle set writes. The edited config names
-   its own agent, main-demo-<hash of the config>, created once from
-   main-demo-base and never PATCHed: two lanes with the same config share
+   its own agent, DEMO_main-demo-<hash of the config>, created once from
+   DEMO_main-demo-base and never PATCHed: two lanes with the same config share
    it, and no edit can change an agent another lane is running. */
 
 /* check-copy: off */
@@ -338,7 +342,7 @@ export function isCustom(toggles, edits) {
 }
 
 export const customKey = (blocks) => `custom=${hashConfig(blocks)}`;
-export const customName = (blocks) => `main-demo-${hashConfig(blocks)}`;
+export const customName = (blocks) => `${NAME_PREFIX}${hashConfig(blocks)}`;
 
 /**
  * Resolve an edited config: an agent the page or the script already made
@@ -364,7 +368,7 @@ export function baseTemplate(base) {
   return t;
 }
 
-/** the create body for an agent with these config blocks over main-demo-base */
+/** the create body for an agent with these config blocks over the base agent */
 export function customAgentBody(base, blocks, name = customName(blocks)) {
   const config = { ...(base.config || {}) };
   delete config.searchPrefetch;

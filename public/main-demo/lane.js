@@ -256,7 +256,7 @@ function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled,
       </div>`)}
       <p class="cfg-model">${entry.model
         ? html`<code>${entry.model}</code>${entry.provider ? html` · ${entry.provider}` : ""}`
-        : custom ? "model, tools and instructions copied from main-demo-base" : "model unknown"}</p>
+        : custom ? "model, tools and instructions copied from the base agent" : "model unknown"}</p>
     </div>
   </details>`;
 }
@@ -265,7 +265,7 @@ function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled,
 function CreateAgent({ resolution, state, onCreate }) {
   return html`<div class="missing">
     <p><b>No agent for this config yet.</b> The page creates <code>${resolution.name}</code> from
-      main-demo-base with these blocks, and never changes an agent a lane already runs.</p>
+      the base agent with these blocks, and never changes an agent a lane already runs.</p>
     <button type="button" class="btn" disabled=${state.busy} onClick=${onCreate}>
       ${state.busy ? "Creating…" : `Create ${resolution.name}`}</button>
     ${state.error && html`<p class="missing-err" role="alert">${state.error}</p>`}

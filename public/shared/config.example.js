@@ -220,8 +220,8 @@ window.DEMO_CONFIG = {
     //   MAIN_DEMO_HOST=… APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs --print-config
     // and paste the output here. An entry with no agentId is ignored.
     // variants: {
-    //   "prefetch=0,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_BASE_AGENT_ID", name: "main-demo-base" },
-    //   "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID", name: "main-demo-prefetch" },
+    //   "prefetch=0,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_BASE_AGENT_ID", name: "DEMO_main-demo-base" },
+    //   "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID", name: "DEMO_main-demo-prefetch" },
     // },
   },
 };

@@ -29,12 +29,14 @@ test("every manifest variant has a canonical key, a unique name, and round-trips
   assert.throws(() => c.parseKey("prefetch=tool_pair,memory=0,guardrails=0,suggestions=0"), /unknown toggle/,
     "prefetch is on or off: there is one injection format");
   assert.throws(() => c.parseKey("color=blue"), /unknown toggle/);
+  assert.deepEqual(c.MANIFEST.map((m) => m.name), ["DEMO_main-demo-base", "DEMO_main-demo-prefetch"], "the race's two arms");
+  for (const m of c.MANIFEST) assert.ok(m.name.startsWith("DEMO_"), "a demo agent on a shared app says so in its name");
 });
 
 test("a combination outside the manifest gets a stable, readable name", async () => {
   const c = await load("configs.mjs");
   const t = { prefetch: true, memory: true, guardrails: false, suggestions: true };
-  assert.equal(c.agentName(t), "main-demo-prefetch-memory-suggestions");
+  assert.equal(c.agentName(t), "DEMO_main-demo-prefetch-memory-suggestions");
 });
 
 test("the config a variant writes reads back as the same toggles", async () => {
@@ -55,7 +57,7 @@ test("resolution: the exact agent or a command, and prefetch off is its own agen
   const c = await load("configs.mjs");
   const base = c.configKey(c.BASE_TOGGLES);
   const pf = c.configKey({ ...c.BASE_TOGGLES, prefetch: true });
-  const table = { [pf]: { agentId: "pf-id", name: "main-demo-prefetch" } };
+  const table = { [pf]: { agentId: "pf-id", name: "DEMO_main-demo-prefetch" } };
 
   // no per-request override: a prefetch agent never stands in for its prefetch-off twin
   const off = c.resolveVariant(c.BASE_TOGGLES, table);
@@ -67,9 +69,11 @@ test("resolution: the exact agent or a command, and prefetch off is its own agen
   assert.equal(exact.status, "agent");
   assert.equal(exact.agentId, "base-id");
 
-  const miss = c.resolveVariant({ ...c.BASE_TOGGLES, memory: true }, table);
+  const miss = c.resolveVariant(c.BASE_TOGGLES, table);
   assert.equal(miss.status, "missing");
   assert.match(miss.command, /node tools\/main-demo-provision\.mjs$/, "a manifest variant needs no --add");
+  const memory = c.resolveVariant({ ...c.BASE_TOGGLES, memory: true }, table);
+  assert.match(memory.command, /--add 'prefetch=0,memory=1,guardrails=0,suggestions=0'$/, "outside the two arms, one --add");
   const combo = c.resolveVariant({ ...c.BASE_TOGGLES, memory: true, suggestions: true }, table);
   assert.match(combo.command, /node tools\/main-demo-provision\.mjs --add 'prefetch=0,memory=1,guardrails=0,suggestions=1'$/);
   // a prefetch lane never borrows a prefetch-off agent
@@ -184,9 +188,9 @@ test("a deploy's variant map comes from mainDemo.variants, and variants.json is 
   assert.equal(c.configVariants({}), null, "no variants field: fetch variants.json");
   assert.equal(c.configVariants({ variants: {} }), null, "an empty map is no map");
   assert.equal(c.configVariants({ variants: [] }), null);
-  assert.equal(c.configVariants({ variants: { [key]: { name: "main-demo-prefetch" } } }), null,
+  assert.equal(c.configVariants({ variants: { [key]: { name: "DEMO_main-demo-prefetch" } } }), null,
     "an entry without an agentId names no agent");
-  const map = c.configVariants({ variants: { [key]: { agentId: "a1", name: "main-demo-prefetch" }, x: { agentId: "" } } });
+  const map = c.configVariants({ variants: { [key]: { agentId: "a1", name: "DEMO_main-demo-prefetch" }, x: { agentId: "" } } });
   assert.deepEqual(Object.keys(map), [key]);
   assert.equal(c.resolveVariant({ prefetch: true }, map).agentId, "a1", "the lane resolves it like variants.json");
 });
@@ -194,13 +198,13 @@ test("a deploy's variant map comes from mainDemo.variants, and variants.json is 
 test("--print-config output: the variants map without the run's status", async () => {
   const c = await load("configs.mjs");
   const shared = c.shareableVariants({
-    a: { agentId: "a1", name: "main-demo-base", model: "gpt-4.1", provider: "openai", status: "adopted" },
-    b: { agentId: "b1", name: "main-demo-prefetch", model: null, status: "created" },
+    a: { agentId: "a1", name: "DEMO_main-demo-base", model: "gpt-4.1", provider: "openai", status: "adopted" },
+    b: { agentId: "b1", name: "DEMO_main-demo-prefetch", model: null, status: "created" },
     c: { name: "no-id" },
   });
   assert.deepEqual(shared, {
-    a: { agentId: "a1", name: "main-demo-base", model: "gpt-4.1", provider: "openai" },
-    b: { agentId: "b1", name: "main-demo-prefetch" },
+    a: { agentId: "a1", name: "DEMO_main-demo-base", model: "gpt-4.1", provider: "openai" },
+    b: { agentId: "b1", name: "DEMO_main-demo-prefetch" },
   });
   assert.deepEqual(c.configVariants({ variants: shared }), shared, "what it prints, the page reads back");
 });
@@ -370,7 +374,7 @@ test("edited configs: defaults pruned, hashed by content, resolved or named for 
   assert.deepEqual(edited.searchPrefetch, { enabled: true, conversationWindow: 3, hitsPerPage: 5, timeoutMs: 1500 });
   assert.ok(c.isCustom(pf, edited));
   const blocks = c.effectiveBlocks(pf, edited);
-  assert.match(c.customName(blocks), /^main-demo-[0-9a-f]{8}$/);
+  assert.match(c.customName(blocks), /^DEMO_main-demo-[0-9a-f]{8}$/);
   assert.equal(c.hashConfig(blocks), c.hashConfig(JSON.parse(JSON.stringify(blocks))), "stable");
   assert.equal(c.canonical({ b: 1, a: [2, { d: 1, c: 0 }] }), '{"a":[2,{"c":0,"d":1}],"b":1}');
 
@@ -383,7 +387,7 @@ test("edited configs: defaults pruned, hashed by content, resolved or named for 
   const local = { [c.customKey(blocks)]: { agentId: "id-1", name: c.customName(blocks) } };
   assert.equal(c.resolveCustom(blocks, {}, local).agentId, "id-1");
 
-  const base = { name: "main-demo-base", instructions: "new prompt", model: "m", providerId: "p", tools: [1], config: { searchPrefetch: true, x: 1 }, id: "no" };
+  const base = { name: "DEMO_main-demo-base", instructions: "new prompt", model: "m", providerId: "p", tools: [1], config: { searchPrefetch: true, x: 1 }, id: "no" };
   const body = c.customAgentBody(base, blocks);
   assert.equal(body.instructions, "new prompt", "instructions come from base at creation");
   assert.equal(body.id, undefined);
@@ -459,7 +463,7 @@ test("provision --print-config: stdout is the map, the progress goes to stderr, 
   const fs = require("node:fs");
   const { execFile } = require("node:child_process");
   const SECRET = "test-admin-key-never-printed";
-  const agents = [{ id: "base-id", name: "main-demo-base", model: "m", providerId: "p", config: { searchPrefetch: false } }];
+  const agents = [{ id: "base-id", name: "DEMO_main-demo-base", model: "m", providerId: "p", config: { searchPrefetch: false } }];
   const uas = new Set();
   const server = http.createServer((req, res) => {
     uas.add(req.headers["user-agent"]);
@@ -494,7 +498,7 @@ test("provision --print-config: stdout is the map, the progress goes to stderr, 
     const map = JSON.parse(stdout);
     const c = await load("configs.mjs");
     assert.deepEqual(Object.keys(map).sort(), c.MANIFEST.map((m) => c.configKey(m.toggles)).sort());
-    assert.equal(map[c.configKey(c.BASE_TOGGLES)].agentId, "base-id", "main-demo-base is adopted, not copied");
+    assert.equal(map[c.configKey(c.BASE_TOGGLES)].agentId, "base-id", "the base is adopted, not copied");
     assert.equal(agents.length, c.MANIFEST.length, "the other manifest variants are created");
     for (const e of Object.values(map)) assert.equal(e.status, undefined, "the run's status stays in variants.json");
     assert.match(stderr, /wrote .*variants\.json/);

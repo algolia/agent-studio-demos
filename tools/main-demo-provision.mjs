@@ -11,16 +11,16 @@
    module the page uses), lists the agents on HOST, and for each variant:
 
      - an agent with the variant's name exists → adopt it, untouched;
-     - none does → copy main-demo-base (model, provider, tools, prompt),
+     - none does → copy DEMO_main-demo-base (model, provider, tools, prompt),
        layer the variant's config on top, create it and publish it.
 
    --config takes the blocks of an edited config (what the page's Create
-   button would send) and creates or adopts main-demo-<hash>. Every agent
-   already named main-demo-<hash> is adopted and keyed by its config.
+   button would send) and creates or adopts DEMO_main-demo-<hash>. Every agent
+   already named DEMO_main-demo-<hash> is adopted and keyed by its config.
 
-   --sync-instructions copies main-demo-base's instructions and system
-   prompt to every other main-demo-* agent that differs, then republishes
-   it. It never writes main-demo-base, and it is the only write this script
+   --sync-instructions copies DEMO_main-demo-base's instructions and system
+   prompt to every other DEMO_main-demo-* agent that differs, then republishes
+   it. It never writes the base, and it is the only write this script
    makes to an existing agent.
 
    Then writes public/main-demo/variants.json (gitignored): config key →
@@ -39,16 +39,15 @@ import { readFile, writeFile, access } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
-  MANIFEST, configKey, parseKey, agentName, agentConfigPatch, togglesFromAgentConfig,
+  MANIFEST, NAME_PREFIX, BASE_AGENT, configKey, parseKey, agentName, agentConfigPatch, togglesFromAgentConfig,
   baseTemplate, customAgentBody, customKey, customName, blocksFromConfig, shareableVariants,
 } from "../public/main-demo/configs.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUT = path.join(HERE, "..", "public", "main-demo", "variants.json");
-const BASE_NAME = "main-demo-base";
 
 function parseArgs(argv) {
-  const out = { add: [], configs: [], sync: false, dryRun: false, printConfig: false, out: DEFAULT_OUT, base: BASE_NAME };
+  const out = { add: [], configs: [], sync: false, dryRun: false, printConfig: false, out: DEFAULT_OUT, base: BASE_AGENT };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--add") out.add.push(argv[++i]);
@@ -207,10 +206,10 @@ async function main() {
     }
   };
 
-  // edited configs: the ones asked for, and every main-demo-<hash> already there
+  // edited configs: the ones asked for, and every DEMO_main-demo-<hash> already there
   const customs = new Map(args.configs.map((b) => [customKey(b), b]));
   for (const a of agents) {
-    if (!/^main-demo-[0-9a-f]{8}$/.test(a.name)) continue;
+    if (!(a.name.startsWith(NAME_PREFIX) && /^[0-9a-f]{8}$/.test(a.name.slice(NAME_PREFIX.length)))) continue;
     const full = a.config ? a : await call("GET", `/1/agents/${a.id}`);
     const blocks = blocksFromConfig(full.config);
     if (customName(blocks) !== a.name) { log(`skip   ${a.name}  (its config hashes to ${customName(blocks)})`); continue; }
@@ -229,7 +228,7 @@ async function main() {
 
   if (args.sync) {
     for (const a of agents) {
-      if (!a.name.startsWith("main-demo-") || a.name === args.base || a.id === base.id) continue;
+      if (!a.name.startsWith(NAME_PREFIX) || a.name === args.base || a.id === base.id) continue;
       const full = await call("GET", `/1/agents/${a.id}`);
       if (full.instructions === base.instructions && full.systemPrompt === base.systemPrompt) {
         log(`same   ${a.name}`);
