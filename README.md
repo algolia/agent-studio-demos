@@ -9,7 +9,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 
 | Demo | Path | Status |
 | --- | --- | --- |
-| What is Agent Studio? | `/main-demo/` | Live on a review build |
+| What is Agent Studio? | `/main-demo/` | Production, once its two agents are provisioned |
 | Jev trims the record | `/jev-attributes/` | Local; public with your own key once this site forwards it |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
@@ -153,7 +153,9 @@ before the model starts, and hands the model those hits, so it can often answer
 without asking for a search itself.
 
 **RAG race** mode is where you see it. Two lanes get the same question at the
-same moment: lane A starts without prefetch, lane B with it. Each lane draws its own
+same moment: lane A runs `DEMO_main-demo-base` (prefetch off), lane B
+`DEMO_main-demo-prefetch` (prefetch on, the shipped defaults), two agents that
+differ in that one block, on Agent Studio production. Each lane draws its own
 timeline (first byte, first token, every search and model call, full paint).
 The scoreboard puts both lanes' model calls, tool calls, first token, full paint
 and tokens side by side. A race repeats 1 to 10 times, and the board shows medians and how
@@ -162,24 +164,52 @@ in it, the raw sentence finds little, and the model searches anyway.
 
 ### Run it locally
 
-1. Start an Agent Studio backend, for example on `http://127.0.0.1:8000`, with a
-   products index and an agent named `main-demo-base` (model, provider, search
-   tool, Grouped Results tool, prompt).
-2. Create the other agents from it, once:
+1. Create the two agents once, on production or on a backend of your own (see
+   [Provision the agents](#provision-the-agents)).
+2. Fill `mainDemo` in `public/shared/config.js` (see `config.example.js`):
+   `region` (or `host`), `appId`, `indexName`, a search-only key in
+   `searchApiKey` and `agentStudioApiKey`, and `fields` if your records name
+   their attributes differently.
+3. Serve `public/` (see [Run it locally](#run-it-locally)) and open `/main-demo/`.
 
-   ```bash
-   MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs
-   ```
+The page talks to `mainDemo.host` when it is set, else to production in
+`mainDemo.region` (`eu`: `https://agent-studio.eu.algolia.com`, `us`:
+`https://agent-studio.us.algolia.com`), else to `http://127.0.0.1:8000`.
 
-3. Fill `mainDemo` in `public/shared/config.js` (see `config.example.js`): `host`,
-   `appId`, `indexName`, a search-only key in `searchApiKey` and
-   `agentStudioApiKey`, and `fields` if your records name their attributes
-   differently.
-4. Serve `public/` (see [Run it locally](#run-it-locally)) and open `/main-demo/`.
+No backend? The page still opens: with nothing answering at that host, or with
+`?fixture=1`, the lanes replay a recorded stream and label every number as a
+replay.
 
-No backend? The page still opens: with nothing answering at `mainDemo.host`, or
-with `?fixture=1`, the lanes replay a recorded stream and label every number as
-a replay.
+### Provision the agents
+
+`tools/main-demo-provision.mjs` creates the race's two agents, or adopts them
+when they exist. On production it runs behind a fence: it creates only agents
+named `DEMO_…` or `EVAL_…`, writes only agents named `DEMO_main-demo-…`, and
+refuses a base agent whose provider is not named `TEST_…`. The variants copy the
+base's provider, model, tools and prompt.
+
+```bash
+# the first run: find the app's region, create the base, then the prefetch arm
+APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs --region auto \
+  --seed --provider TEST_… --model … --print-config > variants.config.json
+```
+
+- `--region auto` asks both production hosts and keeps the one that lists the
+  app's providers, then prints the `mainDemo.region` to set. `--region eu` or
+  `--region us` skips the question.
+- `--seed` creates `DEMO_main-demo-base` when there is none: the products
+  index with the search and Grouped Results tools, the shopping prompt, Algolia
+  MCP on, prefetch off. Without `--provider` it lists the app's `TEST_`
+  providers to pick from.
+- `--dry-run` reads and plans, and writes nothing.
+- A second run creates nothing. It reports an agent the shipped backend would
+  read differently (Algolia MCP off, prefetch keys it ignores), and
+  `--converge` rewrites that agent's config, then republishes it.
+- The key stays in the environment. Neither the progress lines nor the map
+  print it.
+
+On a backend of your own, `MAIN_DEMO_HOST=http://127.0.0.1:8000` replaces
+`--region`, and the fence is off.
 
 ### How a lane picks its agent
 
@@ -192,29 +222,33 @@ A lane's toggles (search prefetch, memory, guardrails, suggestions) select an
 variant, an agent whose `searchPrefetch` is `false`: the completions call takes
 no per-request override.
 
-The provisioning script copies `main-demo-base`, layers each variant's config on
-top, adopts any agent that already carries the variant's name, and writes
-`public/main-demo/variants.json` (gitignored). A combination outside the manifest
-is added with `--add 'prefetch=1,memory=1,guardrails=0,suggestions=0'`, and the
-page prints that exact line when a lane asks for a variant nobody created.
+The provisioning script copies `DEMO_main-demo-base`, layers each variant's
+config on top, adopts any agent that already carries the variant's name, and
+writes `public/main-demo/variants.json` (gitignored). By default it makes the
+race's two arms. A combination outside them is added with
+`--add 'prefetch=1,memory=1,guardrails=0,suggestions=0'`, and the page prints
+that exact line, for the host it talks to, when a lane asks for a variant
+nobody created. An edited config gets its own `DEMO_main-demo-<hash>` agent; the
+page creates it only on a local backend, and on production it prints the
+command instead.
 
-A prefetch variant carries the block the product documents in
-`docs/SEARCH_PREFETCH.md`, under the `searchPrefetch` key:
+A prefetch variant carries the block Agent Studio ships (conversational-ai
+`docs/SEARCH_PREFETCH.md`), under the `searchPrefetch` key. The race's prefetch
+arm sets only `enabled`, so it runs on the defaults:
 
 ```json
-{ "searchPrefetch": { "enabled": true, "conversationWindow": 1, "minInformativeTokens": 2,
-  "hitsPerPage": 5, "searchParameters": { "queryLanguages": ["en"] } } }
+{ "searchPrefetch": { "enabled": true, "indexName": null, "conversationWindow": 1,
+  "minInformativeTokens": 2, "hitsPerPage": null, "timeoutMs": 1000 } }
 ```
 
-The lane's editor holds every field of that block. `capturedIndexSettings` is
-written by the server after a save: the editor shows it, read-only, once the
-script has read it back, and never sends it or hashes it.
+The lane's editor holds those six fields and no others.
 
-Each prefetch turn streams a `data-search_prefetch` part: `decision`, `nbHits`,
-`latencyMs`, `toolName`, `index`, and `toolCallId` when the hits reached the
-model. The hits ride on the visible search tool call with that id, which the
-lane draws as the passive search. An injected turn sends the part again before
-`finish`, with `agentSearchedAnyway`, and the lane reads that flag from it.
+Each prefetch turn streams one `data-search_prefetch` part: `decision`,
+`nbHits`, `latencyMs`, `toolName`, `index`, and `toolCallId` when the hits
+reached the model. The hits ride on the visible search tool call with that id,
+which the lane draws as the passive search. Whether the model searched anyway
+is read off the same stream: a search call of its own after an injected
+prefetch.
 
 ### Public mode
 
@@ -230,17 +264,12 @@ The deployed page needs two things in its config, and nothing else changes:
 To point the public page at a backend:
 
 1. Provision the agents there, and print the map as JSON (agent ids and names,
-   never a key; progress goes to stderr):
-
-   ```bash
-   MAIN_DEMO_HOST=https://… APP_ID=… ADMIN_KEY=… \
-     node tools/main-demo-provision.mjs --print-config > variants.config.json
-   ```
-
+   never a key; progress goes to stderr), as in
+   [Provision the agents](#provision-the-agents).
 2. Mint the search-only key.
-3. Add a `mainDemo` block to the deploy config: `host`, `appId`, `indexName`,
-   `fields`, the key in both key fields, and the printed map as `variants`. The
-   backend must answer CORS for the site's origin.
+3. Add a `mainDemo` block to the deploy config: `region` (or `host`), `appId`,
+   `indexName`, `fields`, the key in both key fields, and the printed map as
+   `variants`. Production answers CORS for any origin.
 4. Refresh `DEMO_CONFIG_JS` from that file (see [Deploy](#deploy)), and the next
    push to `main` serves it.
 
