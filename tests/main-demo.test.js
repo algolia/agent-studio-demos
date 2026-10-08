@@ -115,8 +115,7 @@ test("the prefetched search is on the wire, as a tool pair before the first mode
   assert.deepEqual(pp.tools.map((x) => x.name), ["algolia_search_index_products", "algolia_grouped_results"]);
   assert.equal(pp.hits.length, 6, "the hits ride on the visible tool output, never on the part");
   assert.deepEqual(pp.tools.map((x) => x.passive), [true, false]);
-  assert.equal(pp.prefetchParts, 2, "sent up front, then again before finish");
-  assert.equal(pp.prefetchPart.agentSearchedAnyway, false);
+  assert.equal(pp.prefetchParts, 1, "one part per user turn, sent up front");
   assert.equal(pp.prefetchPart.hits, undefined);
   const [passive] = pp.tools;
   assert.equal(passive.duration, 212.4, "the passive search lasts what the part says, not its wire time");
@@ -143,17 +142,24 @@ test("a part with toolCallId marks exactly that tool call passive, whatever its 
   assert.ok(!isPrefetchPart({ type: "data-suggestions" }));
 });
 
-test("the second prefetch part's agentSearchedAnyway wins", async () => {
+test("searched anyway: read off the stream, after an injected prefetch only", async () => {
   const { createTurn, searchCounts } = await load("stream.mjs");
   const first = { decision: "injected_candidate", nbHits: 6, latencyMs: 212.4, toolName: "s", index: "products", toolCallId: "prefetch_1" };
   const t = createTurn();
   t.observe(1, { type: "data-search_prefetch", id: "search_prefetch", data: first });
-  assert.equal(searchCounts(true, t.view()).searchedAnyway, null, "unknown until the turn ends");
-  t.observe(9, { type: "data-search_prefetch", id: "search_prefetch", data: { ...first, agentSearchedAnyway: true } });
+  assert.equal(searchCounts(true, t.view()).searchedAnyway, null, "unknown while the turn runs");
+  t.observe(5, { type: "tool-input-start", toolCallId: "call_1", toolName: "algolia_search_index_products" });
+  t.observe(6, { type: "tool-output-available", toolCallId: "call_1", output: { hits: [] } });
+  assert.equal(searchCounts(true, t.view()).searchedAnyway, true, "the model's own search settles it");
+  t.finish(9);
   const c = searchCounts(true, t.view());
-  assert.equal(c.searchedAnyway, true);
-  assert.equal(c.passive, 1);
-  assert.equal(t.view().prefetchParts, 2);
+  assert.deepEqual([c.passive, c.active, c.searchedAnyway], [1, 1, true]);
+  assert.equal(t.view().prefetchParts, 1);
+
+  const quiet = createTurn();
+  quiet.observe(1, { type: "data-search_prefetch", id: "search_prefetch", data: first });
+  quiet.finish(4);
+  assert.equal(searchCounts(true, quiet.view()).searchedAnyway, false, "a finished turn with no search of its own used the prefetch");
 });
 
 test("ms() prints milliseconds under a second and seconds above", async () => {

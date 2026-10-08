@@ -123,7 +123,7 @@ function Timeline({ view, fixture }) {
 
 /* check-copy: off */
 const NO_PART_TIP = "This lane's agent has prefetch on, but the backend streamed no data-search_prefetch part.";
-const ANYWAY_TIP = "agentSearchedAnyway, from the prefetch part the backend sends again at the end of the turn.";
+const ANYWAY_TIP = "Read off the stream: did the model run its own search after the prefetched one?";
 /* check-copy: on */
 
 /** who searched this turn: the platform before the model (passive), or the model itself (active) */
