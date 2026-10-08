@@ -19,7 +19,7 @@ import { InstantSearch, Chat, ChatInlineLayout } from "react-instantsearch";
 import {
   TOGGLES, BLOCKS, normalize, resolveVariant, completionQuery, agentName,
   blockValues, blockFrom, validateBlock, toggleBlocks, effectiveBlocks, isCustom, canonical,
-  resolveCustom, customKey, customName,
+  resolveCustom, customKey, customName, isLocalHost,
 } from "./configs.mjs";
 import { apiClient, ensureCustomAgent, loadLocal, saveLocal } from "./agents.mjs";
 import { createSseParser, createTurn, decisionLabel, ms, searchCounts } from "./stream.mjs";
@@ -261,8 +261,18 @@ function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled,
   </details>`;
 }
 
-/** an edited config with no agent yet: make it here, or copy the command */
-function CreateAgent({ resolution, state, onCreate }) {
+/**
+ * An edited config with no agent yet: make it here, or copy the command.
+ * Only against a local backend: on production the page never writes an agent,
+ * whatever its key allows, so the shell is the one way.
+ */
+function CreateAgent({ resolution, state, onCreate, canCreate }) {
+  if (!canCreate) {
+    return html`<div class="missing">
+      <p><b>No agent for this config yet.</b> Create <code>${resolution.name}</code> from a shell:</p>
+      <pre><code>${resolution.command}</code></pre>
+    </div>`;
+  }
   return html`<div class="missing">
     <p><b>No agent for this config yet.</b> The page creates <code>${resolution.name}</code> from
       the base agent with these blocks, and never changes an agent a lane already runs.</p>
@@ -341,10 +351,10 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
   const custom = isCustom(toggles, edits);
   const blocks = useMemo(() => effectiveBlocks(toggles, edits), [toggles, edits]);
   const resolution = useMemo(() => {
-    if (!custom) return resolveVariant(toggles, variants);
+    if (!custom) return resolveVariant(toggles, variants, { host: cfg.host });
     if (fixture) return { status: "agent", key: customKey(blocks), agentId: "fixture", entry: { name: customName(blocks) }, custom: true };
-    return resolveCustom(blocks, variants, local);
-  }, [custom, toggles, variants, blocks, local, fixture]);
+    return resolveCustom(blocks, variants, local, { host: cfg.host });
+  }, [custom, toggles, variants, blocks, local, fixture, cfg.host]);
   const prefetchOn = Boolean(blocks.searchPrefetch && blocks.searchPrefetch.enabled);
 
   // one redraw per frame, however fast the events come
@@ -452,6 +462,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     setTurn(null);
   };
   const create = async () => {
+    if (!isLocalHost(cfg.host)) return;
     setCreating({ busy: true, error: "" });
     try {
       const call = apiClient({ host: cfg.host, appId: cfg.appId, apiKey: cfg.agentStudioApiKey });
@@ -497,7 +508,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
               }} />
           </${InstantSearch}>`
         : resolution.status === "custom"
-          ? html`<${CreateAgent} resolution=${resolution} state=${creating} onCreate=${create} />`
+          ? html`<${CreateAgent} resolution=${resolution} state=${creating} onCreate=${create} canCreate=${isLocalHost(cfg.host)} />`
           : html`<${Missing} resolution=${resolution} />`}
     </div>
     <${HitsPanel} view=${view} Card=${Card} />

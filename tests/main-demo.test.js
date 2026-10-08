@@ -177,9 +177,33 @@ test("config.example.js documents every mainDemo field the page reads", () => {
   const { loadExampleConfig } = require("./load.js");
   const md = loadExampleConfig().mainDemo;
   assert.ok(md, "config.example.js has no mainDemo block");
-  for (const f of ["host", "appId", "searchApiKey", "agentStudioApiKey", "indexName"]) {
+  for (const f of ["region", "appId", "searchApiKey", "agentStudioApiKey", "indexName"]) {
     assert.ok(typeof md[f] === "string" && md[f], `mainDemo.${f} is missing`);
   }
+  const src = require("node:fs").readFileSync(path.join(__dirname, "..", "public", "shared", "config.example.js"), "utf8");
+  assert.match(src, /\/\/ host: "http:\/\/127\.0\.0\.1:8000"/, "host is documented, and left to override region");
+});
+
+test("host: mainDemo.host wins, then production in mainDemo.region, then a local backend", async () => {
+  const c = await load("configs.mjs");
+  assert.equal(c.demoHost({ region: "eu" }), "https://agent-studio.eu.algolia.com");
+  assert.equal(c.demoHost({ region: "US" }), "https://agent-studio.us.algolia.com");
+  assert.equal(c.demoHost({ region: "eu", host: "http://127.0.0.1:8000/" }), "http://127.0.0.1:8000");
+  assert.equal(c.demoHost({ region: "mars" }), c.LOCAL_HOST);
+  assert.equal(c.demoHost(undefined), c.LOCAL_HOST);
+  assert.equal(c.regionOf("https://agent-studio.us.algolia.com/"), "us");
+  assert.equal(c.regionOf("https://agent-studio.staging.eu.algolia.com"), null);
+  assert.ok(c.isLocalHost("http://localhost:8000") && c.isLocalHost(c.LOCAL_HOST));
+  assert.ok(!c.isLocalHost(c.HOSTS.eu), "production is never local: the page does not create agents there");
+
+  // the command a lane prints targets the backend the page talks to
+  const pf = { ...c.BASE_TOGGLES, prefetch: true };
+  assert.equal(c.resolveVariant(pf, {}, { host: c.HOSTS.us }).command,
+    "APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY node tools/main-demo-provision.mjs --region us");
+  assert.equal(c.provisionCommand(["k=1"], { host: "http://127.0.0.1:9000" }),
+    "MAIN_DEMO_HOST=http://127.0.0.1:9000 APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY node tools/main-demo-provision.mjs --add 'k=1'");
+  const blocks = c.effectiveBlocks(pf, { searchPrefetch: { enabled: true, timeoutMs: 1500 } });
+  assert.match(c.resolveCustom(blocks, {}, {}, { host: c.HOSTS.eu }).command, /provision\.mjs --region eu --config '\{/);
 });
 
 test("a deploy's variant map comes from mainDemo.variants, and variants.json is the fallback", async () => {

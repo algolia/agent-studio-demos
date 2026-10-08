@@ -137,7 +137,7 @@ export function togglesFromAgentConfig(config) {
  *
  * `variants` is the `variants` map of variants.json: key → { agentId, ... }.
  */
-export function resolveVariant(toggles, variants, { commandPrefix } = {}) {
+export function resolveVariant(toggles, variants, { host } = {}) {
   const t = normalize(toggles);
   const key = configKey(t);
   const table = variants || {};
@@ -146,7 +146,7 @@ export function resolveVariant(toggles, variants, { commandPrefix } = {}) {
   }
   // a manifest variant needs no --add: the plain run creates every one of them
   const inManifest = MANIFEST.some((m) => configKey(m.toggles) === key);
-  return { status: "missing", key, command: provisionCommand(inManifest ? [] : [key], commandPrefix) };
+  return { status: "missing", key, command: provisionCommand(inManifest ? [] : [key], { host }) };
 }
 
 /**
@@ -176,11 +176,49 @@ export function shareableVariants(variants) {
   return out;
 }
 
-/** the exact shell line that creates a missing variant */
-export function provisionCommand(keys, prefix) {
-  const env = prefix || "MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY";
+/* ── Where the agents live ──────────────────────────────────────
+   Production serves an app's agents from its region's host. The page and
+   the script name the same host, so the command the page prints targets
+   the backend the page talks to. */
+
+/** Agent Studio production, by region */
+export const HOSTS = Object.freeze({
+  eu: "https://agent-studio.eu.algolia.com",
+  us: "https://agent-studio.us.algolia.com",
+});
+export const LOCAL_HOST = "http://127.0.0.1:8000";
+
+/** mainDemo.host when set, else the production host of mainDemo.region, else a local backend */
+export function demoHost(mainDemo) {
+  const md = mainDemo || {};
+  if (typeof md.host === "string" && md.host.trim()) return md.host.trim().replace(/\/+$/, "");
+  const region = String(md.region || "").trim().toLowerCase();
+  return HOSTS[region] || LOCAL_HOST;
+}
+
+/** the region whose production host this is; null for any other backend */
+export function regionOf(host) {
+  const h = String(host || "").replace(/\/+$/, "");
+  return Object.keys(HOSTS).find((r) => HOSTS[r] === h) || null;
+}
+
+/** a backend on this machine: the only place the page itself may create agents */
+export function isLocalHost(host) {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/.test(String(host || ""));
+}
+
+/** the shell prefix that points the script at `host`; the key stays a variable */
+function commandEnv(host) {
+  const region = regionOf(host);
+  const keys = "APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY";
+  return region ? { env: keys, flag: ` --region ${region}` } : { env: `MAIN_DEMO_HOST=${host || LOCAL_HOST} ${keys}`, flag: "" };
+}
+
+/** the exact shell line that creates a missing variant on `host` */
+export function provisionCommand(keys, { host } = {}) {
+  const { env, flag } = commandEnv(host);
   const adds = (keys || []).map((k) => ` --add '${k}'`).join("");
-  return `${env} node tools/main-demo-provision.mjs${adds}`;
+  return `${env} node tools/main-demo-provision.mjs${flag}${adds}`;
 }
 
 /** query parameters the completions URL carries */
@@ -349,14 +387,14 @@ export const customName = (blocks) => `${NAME_PREFIX}${hashConfig(blocks)}`;
  * for this hash, or `{ status: "custom" }` with the name to create and the
  * command that creates it.
  */
-export function resolveCustom(blocks, variants, local, { commandPrefix } = {}) {
+export function resolveCustom(blocks, variants, local, { host } = {}) {
   const key = customKey(blocks);
   const hit = (variants && variants[key]) || (local && local[key]);
   if (hit && hit.agentId) return { status: "agent", key, agentId: hit.agentId, entry: hit, custom: true };
-  const env = commandPrefix || "MAIN_DEMO_HOST=http://127.0.0.1:8000 APP_ID=$APP_ID ADMIN_KEY=$ADMIN_KEY";
+  const { env, flag } = commandEnv(host);
   return {
     status: "custom", key, name: customName(blocks), blocks,
-    command: `${env} node tools/main-demo-provision.mjs --config '${canonical(blocks)}'`,
+    command: `${env} node tools/main-demo-provision.mjs${flag} --config '${canonical(blocks)}'`,
   };
 }
 
