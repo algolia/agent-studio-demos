@@ -72,3 +72,91 @@ test("provider: off this machine the base runs on a TEST_ provider, and the vari
   assert.equal(body.providerId, "t", "a variant runs on its base's provider");
   assert.equal(body.config.enableAlgoliaMcp, true, "and keeps the base's MCP switch");
 });
+
+/** a fake Agent Studio on this machine, and the script run against it */
+async function withFakeHost(state, args, fn) {
+  const http = require("node:http");
+  const os = require("node:os");
+  const fs = require("node:fs");
+  const { execFile } = require("node:child_process");
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (d) => { body += d; });
+    req.on("end", () => {
+      const send = (j) => { res.setHeader("content-type", "application/json"); res.end(JSON.stringify(j)); };
+      const url = new URL(req.url, "http://x");
+      const one = url.pathname.match(/^\/1\/agents\/([^/]+)(\/publish)?$/);
+      if (req.method === "GET" && url.pathname === "/1/agents") return send({ data: state.agents, pagination: { totalPages: 1 } });
+      if (req.method === "GET" && url.pathname === "/1/providers") return send({ data: state.providers });
+      if (req.method === "POST" && url.pathname === "/1/agents") {
+        const a = { id: `id-${state.agents.length}`, ...JSON.parse(body) };
+        state.agents.push(a);
+        return send(a);
+      }
+      if (one && one[2]) return send({});
+      if (one) return send(state.agents.find((a) => a.id === one[1]));
+      res.statusCode = 404;
+      send({ detail: "not here" });
+    });
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "main-demo-"));
+  try {
+    const run = await new Promise((resolve) => {
+      execFile(process.execPath, [path.join(__dirname, "..", "tools", "main-demo-provision.mjs"), ...args, "--out", path.join(tmp, "variants.json")], {
+        env: { ...process.env, MAIN_DEMO_HOST: `http://127.0.0.1:${server.address().port}`, APP_ID: "APPID", ADMIN_KEY: SECRET },
+      }, (err, stdout, stderr) => resolve({ code: err ? err.code : 0, stdout, stderr }));
+    });
+    await fn(run);
+  } finally {
+    server.close();
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+const SECRET = "test-admin-key-never-printed";
+const PROVIDERS = [{ id: "t", name: "TEST_openai", providerName: "openai" }, { id: "c", name: "Customer key", providerName: "openai" }];
+
+test("--seed: the base and the prefetch arm, one provider, Algolia MCP on, prefetch the shipped default", async () => {
+  const state = { agents: [], providers: PROVIDERS };
+  await withFakeHost(state, ["--seed", "--provider", "TEST_openai", "--model", "gpt-4.1", "--print-config"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    const [base, prefetch] = state.agents;
+    assert.deepEqual(state.agents.map((a) => a.name), ["DEMO_main-demo-base", "DEMO_main-demo-prefetch"]);
+    assert.deepEqual([base.providerId, prefetch.providerId], ["t", "t"]);
+    assert.deepEqual([base.model, prefetch.model], ["gpt-4.1", "gpt-4.1"]);
+    assert.equal(base.config.searchPrefetch, false);
+    assert.deepEqual(prefetch.config.searchPrefetch, { enabled: true }, "the shipped defaults: no field set");
+    assert.deepEqual([base.config.enableAlgoliaMcp, prefetch.config.enableAlgoliaMcp], [true, true]);
+    assert.deepEqual(base.tools.map((t) => t.type), ["algolia_search_index", "algolia_grouped_results"]);
+    assert.equal(base.tools[0].indices[0].index, "products");
+    assert.deepEqual(prefetch.tools, base.tools);
+    assert.equal(prefetch.instructions, base.instructions);
+    const map = JSON.parse(run.stdout);
+    assert.equal(Object.keys(map).length, 2);
+    assert.ok(!run.stdout.includes(SECRET) && !run.stderr.includes(SECRET), "the key is never printed");
+  });
+
+  // a second run creates nothing
+  await withFakeHost(state, ["--seed", "--provider", "TEST_openai", "--model", "gpt-4.1"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.equal(state.agents.length, 2);
+    assert.match(run.stdout, /--seed changes nothing/);
+  });
+});
+
+test("--seed asks for what it lacks, and names only TEST_ providers", async () => {
+  await withFakeHost({ agents: [], providers: PROVIDERS }, ["--seed", "--model", "m"], async (run) => {
+    assert.notEqual(run.code, 0);
+    assert.match(run.stderr, /--seed needs --provider NAME; providers named TEST_… here: TEST_openai/);
+    assert.ok(!run.stderr.includes("Customer key"));
+  });
+  await withFakeHost({ agents: [], providers: PROVIDERS }, [], async (run) => {
+    assert.notEqual(run.code, 0);
+    assert.match(run.stderr, /no agent named DEMO_main-demo-base .*pass --seed/);
+  });
+  const p = await load();
+  const providers = new Map(PROVIDERS.map((x) => [x.id, { name: x.name, label: x.providerName }]));
+  assert.throws(() => p.seedProvider(providers, "Customer key", { local: false }), /not a TEST_ provider/);
+  assert.equal(p.seedProvider(providers, "Customer key", { local: true }), "c", "a local backend may use any provider");
+  assert.equal(p.seedProvider(providers, "TEST_openai", { local: false }), "t");
+});

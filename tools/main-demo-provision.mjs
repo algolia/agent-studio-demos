@@ -7,6 +7,13 @@
        node tools/main-demo-provision.mjs [--add 'prefetch=1,memory=1,…']
          [--config '{"searchPrefetch":{…},…}'] [--sync-instructions] [--dry-run]
          [--base NAME] [--out FILE] [--print-config]
+         [--seed --provider NAME --model ID [--index NAME]]
+
+   --seed creates the base agent when the host has none: a shopping
+   assistant on --index (products by default) with the Algolia search and
+   grouped-results tools, on --provider NAME with --model ID, Algolia MCP
+   on (search prefetch only runs through it) and prefetch off. Run without
+   --provider, it lists the providers named TEST_… to pick from.
 
    --region targets Agent Studio production in that region; auto asks both
    hosts and keeps the one where the app has providers. On any host that is
@@ -47,7 +54,7 @@ import { readFile, writeFile, access } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
-  MANIFEST, NAME_PREFIX, BASE_AGENT, HOSTS, isLocalHost, configKey, parseKey, agentName, agentConfigPatch, togglesFromAgentConfig,
+  MANIFEST, NAME_PREFIX, BASE_AGENT, BASE_TOGGLES, HOSTS, isLocalHost, configKey, parseKey, agentName, agentConfigPatch, togglesFromAgentConfig,
   baseTemplate, customAgentBody, customKey, customName, blocksFromConfig, shareableVariants,
 } from "../public/main-demo/configs.mjs";
 
@@ -66,6 +73,10 @@ function parseArgs(argv) {
     else if (a === "--out") out.out = path.resolve(argv[++i]);
     else if (a === "--base") out.base = argv[++i];
     else if (a === "--region") out.region = String(argv[++i] || "").toLowerCase();
+    else if (a === "--seed") out.seed = true;
+    else if (a === "--provider") out.provider = argv[++i];
+    else if (a === "--model") out.model = argv[++i];
+    else if (a === "--index") out.index = argv[++i];
     else if (a === "--help" || a === "-h") out.help = true;
     else throw new Error(`unknown argument: ${a}`);
   }
@@ -146,6 +157,61 @@ export function checkProvider(base, providers, { local }) {
   }
 }
 
+/* ── The seeded base agent ──────────────────────────────────────
+   The frozen review env's base, ported from the earlier local provisioner:
+   the same prompt, tools and search parameters, so the race on production
+   compares the same two agents. */
+
+const PRODUCTS = {
+  description: "General product catalog (electronics, sports, home, toys, fashion, books): title, brand, "
+    + "price, categories, product group, color, features and image.",
+  attributes: ["title", "brand", "manufacturer", "price", "priceDisplay", "largeImage", "categories",
+    "productGroup", "color", "features", "url"],
+};
+
+const SEED_INSTRUCTIONS = "You are a shopping assistant for an online store. Help shoppers find products from the "
+  + "catalog. Search the catalog before recommending anything, and only recommend products "
+  + "that appear in the search results. Keep answers short: a sentence of context, then the "
+  + "products. Mention price and brand when they help the shopper choose. When you show "
+  + "several products, present them with the grouped results tool. When a search returns no "
+  + "hits, or hits that don't fit the request, search again once with broader or related terms "
+  + "(the product category, a synonym, fewer words, no filters). Never answer with nothing: "
+  + "recommend the closest products you found and say in a few words how they differ from the request.";
+
+/** the base agent --seed creates: prefetch off, Algolia MCP on, so both arms search the same way */
+export function seedBody({ name = BASE_AGENT, providerId, model, index = "products" }) {
+  const known = index === "products";
+  const searchParameters = {
+    ...(known ? { attributesToRetrieve: PRODUCTS.attributes } : {}),
+    hitsPerPage: 7,
+    // a chat query with one word the catalog lacks finds nothing under strict settings
+    removeWordsIfNoResults: "allOptional", ignorePlurals: true, typoTolerance: "min",
+  };
+  return {
+    name,
+    description: "Search prefetch race: the base arm, and the template every variant copies",
+    providerId, model,
+    instructions: SEED_INSTRUCTIONS,
+    config: { enableAlgoliaMcp: true, ...agentConfigPatch(BASE_TOGGLES) },
+    tools: [
+      { type: "algolia_search_index", name: "algolia_search_index",
+        indices: [{ index, description: known ? PRODUCTS.description : `The ${index} catalog.`, searchParameters }] },
+      { type: "algolia_grouped_results", name: "algolia_grouped_results" },
+    ],
+  };
+}
+
+/** the provider --seed names, refused off this machine unless it is a TEST_ one */
+export function seedProvider(providers, name, { local }) {
+  const tests = [...providers.values()].filter(isTestProvider).map((p) => p.name).sort();
+  const hint = tests.length ? `providers named TEST_… here: ${tests.join(", ")}` : "no provider here is named TEST_…";
+  if (!name) throw new Error(`--seed needs --provider NAME; ${hint}`);
+  const found = [...providers.entries()].find(([, p]) => p.name === name);
+  if (!found) throw new Error(`no provider named ${name}; ${hint}`);
+  if (!local && !isTestProvider(found[1])) throw new Error(`refused: ${name} is not a TEST_ provider; ${hint}`);
+  return found[0];
+}
+
 function client({ host, appId, key }) {
   const headers = {
     "content-type": "application/json",
@@ -222,7 +288,7 @@ async function main() {
   if (args.help) {
     log("usage: MAIN_DEMO_HOST=… APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs"
       + " [--add KEY]… [--config JSON]… [--sync-instructions] [--dry-run] [--out FILE] [--base NAME]"
-      + " [--print-config]");
+      + " [--print-config] [--region eu|us|auto] [--seed --provider NAME --model ID [--index NAME]]");
     return;
   }
   const e = env();
@@ -243,9 +309,35 @@ async function main() {
   for (const a of agents) call.own(a);
   const byName = new Map(agents.map((a) => [a.name, a]));
   const providers = await listProviders(call);
+  let base;
+  let seeded = null;
   const baseRow = byName.get(args.base);
-  if (!baseRow) throw new Error(`no agent named ${args.base} on ${e.host}; create it first`);
-  const base = await call("GET", `/1/agents/${baseRow.id}`);
+  if (baseRow) {
+    base = await call("GET", `/1/agents/${baseRow.id}`);
+    if (args.seed) log(`adopt  ${args.base}  (it exists: --seed changes nothing)`);
+  } else if (!args.seed) {
+    throw new Error(`no agent named ${args.base} on ${e.host}; pass --seed --provider NAME --model ID to create it`);
+  } else {
+    const providerId = seedProvider(providers, args.provider, { local });
+    if (!args.model) throw new Error("--seed needs --model ID, a model the provider serves");
+    const body = seedBody({ name: args.base, providerId, model: args.model, index: args.index });
+    if (args.dryRun) {
+      log(`seed   ${args.base}  (dry run: skipped)`);
+      base = { ...body, id: "dry-run" };
+      byName.set(base.name, base);
+    } else {
+      const created = await call("POST", "/1/agents", body);
+      try {
+        await call("POST", `/1/agents/${created.id}/publish`);
+      } catch (err) {
+        if (err.status !== 409) log(`       publish: ${err.message}`);
+      }
+      base = await call("GET", `/1/agents/${created.id}`);
+      byName.set(base.name, base);
+      seeded = base.id;
+      log(`seed   ${args.base}  (on ${args.provider}, ${args.model}, index ${args.index || "products"})`);
+    }
+  }
   checkProvider(base, providers, { local });
 
   const variants = {};
@@ -263,8 +355,8 @@ async function main() {
     const found = byName.get(name);
     if (found) {
       const full = found.config ? found : await call("GET", `/1/agents/${found.id}`);
-      const actual = record(full, "adopted");
-      log(`adopt  ${name}${actual === key ? "" : `  (its config reads as ${actual}, keyed by that)`}`);
+      const actual = record(full, found.id === seeded ? "created" : "adopted");
+      if (found.id !== seeded) log(`adopt  ${name}${actual === key ? "" : `  (its config reads as ${actual}, keyed by that)`}`);
       continue;
     }
     if (args.dryRun) { log(`create ${name}  (dry run: skipped)`); continue; }
