@@ -175,13 +175,6 @@ function Field({ f, value, error, onValue, disabled }) {
     input = html`<select id=${id} value=${String(f.options.indexOf(value))} disabled=${disabled}
       onChange=${(e) => onValue(f.options[Number(e.target.value)])}>
       ${f.options.map((o, i) => html`<option key=${i} value=${String(i)}>${o === null ? "unset" : String(o)}</option>`)}</select>`;
-  } else if (f.type === "langs" || f.type === "list" || f.type === "boolOrLangs") {
-    input = html`<${ListField} id=${id} value=${value} f=${f} disabled=${disabled} onValue=${onValue} />`;
-  } else if (f.type === "readonly") {
-    input = value && typeof value === "object"
-      ? html`<ul id=${id} class="fld-ro">${Object.entries(value).map(([index, c]) => html`<li key=${index}>
-          <code>${index}</code> ${capturedLine(c)}</li>`)}</ul>`
-      : html`<span id=${id} class="fld-ro is-empty">none yet</span>`;
   } else if (f.type === "json") {
     input = html`<${JsonField} id=${id} value=${value} disabled=${disabled} onValue=${onValue} />`;
   } else {
@@ -189,30 +182,10 @@ function Field({ f, value, error, onValue, disabled }) {
       onChange=${(e) => onValue(e.target.value === "" ? null : e.target.value)} />`;
   }
   const hinted = f.hint && f.type !== "text";
-  return html`<div class=${"fld" + (error ? " is-bad" : "") + (f.type === "readonly" ? " is-wide" : "")}>
+  return html`<div class=${"fld" + (error ? " is-bad" : "")}>
     <label for=${id}>${f.label}</label>${input}
     ${(error || hinted) && html`<span class="fld-hint">${error || f.hint}</span>`}
   </div>`;
-}
-
-/** one index's captured settings: its languages, its indexLanguages, and when the server read them */
-function capturedLine(c) {
-  const langs = (xs) => (Array.isArray(xs) && xs.length ? xs.join(", ") : "none");
-  const at = c && c.capturedAt ? String(c.capturedAt).slice(0, 16).replace("T", " ") : "";
-  return `languages ${langs(c && c.languages)} · indexLanguages ${langs(c && c.indexLanguages)}${at ? ` · ${at}` : ""}`;
-}
-
-/** a list typed as comma-separated text, kept as typed so a trailing comma survives */
-function ListField({ id, value, f, onValue, disabled }) {
-  const [text, setText] = useState(() => (Array.isArray(value) ? value.join(", ") : value === null || value === undefined ? "" : String(value)));
-  const parse = (t) => {
-    const v = t.trim();
-    if (!v) return null;
-    if (f.type === "boolOrLangs" && (v === "true" || v === "false")) return v === "true";
-    return v.split(",").map((x) => x.trim()).filter(Boolean);
-  };
-  return html`<input id=${id} type="text" value=${text} disabled=${disabled} spellcheck="false"
-    onChange=${(e) => { setText(e.target.value); onValue(parse(e.target.value)); }} />`;
 }
 
 /** a JSON list typed as text; only a list that parses reaches the block */
@@ -276,8 +249,7 @@ function ConfigPanel({ toggles, edits, onToggles, onEdits, resolution, disabled,
             onClick=${() => setEditing(editing === id ? null : id)}>${editing === id ? "Close" : "Edit"}</button>`}
         </div>
         ${editing === id && html`<${BlockEditor} key=${id + canonical(blocks[id] ?? null)} blockId=${id}
-          stored=${id === "searchPrefetch" && entry.capturedIndexSettings
-            ? { ...(blocks[id] || {}), capturedIndexSettings: entry.capturedIndexSettings } : blocks[id]} edited=${Boolean(edits && edits[id])} disabled=${disabled}
+          stored=${blocks[id]} edited=${Boolean(edits && edits[id])} disabled=${disabled}
           onApply=${(b) => { onEdits({ ...(edits || {}), [id]: b }); setEditing(null); }}
           onReset=${() => { const n = { ...edits }; delete n[id]; onEdits(n); setEditing(null); }}
           onClose=${() => setEditing(null)} />`}

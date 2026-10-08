@@ -116,13 +116,6 @@ export function storedPrefetch(config) {
   return c.search_prefetch !== undefined ? c.search_prefetch : c.searchPrefetch;
 }
 
-/** what the server wrote into the prefetch block on save, by index name; null when nothing yet */
-export function capturedSettings(config) {
-  const sp = storedPrefetch(config);
-  const cap = sp && typeof sp === "object" ? sp.capturedIndexSettings || sp.captured_index_settings : null;
-  return cap && typeof cap === "object" && Object.keys(cap).length ? cap : null;
-}
-
 /** read a stored agent config back into toggles, whatever spelling it used */
 export function togglesFromAgentConfig(config) {
   const c = config || {};
@@ -169,7 +162,7 @@ export function configVariants(mainDemo) {
 
 /** variants.json's map as a config block: what the page reads, without the run's status */
 export function shareableVariants(variants) {
-  const keep = ["agentId", "name", "model", "provider", "capturedIndexSettings"];
+  const keep = ["agentId", "name", "model", "provider"];
   const out = {};
   for (const [key, entry] of Object.entries(variants || {})) {
     if (!entry || !entry.agentId) continue;
@@ -210,20 +203,8 @@ export const BLOCKS = [
       hint: "shorter queries skip prefetch" },
     { path: "hitsPerPage", label: "Hits per page", type: "int", min: 1, max: 100, def: null, nullable: true,
       hint: "empty: the search tool's value" },
-    { group: "Search parameters", path: "searchParameters.queryLanguages", label: "Query languages", type: "langs", def: null,
-      hint: "empty: the index's languages" },
-    { path: "searchParameters.naturalLanguages", label: "Natural languages", type: "langs", def: null },
-    { path: "searchParameters.removeStopWords", label: "Remove stop words", type: "boolOrLangs", def: null,
-      hint: "true, false, or languages" },
-    { path: "searchParameters.ignorePlurals", label: "Ignore plurals", type: "boolOrLangs", def: null,
-      hint: "true, false, or languages" },
-    { path: "searchParameters.typoTolerance", label: "Typo tolerance", type: "enum", options: [null, true, false, "min", "strict"], def: null },
-    { path: "searchParameters.removeWordsIfNoResults", label: "Remove words if no results", type: "enum",
-      options: ["none", "lastWords", "firstWords", "allOptional"], def: "allOptional" },
-    { path: "searchParameters.restrictSearchableAttributes", label: "Restrict to attributes", type: "list", def: null,
-      hint: "empty: every searchable attribute" },
-    { path: "capturedIndexSettings", label: "Captured index settings", type: "readonly", def: null,
-      hint: "written by the server on save, never sent" },
+    { path: "timeoutMs", label: "Timeout (ms)", type: "int", min: 0, max: 5000, def: 1000,
+      hint: "search budget; 0 turns prefetch off" },
   ] },
   { id: "memory", label: "Memory", fields: [
     { path: "enabled", label: "Enabled", type: "bool", def: false },
@@ -280,9 +261,6 @@ export function blockValues(blockId, stored) {
   return out;
 }
 
-/** Algolia language codes: two letters, or a region form such as pt-br */
-const isLangs = (v) => Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string" && /^[a-z]{2}(-[a-z]{2})?$/.test(x));
-
 /** the problems with a block's values, by field path; empty when the backend would accept it */
 export function validateBlock(blockId, values) {
   const b = BLOCKS.find((x) => x.id === blockId);
@@ -295,11 +273,6 @@ export function validateBlock(blockId, values) {
     }
     if (f.type === "enum" && !f.options.includes(v)) errors[f.path] = "not an option";
     if (f.type === "json" && !Array.isArray(v)) errors[f.path] = "a JSON list";
-    if (f.type === "langs" && !unset && !isLangs(v)) errors[f.path] = "language codes, like en, fr";
-    if (f.type === "boolOrLangs" && !unset && typeof v !== "boolean" && !isLangs(v)) errors[f.path] = "true, false, or codes";
-    if (f.type === "list" && !unset && !(Array.isArray(v) && v.length && v.every((x) => typeof x === "string" && x))) {
-      errors[f.path] = "names, comma separated";
-    }
   }
   return errors;
 }
@@ -310,7 +283,6 @@ export function blockFrom(blockId, values) {
   if (b.scalar) return Boolean(values[""]);
   const out = {};
   for (const f of b.fields) {
-    if (f.type === "readonly") continue; // server-written: shown, never sent, never hashed
     const v = values[f.path];
     const empty = v === null || v === undefined || v === "";
     if (f.path === "enabled") { setPath(out, f.path, Boolean(v)); continue; }

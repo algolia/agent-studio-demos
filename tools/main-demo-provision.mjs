@@ -24,10 +24,7 @@
    makes to an existing agent.
 
    Then writes public/main-demo/variants.json (gitignored): config key →
-   agent id, plus the prefetch block's capturedIndexSettings when the server
-   has written them. The server captures them after a save returns, so a
-   freshly created agent shows them from the next run on. Idempotent: a
-   second run creates nothing.
+   agent id. Idempotent: a second run creates nothing.
 
    --print-config also prints the variants map to stdout, as JSON, for
    mainDemo.variants in a deploy's config.js (variants.json is gitignored).
@@ -43,7 +40,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
   MANIFEST, configKey, parseKey, agentName, agentConfigPatch, togglesFromAgentConfig,
-  baseTemplate, customAgentBody, customKey, customName, blocksFromConfig, capturedSettings, shareableVariants,
+  baseTemplate, customAgentBody, customKey, customName, blocksFromConfig, shareableVariants,
 } from "../public/main-demo/configs.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -136,12 +133,6 @@ function variantBody(base, toggles) {
   return { ...baseTemplate(base), name: agentName(toggles), config: { ...config, ...agentConfigPatch(toggles) } };
 }
 
-/** the server-written prefetch settings, as a variants.json field the page shows read-only */
-function withCaptured(config) {
-  const cap = capturedSettings(config);
-  return cap ? { capturedIndexSettings: cap } : {};
-}
-
 async function existingFormat(file) {
   try { await access(file); } catch (_) { return "absent"; }
   try {
@@ -183,7 +174,6 @@ async function main() {
     variants[key] = {
       agentId: agent.id, name: agent.name, model: agent.model || null,
       provider: providers.get(agent.providerId) || null, status,
-      ...withCaptured(agent.config),
     };
     return key;
   };
@@ -224,7 +214,7 @@ async function main() {
     const full = a.config ? a : await call("GET", `/1/agents/${a.id}`);
     const blocks = blocksFromConfig(full.config);
     if (customName(blocks) !== a.name) { log(`skip   ${a.name}  (its config hashes to ${customName(blocks)})`); continue; }
-    variants[customKey(blocks)] = { agentId: a.id, name: a.name, model: a.model || null, status: "adopted", ...withCaptured(full.config) };
+    variants[customKey(blocks)] = { agentId: a.id, name: a.name, model: a.model || null, status: "adopted" };
     customs.delete(customKey(blocks));
     log(`adopt  ${a.name}`);
   }
