@@ -241,8 +241,12 @@ module.exports = [
     // main-demo is the one page built on ES modules: React and the Chat widget
     // arrive through an import map, so its files import rather than read
     // globals. The .mjs modules are shared with tools/main-demo-provision.mjs,
-    // which is why they may touch both lists.
-    files: ["public/main-demo/**/*.js", "public/main-demo/**/*.mjs", "tools/**/*.mjs"],
+    // which is why they may touch both lists. prefetch/ mounts main-demo's
+    // lanes, so it shares the block.
+    files: [
+      "public/main-demo/**/*.js", "public/main-demo/**/*.mjs", "tools/**/*.mjs",
+      "public/prefetch/**/*.js", "public/prefetch/**/*.mjs",
+    ],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",

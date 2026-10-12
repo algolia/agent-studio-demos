@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search prefetch, before and after</title>
+<meta name="description" content="One Agent Studio agent, one question, with and without search prefetch, side by side: model calls, searches, tokens and timings.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/instantsearch.css@8.23.0/components/chat-min.css">
+<link rel="stylesheet" href="../shared/tokens.css">
+<link rel="stylesheet" href="../main-demo/style.css">
+<link rel="icon" href="data:,">
+<script>
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
+    var dark = saved ? saved === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+
+<!-- The lanes are main-demo's: the same pinned packages, one shared React. -->
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19.1.1",
+    "react/": "https://esm.sh/react@19.1.1/",
+    "react-dom": "https://esm.sh/react-dom@19.1.1?external=react",
+    "react-dom/client": "https://esm.sh/react-dom@19.1.1/client?external=react",
+    "react-instantsearch": "https://esm.sh/react-instantsearch@7.50.1?external=react,react-dom",
+    "algoliasearch/lite": "https://esm.sh/algoliasearch@5.59.0/lite",
+    "htm": "https://esm.sh/htm@3.1.1",
+    "blurhash": "https://esm.sh/blurhash@2.0.5"
+  }
+}
+</script>
+<script src="../shared/config.js" onerror="window.DEMO_CONFIG = window.DEMO_CONFIG || null"></script>
+<style>
+/* layered on main-demo/style.css: only the page's own pieces */
+.pf-caption { margin: 10px 0 0; color: var(--ink-2); font-size: 15px; max-width: 64ch; }
+.pf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 20px 0 10px; }
+.pf-source { margin: 0; font-size: 14px; color: var(--ink-2); flex: 1 1 320px; min-width: 0; }
+.pf-source b { color: var(--ink); font-weight: 600; }
+.pf-bar .btn, .pf-bar .btn-quiet { padding: 7px 16px; }
+.pf-bar .btn-quiet[aria-disabled="true"] { color: var(--ink-3); }
+.pf-q { margin: 0 0 12px; font-size: 14px; color: var(--ink-3); }
+.pf-q q { color: var(--ink); }
+.pf-score { margin: 0 0 16px; overflow-x: auto; }
+.pf-score table { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; max-width: 760px; }
+.pf-score th, .pf-score td { padding: 7px 20px 7px 0; text-align: left; font-weight: 400; white-space: nowrap; }
+.pf-score thead th { font-size: 13px; font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--line); }
+.pf-score thead .pf-col.is-on { color: var(--accent); }
+.pf-score tbody tr + tr th, .pf-score tbody tr + tr td { border-top: 1px solid var(--line); }
+.pf-score .pf-m { color: var(--ink-2); font-size: 14px; }
+.pf-score .pf-v { font-family: var(--mono); font-size: 15px; color: var(--ink); }
+.pf-score .pf-v.is-blank { font-family: var(--body); font-size: 13px; color: var(--ink-3); }
+.pf-score .pf-d { font-family: var(--mono); font-size: 13px; color: var(--ink-3); padding-right: 0; }
+.pf-score thead .pf-d { font-family: var(--body); cursor: help; }
+@media (max-width: 480px) {
+  .pf-score th, .pf-score td { padding-right: 10px; }
+  .pf-score .pf-m { white-space: normal; font-size: 13px; }
+  .pf-score .pf-v { font-size: 13px; }
+  .pf-score .pf-v.is-blank { font-size: 12px; white-space: normal; }
+  .pf-score thead th { white-space: normal; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#score">Skip to the numbers</a>
+
+<header class="hero wrap">
+  <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
+  <h1>Search prefetch, before and after</h1>
+  <p class="lede">One agent, one question, twice: as is, then with search prefetch on.</p>
+  <p class="pf-caption">Prefetch runs the agent's own search before the first model call. When the hits fit, the model skips a search. It costs extra input tokens and a later first byte.</p>
+</header>
+
+<main class="wrap">
+  <div class="pf-bar">
+    <p class="pf-source" id="source" aria-live="polite"></p>
+    <button type="button" class="btn" id="replay">Replay</button>
+    <button type="button" class="btn-quiet" id="live">Run live</button>
+  </div>
+  <p class="status" id="status" role="status" hidden></p>
+  <p class="pf-q">Question: <q id="question"></q></p>
+
+  <section class="pf-score" id="score" aria-label="Before and after" aria-live="polite"></section>
+
+  <div class="lanes" data-mode="race">
+    <section class="lane" id="lane-a" aria-label="Without prefetch"></section>
+    <section class="lane" id="lane-b" aria-label="With prefetch"></section>
+  </div>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
