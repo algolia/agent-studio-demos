@@ -8,6 +8,7 @@
          [--config '{"searchPrefetch":{…},…}'] [--sync-instructions] [--dry-run]
          [--base NAME] [--out FILE] [--print-config]
          [--seed --provider NAME --model ID [--index NAME]] [--converge]
+         [--prefix DEMO_main-demo-NAME-]
 
    --seed creates the base agent when the host has none: a shopping
    assistant on --index (products by default) with the Algolia search and
@@ -47,6 +48,12 @@
    Then writes public/main-demo/variants.json (gitignored): config key →
    agent id. Idempotent: a second run creates nothing.
 
+   --prefix names a second pair next to the first, for a run on another
+   provider or model: DEMO_main-demo-openai- gives DEMO_main-demo-openai-base
+   and DEMO_main-demo-openai-prefetch. It must start with DEMO_main-demo-, and
+   a run with it reads, writes and syncs only its own pair. The page keys
+   agents by id, so either pair can back it.
+
    --print-config also prints the variants map to stdout, as JSON, for
    mainDemo.variants in a deploy's config.js (variants.json is gitignored).
    The progress lines move to stderr, so stdout is only the map.
@@ -69,7 +76,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUT = path.join(HERE, "..", "public", "main-demo", "variants.json");
 
 function parseArgs(argv) {
-  const out = { add: [], configs: [], sync: false, dryRun: false, printConfig: false, out: DEFAULT_OUT, base: BASE_AGENT };
+  const out = { add: [], configs: [], sync: false, dryRun: false, printConfig: false, out: DEFAULT_OUT, base: null, prefix: NAME_PREFIX };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--add") out.add.push(argv[++i]);
@@ -85,10 +92,35 @@ function parseArgs(argv) {
     else if (a === "--provider") out.provider = argv[++i];
     else if (a === "--model") out.model = argv[++i];
     else if (a === "--index") out.index = argv[++i];
+    else if (a === "--prefix") out.prefix = argv[++i];
     else if (a === "--help" || a === "-h") out.help = true;
     else throw new Error(`unknown argument: ${a}`);
   }
+  checkPrefix(out.prefix);
+  if (out.prefix !== NAME_PREFIX && out.configs.length) throw new Error("--config makes DEMO_main-demo-<hash> agents; it does not take --prefix");
+  if (!out.base) out.base = `${out.prefix}base`;
   return out;
+}
+
+/** a pair prefix: under this demo's own, so the fence and the DEMO_ rule still hold */
+export function checkPrefix(prefix) {
+  if (!String(prefix || "").startsWith(NAME_PREFIX) || !/^[A-Za-z0-9_-]+-$/.test(prefix)) {
+    throw new Error(`--prefix must start with ${NAME_PREFIX} and end with -, not ${prefix}`);
+  }
+  return prefix;
+}
+
+/** a variant's agent name under a pair prefix */
+export function prefixedName(prefix, toggles) {
+  return prefix + agentName(toggles).slice(NAME_PREFIX.length);
+}
+
+const VARIANT_REST = /^(prefetch|memory|guardrails|suggestions)(-(prefetch|memory|guardrails|suggestions))*$|^[0-9a-f]{8}$/;
+
+/** an agent of this run's pair: its prefix, then a variant's flags or a config hash; never another pair's */
+export function inPair(prefix, name) {
+  const n = String(name || "");
+  return n.startsWith(prefix) && VARIANT_REST.test(n.slice(prefix.length));
 }
 
 function env() {
@@ -323,11 +355,11 @@ async function listProviders(call) {
   }
 }
 
-function variantBody(base, toggles) {
+function variantBody(base, toggles, name = agentName(toggles)) {
   const config = { ...(base.config || {}) };
   delete config.searchPrefetch;
   delete config.search_prefetch;
-  return { ...baseTemplate(base), name: agentName(toggles), config: { ...config, ...agentConfigPatch(toggles) } };
+  return { ...baseTemplate(base), name, config: { ...config, ...agentConfigPatch(toggles) } };
 }
 
 async function existingFormat(file) {
@@ -347,7 +379,7 @@ async function main() {
   if (args.help) {
     log("usage: MAIN_DEMO_HOST=… APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs"
       + " [--add KEY]… [--config JSON]… [--sync-instructions] [--dry-run] [--out FILE] [--base NAME]"
-      + " [--print-config] [--region eu|us|auto] [--seed --provider NAME --model ID [--index NAME]]");
+      + " [--print-config] [--region eu|us|auto] [--seed --provider NAME --model ID [--index NAME]] [--prefix P]");
     return;
   }
   const e = env();
@@ -418,7 +450,7 @@ async function main() {
   };
 
   for (const [key, toggles] of wanted) {
-    const name = agentName(toggles);
+    const name = prefixedName(args.prefix, toggles);
     const found = byName.get(name);
     if (found) {
       let full = found.config ? found : await call("GET", `/1/agents/${found.id}`);
@@ -440,7 +472,7 @@ async function main() {
       continue;
     }
     if (args.dryRun) { log(`create ${name}  (dry run: skipped)`); continue; }
-    const created = await call("POST", "/1/agents", variantBody(base, toggles));
+    const created = await call("POST", "/1/agents", variantBody(base, toggles, name));
     try {
       await call("POST", `/1/agents/${created.id}/publish`);
     } catch (err) {
@@ -454,6 +486,7 @@ async function main() {
   // edited configs: the ones asked for, and every DEMO_main-demo-<hash> already there
   const customs = new Map(args.configs.map((b) => [customKey(b), b]));
   for (const a of agents) {
+    if (args.prefix !== NAME_PREFIX) break;
     if (!(a.name.startsWith(NAME_PREFIX) && /^[0-9a-f]{8}$/.test(a.name.slice(NAME_PREFIX.length)))) continue;
     const full = a.config ? a : await call("GET", `/1/agents/${a.id}`);
     const blocks = blocksFromConfig(full.config);
@@ -473,7 +506,7 @@ async function main() {
 
   if (args.sync) {
     for (const a of agents) {
-      if (!a.name.startsWith(NAME_PREFIX) || a.name === args.base || a.id === base.id) continue;
+      if (!inPair(args.prefix, a.name) || a.name === args.base || a.id === base.id) continue;
       const full = await call("GET", `/1/agents/${a.id}`);
       if (full.instructions === base.instructions && full.systemPrompt === base.systemPrompt) {
         log(`same   ${a.name}`);

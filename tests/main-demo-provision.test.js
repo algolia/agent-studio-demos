@@ -247,3 +247,32 @@ test("--seed knows the ESCI catalog: its own fields, and a prompt that never quo
   const other = p.seedBody({ providerId: "t", model: "m", index: "my_index" });
   assert.equal(other.tools[0].indices[0].searchParameters.attributesToRetrieve, undefined, "an unknown index retrieves its defaults");
 });
+
+test("--prefix: a second pair next to the first, created on its own provider, the first left alone", async () => {
+  const managed = { id: "m", name: "Algolia Managed LLMs", providerName: "algolia_managed_llm" };
+  const cfg = (prefetch) => ({ enableAlgoliaMcp: true, searchPrefetch: prefetch ? { enabled: true } : false });
+  const first = [
+    { id: "old-base", name: "DEMO_main-demo-base", providerId: "m", model: "medium", instructions: "old", tools: [], config: cfg(false) },
+    { id: "old-pf", name: "DEMO_main-demo-prefetch", providerId: "m", model: "medium", instructions: "old", tools: [], config: cfg(true) },
+  ];
+  const state = { agents: first.map((a) => ({ ...a })), providers: [...PROVIDERS, managed] };
+  const args = ["--prefix", "DEMO_main-demo-openai-", "--seed", "--provider", "TEST_openai", "--model", "gpt-4.1-mini", "--sync-instructions"];
+  await withFakeHost(state, args, async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(state.agents.slice(2).map((a) => [a.name, a.providerId, a.model]),
+      [["DEMO_main-demo-openai-base", "t", "gpt-4.1-mini"], ["DEMO_main-demo-openai-prefetch", "t", "gpt-4.1-mini"]]);
+    assert.deepEqual(state.agents.slice(0, 2), first, "the first pair is neither adopted nor synced");
+    assert.equal(state.patches, undefined);
+  });
+  const p = await load();
+  assert.equal(p.prefixedName("DEMO_main-demo-openai-", { prefetch: true }), "DEMO_main-demo-openai-prefetch");
+  assert.ok(p.inPair("DEMO_main-demo-", "DEMO_main-demo-prefetch"));
+  assert.ok(p.inPair("DEMO_main-demo-", "DEMO_main-demo-0123abcd"));
+  assert.ok(!p.inPair("DEMO_main-demo-", "DEMO_main-demo-openai-prefetch"), "the default pair never syncs another pair");
+  assert.throws(() => p.checkPrefix("EVAL_x-"), /must start with DEMO_main-demo-/);
+  assert.throws(() => p.checkPrefix("DEMO_main-demo-openai"), /end with -/);
+  await withFakeHost({ agents: [], providers: PROVIDERS }, ["--prefix", "DEMO_main-demo-x-", "--config", "{}"], async (run) => {
+    assert.notEqual(run.code, 0);
+    assert.match(run.stderr, /--config .* does not take --prefix/);
+  });
+});

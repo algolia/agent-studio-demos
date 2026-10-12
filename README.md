@@ -204,6 +204,10 @@ APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs --region auto \
   MCP on, prefetch off. Without `--provider` it lists the app's `TEST_` and
   Algolia-managed providers to pick from.
 - `--dry-run` reads and plans, and writes nothing.
+- `--prefix DEMO_main-demo-NAME-` makes a second pair next to the first, for
+  another provider or model: `DEMO_main-demo-NAME-base` and
+  `DEMO_main-demo-NAME-prefetch`. A run with it reads, writes and syncs only its
+  own pair. The page keys agents by id, so either pair can back it.
 - A second run creates nothing. It reports an agent the shipped backend would
   read differently (Algolia MCP off, prefetch keys it ignores), and
   `--converge` rewrites that agent's config, then republishes it.
