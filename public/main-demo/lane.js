@@ -334,7 +334,7 @@ const STUB_CLIENT = {
   }),
 };
 
-function LaneApp({ controller, label, cfg, variants, searchClient, initialToggles, fixture, onView }) {
+function LaneApp({ controller, label, cfg, variants, searchClient, initialToggles, fixture, onView, locked }) {
   const [toggles, setToggles] = useState(() => normalize(initialToggles));
   const [edits, setEdits] = useState(null);          // edited config blocks over the toggles, or null
   const [local, setLocal] = useState(() => loadLocal());
@@ -484,17 +484,20 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     <header class="lane-h">
       <div class="lane-id">
         <p class="lane-label">${label}</p>
-        <button type="button" class=${"pf-pill" + (prefetchOn ? " is-on" : "")} aria-haspopup="true"
+        ${locked
+          ? html`<span class=${"pf-pill is-locked" + (prefetchOn ? " is-on" : "")}
+              title=${counts.part ? decisionLabel(counts.part.decision) : ""}>${prefetchOn ? "Prefetch on" : "Prefetch off"}</span>`
+          : html`<button type="button" class=${"pf-pill" + (prefetchOn ? " is-on" : "")} aria-haspopup="true"
           title=${counts.part ? decisionLabel(counts.part.decision) : "Edit the prefetch block"}
           onClick=${() => openEditor("searchPrefetch")}>
           ${prefetchOn ? "Prefetch on" : "Prefetch off"}
-          ${edits && edits.searchPrefetch && html`<span class="pf-edited">edited</span>`}</button>
+          ${edits && edits.searchPrefetch && html`<span class="pf-edited">edited</span>`}</button>`}
       </div>
       <${Searches} counts=${counts} view=${view} prefetchOn=${prefetchOn} />
     </header>
-    <${ConfigPanel} toggles=${toggles} edits=${edits} onToggles=${onToggles} onEdits=${onEdits}
+    ${!locked && html`<${ConfigPanel} toggles=${toggles} edits=${edits} onToggles=${onToggles} onEdits=${onEdits}
       resolution=${resolution} disabled=${busy} open=${cfgOpen} setOpen=${setCfgOpen}
-      editing=${editing} setEditing=${setEditing} />
+      editing=${editing} setEditing=${setEditing} />`}
     <${Timeline} view=${view} fixture=${fixture} />
     <div class="lane-chat">
       ${transport
@@ -520,13 +523,14 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
  * Mount one lane. Returns the controller the page drives:
  *   { send(text) → boolean, ready() → boolean, clear(), unmount() }
  * `onView({ label, view, counts, prefetchOn, seq })` runs after every redraw;
- * `seq` counts the turns this lane has started.
+ * `seq` counts the turns this lane has started. `locked` fixes the lane to its
+ * initial toggles: no config panel, and the prefetch pill is a label.
  */
-export function mountLane(el, { label, cfg, variants, searchClient, initialToggles, fixture, onView }) {
+export function mountLane(el, { label, cfg, variants, searchClient, initialToggles, fixture, onView, locked = false }) {
   const controller = { send: () => false, ready: () => false, clear: () => {} };
   const root = createRoot(el);
   root.render(html`<${LaneApp} controller=${controller} label=${label} cfg=${cfg} variants=${variants}
-    searchClient=${searchClient} initialToggles=${initialToggles} fixture=${fixture} onView=${onView} />`);
+    searchClient=${searchClient} initialToggles=${initialToggles} fixture=${fixture} onView=${onView} locked=${locked} />`);
   controller.unmount = () => root.unmount();
   return controller;
 }

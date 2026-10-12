@@ -93,6 +93,10 @@
 .pf-pill:hover { border-color: var(--accent); }
 .pf-pill.is-on { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
 .pf-pill.is-on:hover { border-color: var(--accent); }
+/* a locked lane (mountLane's `locked`): the pill labels, it does not open anything */
+.pf-pill.is-locked { cursor: default; }
+.pf-pill.is-locked:hover { border-color: var(--line-strong); }
+.pf-pill.is-locked.is-on:hover { border-color: transparent; }
 .pf-edited { font: 500 11px var(--mono); color: var(--crease); }
 
 .searches {
