@@ -227,4 +227,21 @@ window.DEMO_CONFIG = {
     //   "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID", name: "DEMO_main-demo-prefetch" },
     // },
   },
+
+  // Optional: /prefetch/ on its own agent pair. Same shape as mainDemo; when
+  // set, the prefetch page reads it and ignores mainDemo, so main-demo's block
+  // (and its memory, guardrails and suggestions switches) stays as it is.
+  // The page needs the two variants below: the base agent, and the same agent
+  // with search prefetch on.
+  // prefetchDemo: {
+  //   region: "eu",
+  //   appId: "YOUR_APP_ID",
+  //   searchApiKey: "YOUR_SEARCH_ONLY_API_KEY",
+  //   agentStudioApiKey: "YOUR_AGENT_STUDIO_API_KEY",
+  //   indexName: "YOUR_PRODUCTS_INDEX",
+  //   variants: {
+  //     "prefetch=0,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_BASE_AGENT_ID" },
+  //     "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID" },
+  //   },
+  // },
 };

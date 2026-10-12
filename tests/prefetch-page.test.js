@@ -124,6 +124,29 @@ test("Run live needs the mainDemo block, its key, and an agent for both lanes", 
   assert.equal(p.liveReadiness(cfg, both).ok, true, "variants.json's map stands in when config.js has none");
 });
 
+test("prefetchDemo wins over mainDemo, and mainDemo stands in when it is absent", async () => {
+  const p = await load("prefetch/compare.mjs");
+  const main = { appId: "MAIN", agentStudioApiKey: "k1" };
+  const own = { appId: "OWN", agentStudioApiKey: "k2" };
+  assert.deepEqual(p.pageConfig({ mainDemo: main, prefetchDemo: own }), { block: own, name: "prefetchDemo" });
+  assert.deepEqual(p.pageConfig({ mainDemo: main }), { block: main, name: "mainDemo" });
+  assert.deepEqual(p.pageConfig({ mainDemo: main, prefetchDemo: null }), { block: main, name: "mainDemo" });
+  assert.deepEqual(p.pageConfig(null), { block: null, name: null });
+  assert.deepEqual(p.pageConfig({ prefetchDemo: [] }), { block: null, name: null });
+  const app = fs.readFileSync(path.join(PUBLIC, "prefetch", "app.js"), "utf8");
+  assert.match(app, /pageConfig\(window\.DEMO_CONFIG\)/);
+  assert.doesNotMatch(app, /root\.mainDemo/, "the page never reads mainDemo directly");
+});
+
+test("the config template documents prefetchDemo with the two variant keys the page needs", async () => {
+  const c = await load("main-demo/configs.mjs");
+  const p = await load("prefetch/compare.mjs");
+  const src = fs.readFileSync(path.join(PUBLIC, "shared", "config.example.js"), "utf8");
+  const at = src.indexOf("// prefetchDemo: {");
+  assert.ok(at > 0);
+  for (const l of p.LANES) assert.ok(src.indexOf(c.configKey(l.toggles), at) > at, l.label);
+});
+
 test("the page states what prefetch does and claims no more than often sooner", () => {
   const html = fs.readFileSync(path.join(PUBLIC, "prefetch", "index.html"), "utf8");
   assert.match(html, /<script type="module" src="app\.js"><\/script>/);

@@ -3,7 +3,7 @@
 
    Two main-demo lanes, locked to the race's two arms, and the numbers
    their stream readers measure. Live only, on the agents named in the
-   same mainDemo config block main-demo reads. Run stays off until both
+   prefetchDemo config block, or main-demo's mainDemo. Run stays off until both
    agents pass a one-message preflight, and nothing runs until Run is
    pressed: every run makes real model calls.
    ─────────────────────────────────────────────────────────────── */
@@ -11,11 +11,11 @@
 import { liteClient } from "algoliasearch/lite";
 import { mountLane } from "../main-demo/lane.js";
 import { configKey, demoHost } from "../main-demo/configs.mjs";
-import { LANES, STARTERS, liveReadiness, questionOf, rows } from "./compare.mjs";
+import { LANES, STARTERS, liveReadiness, pageConfig, questionOf, rows } from "./compare.mjs";
 import { afterRun, cacheKey, laneFailure, preflightState, probeAgent } from "./preflight.mjs";
 
-const root = window.DEMO_CONFIG || {};
-const mainDemo = root.mainDemo || null;
+// prefetchDemo when the deploy gives this page its own agent pair, else mainDemo
+const { block: mainDemo, name: blockName } = pageConfig(window.DEMO_CONFIG);
 const CFG = { indexName: "products", ...(mainDemo || {}) };
 CFG.host = demoHost(mainDemo);
 
@@ -216,7 +216,9 @@ async function main() {
   el.form.addEventListener("submit", (e) => { e.preventDefault(); run(el.ask.value); });
   renderSource();
   scheduleScore();
-  state.ready = liveReadiness(mainDemo, mainDemo && !mainDemo.variants ? await localVariants() : null);
+  // variants.json is main-demo's local map: it only stands in for mainDemo
+  const local = blockName === "mainDemo" && !mainDemo.variants ? await localVariants() : null;
+  state.ready = liveReadiness(mainDemo, local);
   if (!state.ready.ok) {
     state.check = { phase: "unavailable", text: state.ready.why };
     renderCheck();

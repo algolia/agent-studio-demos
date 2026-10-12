@@ -108,6 +108,19 @@ export function rows(reports) {
 }
 
 /**
+ * The config block this page reads: `prefetchDemo` when the deploy gives the
+ * page its own agent pair, else main-demo's `mainDemo`. Same shape either way.
+ *   { block, name } — block is null when neither is set
+ */
+export function pageConfig(root) {
+  const r = root && typeof root === "object" ? root : {};
+  const usable = (b) => Boolean(b) && typeof b === "object" && !Array.isArray(b);
+  if (usable(r.prefetchDemo)) return { block: r.prefetchDemo, name: "prefetchDemo" };
+  if (usable(r.mainDemo)) return { block: r.mainDemo, name: "mainDemo" };
+  return { block: null, name: null };
+}
+
+/**
  * Whether "Run live" can run, from the same mainDemo block main-demo reads.
  *   { ok: true, variants } or { ok: false, why }
  * `fallback` is variants.json's map, for a local run without mainDemo.variants.
