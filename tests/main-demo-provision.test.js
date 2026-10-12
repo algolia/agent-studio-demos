@@ -153,7 +153,7 @@ test("--seed: the base and the prefetch arm, one provider, Algolia MCP on, prefe
 test("--seed asks for what it lacks, and names only TEST_ providers", async () => {
   await withFakeHost({ agents: [], providers: PROVIDERS }, ["--seed", "--model", "m"], async (run) => {
     assert.notEqual(run.code, 0);
-    assert.match(run.stderr, /--seed needs --provider NAME; providers named TEST_… here: TEST_openai/);
+    assert.match(run.stderr, /--seed needs --provider NAME; providers allowed here \(TEST_… or Algolia-managed\): TEST_openai/);
     assert.ok(!run.stderr.includes("Customer key"));
   });
   await withFakeHost({ agents: [], providers: PROVIDERS }, [], async (run) => {
@@ -162,7 +162,7 @@ test("--seed asks for what it lacks, and names only TEST_ providers", async () =
   });
   const p = await load();
   const providers = new Map(PROVIDERS.map((x) => [x.id, { name: x.name, label: x.providerName }]));
-  assert.throws(() => p.seedProvider(providers, "Customer key", { local: false }), /not a TEST_ provider/);
+  assert.throws(() => p.seedProvider(providers, "Customer key", { local: false }), /neither a TEST_ provider nor the Algolia-managed one/);
   assert.equal(p.seedProvider(providers, "Customer key", { local: true }), "c", "a local backend may use any provider");
   assert.equal(p.seedProvider(providers, "TEST_openai", { local: false }), "t");
 });
@@ -201,5 +201,33 @@ test("drift: what the shipped backend ignores is reported, and --converge writes
     assert.deepEqual([base.config.enableAlgoliaMcp, base.config.searchPrefetch], [true, false]);
     assert.deepEqual(prefetch.config.searchPrefetch, { enabled: true });
     assert.equal(prefetch.config.search_prefetch, undefined);
+  });
+});
+
+test("fence: the base may run on a TEST_ provider or the Algolia-managed one, and on nothing else", async () => {
+  const p = await load();
+  const providers = new Map([
+    ["t", { name: "TEST_openai", label: "openai", providerName: "openai" }],
+    ["m", { name: "Algolia Managed LLMs", label: "algolia_managed_llm", providerName: "algolia_managed_llm" }],
+    ["c", { name: "Customer key", label: "openai", providerName: "openai" }],
+    ["n", { name: "algolia_managed_llm", label: "openai", providerName: "openai" }],
+  ]);
+  const base = (providerId) => ({ name: "DEMO_main-demo-base", providerId });
+  assert.doesNotThrow(() => p.checkProvider(base("t"), providers, { local: false }), "accept: named TEST_");
+  assert.doesNotThrow(() => p.checkProvider(base("m"), providers, { local: false }), "accept: the managed provider");
+  assert.throws(() => p.checkProvider(base("c"), providers, { local: false }), /Customer key; use one named TEST_… or the Algolia-managed one/);
+  assert.throws(() => p.checkProvider(base("n"), providers, { local: false }), /refused/, "the managed one is known by its providerName, not its name");
+  assert.equal(p.seedProvider(providers, "Algolia Managed LLMs", { local: false }), "m");
+  assert.equal(p.seedProvider(providers, "TEST_openai", { local: false }), "t");
+  assert.throws(() => p.seedProvider(providers, "Customer key", { local: false }), /providers allowed here \(TEST_… or Algolia-managed\): Algolia Managed LLMs, TEST_openai/);
+});
+
+test("fence: --seed on the managed provider creates the base and the prefetch arm on it, and nothing else", async () => {
+  const managed = [...PROVIDERS, { id: "m", name: "Algolia Managed LLMs", providerName: "algolia_managed_llm" }];
+  const state = { agents: [], providers: managed };
+  await withFakeHost(state, ["--seed", "--provider", "Algolia Managed LLMs", "--model", "medium", "--index", "esci_products_us"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(state.agents.map((a) => [a.name, a.providerId, a.model]),
+      [["DEMO_main-demo-base", "m", "medium"], ["DEMO_main-demo-prefetch", "m", "medium"]]);
   });
 });

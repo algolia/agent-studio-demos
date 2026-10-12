@@ -13,7 +13,7 @@
    assistant on --index (products by default) with the Algolia search and
    grouped-results tools, on --provider NAME with --model ID, Algolia MCP
    on (search prefetch only runs through it) and prefetch off. Run without
-   --provider, it lists the providers named TEST_… to pick from.
+   --provider, it lists the providers the fence allows (below) to pick from.
 
    An adopted agent is checked against what the shipped backend reads: a
    prefetch block with keys it ignores, or Algolia MCP not on, is reported.
@@ -24,7 +24,9 @@
    hosts and keeps the one where the app has providers. On any host that is
    not this machine, a write fence holds: a new agent must be named DEMO_…
    or EVAL_…, only such agents are ever written, and the base agent's
-   provider must be one named TEST_…, which every variant then inherits.
+   provider must be one named TEST_… or the Algolia-managed one
+   (providerName algolia_managed_llm: free, its credential held by the
+   server), which every variant then inherits.
 
    Reads the variant manifest from public/main-demo/configs.mjs (the same
    module the page uses), lists the agents on HOST, and for each variant:
@@ -128,6 +130,11 @@ export async function hostForRegion(region, callFor, hosts = HOSTS) {
 
 export const isDemoName = (name) => /^(DEMO|EVAL)_/.test(String(name || ""));
 export const isTestProvider = (provider) => Boolean(provider) && /^TEST_/.test(String(provider.name || ""));
+/** Algolia's own managed LLMs: free to the app, and no customer credential behind them */
+export const MANAGED_PROVIDER = "algolia_managed_llm";
+export const isManagedProvider = (provider) => Boolean(provider) && provider.providerName === MANAGED_PROVIDER;
+/** what the fence lets a base agent run on, off this machine */
+export const isAllowedProvider = (provider) => isTestProvider(provider) || isManagedProvider(provider);
 
 /**
  * Off this machine, every write goes through here: a new agent must carry a
@@ -154,12 +161,12 @@ export function fenced(call, { local }) {
   return guarded;
 }
 
-/** off this machine the base must run on a TEST_ provider; the variants copy its providerId */
+/** off this machine the base must run on a TEST_ or the managed provider; the variants copy its providerId */
 export function checkProvider(base, providers, { local }) {
   if (local) return;
   const p = providers.get(base.providerId);
-  if (!isTestProvider(p)) {
-    throw new Error(`refused: ${base.name} runs on provider ${p ? p.name : base.providerId || "none"}; use one named TEST_…`);
+  if (!isAllowedProvider(p)) {
+    throw new Error(`refused: ${base.name} runs on provider ${p ? p.name : base.providerId || "none"}; use one named TEST_… or the Algolia-managed one`);
   }
 }
 
@@ -207,14 +214,15 @@ export function seedBody({ name = BASE_AGENT, providerId, model, index = "produc
   };
 }
 
-/** the provider --seed names, refused off this machine unless it is a TEST_ one */
+/** the provider --seed names, refused off this machine unless the fence allows it */
 export function seedProvider(providers, name, { local }) {
-  const tests = [...providers.values()].filter(isTestProvider).map((p) => p.name).sort();
-  const hint = tests.length ? `providers named TEST_… here: ${tests.join(", ")}` : "no provider here is named TEST_…";
+  const allowed = [...providers.values()].filter(isAllowedProvider).map((p) => p.name).sort();
+  const hint = allowed.length ? `providers allowed here (TEST_… or Algolia-managed): ${allowed.join(", ")}`
+    : "no provider here is named TEST_… or Algolia-managed";
   if (!name) throw new Error(`--seed needs --provider NAME; ${hint}`);
   const found = [...providers.entries()].find(([, p]) => p.name === name);
   if (!found) throw new Error(`no provider named ${name}; ${hint}`);
-  if (!local && !isTestProvider(found[1])) throw new Error(`refused: ${name} is not a TEST_ provider; ${hint}`);
+  if (!local && !isAllowedProvider(found[1])) throw new Error(`refused: ${name} is neither a TEST_ provider nor the Algolia-managed one; ${hint}`);
   return found[0];
 }
 
@@ -288,7 +296,7 @@ async function listAgents(call) {
 async function listProviders(call) {
   try {
     const items = itemsOf(await call("GET", "/1/providers?limit=100"));
-    return new Map(items.map((p) => [p.id, { name: p.name || null, label: p.providerName || p.name || null }]));
+    return new Map(items.map((p) => [p.id, { name: p.name || null, label: p.providerName || p.name || null, providerName: p.providerName || null }]));
   } catch (_) {
     return new Map();
   }
@@ -329,7 +337,7 @@ async function main() {
   }
   const local = isLocalHost(e.host);
   const call = fenced(client(e), { local });
-  log(`host ${e.host} · app ${e.appId.slice(0, 3)}… · key from env${local ? "" : " · DEMO_ names and TEST_ providers only"}`);
+  log(`host ${e.host} · app ${e.appId.slice(0, 3)}… · key from env${local ? "" : " · DEMO_ names, TEST_ or managed providers only"}`);
 
   const wanted = new Map();
   for (const m of MANIFEST) wanted.set(configKey(m.toggles), m.toggles);
