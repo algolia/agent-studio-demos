@@ -8,7 +8,7 @@
          [--config '{"searchPrefetch":{…},…}'] [--sync-instructions] [--dry-run]
          [--base NAME] [--out FILE] [--print-config]
          [--seed --provider NAME --model ID [--index NAME]] [--converge]
-         [--prefix DEMO_main-demo-NAME-]
+         [--prefix DEMO_main-demo-NAME-] [--send-usage]
 
    --seed creates the base agent when the host has none: a shopping
    assistant on --index (products by default) with the Algolia search and
@@ -54,6 +54,10 @@
    a run with it reads, writes and syncs only its own pair. The page keys
    agents by id, so either pair can back it.
 
+   --send-usage has the pair stream token usage (config sendUsage: true),
+   which the race's input-token row reads: --seed writes it, and with
+   --converge an agent of the pair that lacks it gets it.
+
    --print-config also prints the variants map to stdout, as JSON, for
    mainDemo.variants in a deploy's config.js (variants.json is gitignored).
    The progress lines move to stderr, so stdout is only the map.
@@ -93,6 +97,7 @@ function parseArgs(argv) {
     else if (a === "--model") out.model = argv[++i];
     else if (a === "--index") out.index = argv[++i];
     else if (a === "--prefix") out.prefix = argv[++i];
+    else if (a === "--send-usage") out.sendUsage = true;
     else if (a === "--help" || a === "-h") out.help = true;
     else throw new Error(`unknown argument: ${a}`);
   }
@@ -245,7 +250,7 @@ export function seedInstructions(index) {
 }
 
 /** the base agent --seed creates: prefetch off, Algolia MCP on, so both arms search the same way */
-export function seedBody({ name = BASE_AGENT, providerId, model, index = "products" }) {
+export function seedBody({ name = BASE_AGENT, providerId, model, index = "products", sendUsage = false }) {
   const catalog = CATALOGS[index];
   const searchParameters = {
     ...(catalog ? { attributesToRetrieve: catalog.attributes } : {}),
@@ -258,7 +263,7 @@ export function seedBody({ name = BASE_AGENT, providerId, model, index = "produc
     description: "Search prefetch race: the base arm, and the template every variant copies",
     providerId, model,
     instructions: seedInstructions(index),
-    config: { enableAlgoliaMcp: true, ...agentConfigPatch(BASE_TOGGLES) },
+    config: { enableAlgoliaMcp: true, ...agentConfigPatch(BASE_TOGGLES), ...(sendUsage ? { sendUsage: true } : {}) },
     tools: [
       { type: "algolia_search_index", name: "algolia_search_index",
         indices: [{ index, description: catalog ? catalog.description : `The ${index} catalog.`, searchParameters }] },
@@ -411,7 +416,7 @@ async function main() {
   } else {
     const providerId = seedProvider(providers, args.provider, { local });
     if (!args.model) throw new Error("--seed needs --model ID, a model the provider serves");
-    const body = seedBody({ name: args.base, providerId, model: args.model, index: args.index });
+    const body = seedBody({ name: args.base, providerId, model: args.model, index: args.index, sendUsage: args.sendUsage });
     if (args.dryRun) {
       log(`seed   ${args.base}  (dry run: skipped)`);
       base = { ...body, id: "dry-run" };
@@ -457,8 +462,10 @@ async function main() {
       const issues = configDrift(full.config);
       const reads = configKey(togglesFromAgentConfig(full.config));
       if (reads !== key) issues.push(`its config reads as ${reads}`);
+      if (args.sendUsage && full.config && full.config.sendUsage !== true) issues.push("it does not stream token usage");
       if (issues.length && args.converge && !args.dryRun) {
-        await call("PATCH", `/1/agents/${found.id}`, { config: convergedConfig(full.config, toggles) });
+        const config = convergedConfig(full.config, toggles);
+        await call("PATCH", `/1/agents/${found.id}`, { config: args.sendUsage ? { ...config, sendUsage: true } : config });
         await publish(found.id);
         full = await call("GET", `/1/agents/${found.id}`);
         if (found.id === base.id) base = full; // the variants still to create copy the fixed config

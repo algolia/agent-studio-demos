@@ -276,3 +276,28 @@ test("--prefix: a second pair next to the first, created on its own provider, th
     assert.match(run.stderr, /--config .* does not take --prefix/);
   });
 });
+
+test("--send-usage: --seed streams usage on both arms, and --converge adds it to a pair that lacks it", async () => {
+  const p = await load();
+  assert.equal(p.seedBody({ providerId: "t", model: "m" }).config.sendUsage, undefined, "off unless asked");
+  const state = { agents: [], providers: PROVIDERS };
+  await withFakeHost(state, ["--seed", "--provider", "TEST_openai", "--model", "m", "--send-usage"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(state.agents.map((a) => a.config.sendUsage), [true, true], "the prefetch arm copies the base's config");
+  });
+  const cfg = (prefetch) => ({ enableAlgoliaMcp: true, searchPrefetch: prefetch ? { enabled: true } : false });
+  const old = { providers: PROVIDERS, agents: [
+    { id: "b", name: "DEMO_main-demo-base", providerId: "t", model: "m", config: cfg(false) },
+    { id: "f", name: "DEMO_main-demo-prefetch", providerId: "t", model: "m", config: cfg(true) },
+  ] };
+  await withFakeHost(old, ["--send-usage"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.match(run.stdout, /warn it does not stream token usage \(--converge rewrites it\)/);
+    assert.equal(old.patches, undefined);
+  });
+  await withFakeHost(old, ["--send-usage", "--converge"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(old.patches, ["DEMO_main-demo-base", "DEMO_main-demo-prefetch"]);
+    assert.deepEqual(old.agents.map((a) => [a.config.sendUsage, Boolean(a.config.searchPrefetch)]), [[true, false], [true, true]]);
+  });
+});

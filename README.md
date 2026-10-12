@@ -208,6 +208,9 @@ APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs --region auto \
   another provider or model: `DEMO_main-demo-NAME-base` and
   `DEMO_main-demo-NAME-prefetch`. A run with it reads, writes and syncs only its
   own pair. The page keys agents by id, so either pair can back it.
+- `--send-usage` has the pair stream token usage, which the race's input-token
+  row reads: `--seed` writes it, and `--converge` adds it to an agent that lacks
+  it.
 - A second run creates nothing. It reports an agent the shipped backend would
   read differently (Algolia MCP off, prefetch keys it ignores), and
   `--converge` rewrites that agent's config, then republishes it.
