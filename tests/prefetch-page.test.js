@@ -124,15 +124,18 @@ test("Run live needs the mainDemo block, its key, and an agent for both lanes", 
   assert.equal(p.liveReadiness(cfg, both).ok, true, "variants.json's map stands in when config.js has none");
 });
 
-test("the page states what prefetch does and claims no speedup", () => {
+test("the page states what prefetch does and claims no more than often sooner", () => {
   const html = fs.readFileSync(path.join(PUBLIC, "prefetch", "index.html"), "utf8");
   assert.match(html, /<script type="module" src="app\.js"><\/script>/);
   assert.match(html, /id="run"/);
   assert.doesNotMatch(html, /replay/i);
   assert.match(html, /before the first model call/);
-  assert.match(html, /extra input tokens and a later first byte/);
   const prose = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
-  assert.doesNotMatch(prose, /\b(faster|speedup|speeds? up|quicker|saves?)\b/i);
+  assert.match(prose, /often starts sooner/, "the one speed claim, hedged");
+  assert.doesNotMatch(prose, /\b(speedup|speeds? up|quicker|saves?|\d+(\.\d+)?\s*[x×])\b/i);
+  for (const m of prose.matchAll(/\b(faster|sooner)\b/gi)) {
+    assert.match(prose.slice(Math.max(0, m.index - 30), m.index), /\boften\b[^.]*$/i, "a speed word is always qualified by often");
+  }
 });
 
 test("the landing page links the prefetch page", () => {
