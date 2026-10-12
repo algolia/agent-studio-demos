@@ -175,12 +175,26 @@ export function checkProvider(base, providers, { local }) {
    the same prompt, tools and search parameters, so the race on production
    compares the same two agents. */
 
-const PRODUCTS = {
-  description: "General product catalog (electronics, sports, home, toys, fashion, books): title, brand, "
-    + "price, categories, product group, color, features and image.",
-  attributes: ["title", "brand", "manufacturer", "price", "priceDisplay", "largeImage", "categories",
-    "productGroup", "color", "features", "url"],
+/** the catalogs --index knows: what the search tool says about each, and what it retrieves */
+const CATALOGS = {
+  products: {
+    description: "General product catalog (electronics, sports, home, toys, fashion, books): title, brand, "
+      + "price, categories, product group, color, features and image.",
+    attributes: ["title", "brand", "manufacturer", "price", "priceDisplay", "largeImage", "categories",
+      "productGroup", "color", "features", "url"],
+    prices: true,
+  },
+  // the public ESCI shopping-queries dataset: no price, no image; description is
+  // left out because it mostly repeats the bullets and doubles every hit's tokens
+  esci_products_us: {
+    description: "Product catalog from the ESCI shopping dataset (US): title, brand, color and feature "
+      + "bullets. It lists no prices and no images.",
+    attributes: ["title", "brand", "color", "bullets"],
+    prices: false,
+  },
 };
+const NO_PRICES = "Mention the brand when it helps the shopper choose. This catalog lists no prices: "
+  + "never state or guess one, and say so if the shopper asks.";
 
 const SEED_INSTRUCTIONS = "You are a shopping assistant for an online store. Help shoppers find products from the "
   + "catalog. Search the catalog before recommending anything, and only recommend products "
@@ -191,11 +205,18 @@ const SEED_INSTRUCTIONS = "You are a shopping assistant for an online store. Hel
   + "(the product category, a synonym, fewer words, no filters). Never answer with nothing: "
   + "recommend the closest products you found and say in a few words how they differ from the request.";
 
+/** the seed prompt for a catalog: a catalog without prices gets no price to mention */
+export function seedInstructions(index) {
+  const catalog = CATALOGS[index];
+  if (!catalog || catalog.prices) return SEED_INSTRUCTIONS;
+  return SEED_INSTRUCTIONS.replace("Mention price and brand when they help the shopper choose.", NO_PRICES);
+}
+
 /** the base agent --seed creates: prefetch off, Algolia MCP on, so both arms search the same way */
 export function seedBody({ name = BASE_AGENT, providerId, model, index = "products" }) {
-  const known = index === "products";
+  const catalog = CATALOGS[index];
   const searchParameters = {
-    ...(known ? { attributesToRetrieve: PRODUCTS.attributes } : {}),
+    ...(catalog ? { attributesToRetrieve: catalog.attributes } : {}),
     hitsPerPage: 7,
     // a chat query with one word the catalog lacks finds nothing under strict settings
     removeWordsIfNoResults: "allOptional", ignorePlurals: true, typoTolerance: "min",
@@ -204,11 +225,11 @@ export function seedBody({ name = BASE_AGENT, providerId, model, index = "produc
     name,
     description: "Search prefetch race: the base arm, and the template every variant copies",
     providerId, model,
-    instructions: SEED_INSTRUCTIONS,
+    instructions: seedInstructions(index),
     config: { enableAlgoliaMcp: true, ...agentConfigPatch(BASE_TOGGLES) },
     tools: [
       { type: "algolia_search_index", name: "algolia_search_index",
-        indices: [{ index, description: known ? PRODUCTS.description : `The ${index} catalog.`, searchParameters }] },
+        indices: [{ index, description: catalog ? catalog.description : `The ${index} catalog.`, searchParameters }] },
       { type: "algolia_grouped_results", name: "algolia_grouped_results" },
     ],
   };

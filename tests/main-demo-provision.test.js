@@ -231,3 +231,19 @@ test("fence: --seed on the managed provider creates the base and the prefetch ar
       [["DEMO_main-demo-base", "m", "medium"], ["DEMO_main-demo-prefetch", "m", "medium"]]);
   });
 });
+
+test("--seed knows the ESCI catalog: its own fields, and a prompt that never quotes a price", async () => {
+  const p = await load();
+  const esci = p.seedBody({ providerId: "m", model: "medium", index: "esci_products_us" });
+  const idx = esci.tools[0].indices[0];
+  assert.equal(idx.index, "esci_products_us");
+  assert.deepEqual(idx.searchParameters.attributesToRetrieve, ["title", "brand", "color", "bullets"]);
+  assert.match(idx.description, /no prices/);
+  assert.match(esci.instructions, /lists no prices: never state or guess one/);
+  assert.doesNotMatch(esci.instructions, /Mention price/);
+  const products = p.seedBody({ providerId: "t", model: "m" });
+  assert.match(products.instructions, /Mention price and brand when they help the shopper choose\./, "the products seed is unchanged");
+  assert.ok(products.tools[0].indices[0].searchParameters.attributesToRetrieve.includes("price"));
+  const other = p.seedBody({ providerId: "t", model: "m", index: "my_index" });
+  assert.equal(other.tools[0].indices[0].searchParameters.attributesToRetrieve, undefined, "an unknown index retrieves its defaults");
+});
