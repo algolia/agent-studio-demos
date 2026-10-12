@@ -536,3 +536,29 @@ test("provision --print-config: stdout is the map, the progress goes to stderr, 
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("in a race each chat grows to its turn, so no lane's product cards scroll out of sight", () => {
+  const css = require("node:fs").readFileSync(path.join(dir, "style.css"), "utf8");
+  const rule = (sel) => {
+    const at = css.indexOf(sel);
+    assert.ok(at >= 0, `missing rule for ${sel}`);
+    return css.slice(at, css.indexOf("}", at));
+  };
+  assert.match(rule('.lanes[data-mode="race"] .lane-chat .ais-Chat-container'), /height: auto; max-height: none/);
+  assert.match(rule('.lanes[data-mode="race"] .lane-chat .ais-ChatMessages {'), /overflow: visible/);
+  assert.match(rule('.lanes[data-mode="race"] .lane-chat .ais-ChatMessages-scroll'), /height: auto; overflow: visible/);
+});
+
+test("the prefetched search hands its hits to the cards like the model's own search does", async () => {
+  const st = await load("stream.mjs");
+  const turn = st.createTurn({ text: "boots" });
+  const id = "prefetch_abc";
+  turn.headers(10, { status: 200, get: () => null });
+  turn.observe(20, { type: "data-search_prefetch", id: "search_prefetch", data: { decision: "injected_candidate", toolCallId: id, latencyMs: 200 } });
+  turn.observe(21, { type: "tool-input-start", toolCallId: id, toolName: "algolia_search_index_products" });
+  turn.observe(22, { type: "tool-output-available", toolCallId: id, output: { hits: [{ objectID: "1" }, { objectID: "2" }] } });
+  turn.finish(30);
+  const v = turn.view();
+  assert.deepEqual(v.hits.map((h) => h.objectID), ["1", "2"]);
+  assert.equal(v.hitsTool, "algolia_search_index_products");
+});

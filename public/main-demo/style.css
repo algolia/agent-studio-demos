@@ -343,6 +343,14 @@
 .lane-chat .ais-ChatInlineLayout, .lane-chat .ais-Chat-container {
   height: 480px; max-height: 70vh; width: 100%; max-width: 100%;
 }
+/* a race compares two whole answers: each chat grows to its turn instead of
+   scrolling inside a fixed box, which pinned the latest text in view and pushed
+   the product cards above it out of sight in one lane but not the other */
+.lanes[data-mode="race"] .lane-chat .ais-ChatInlineLayout,
+.lanes[data-mode="race"] .lane-chat .ais-Chat-container { height: auto; max-height: none; min-height: 240px; }
+.lanes[data-mode="race"] .lane-chat .ais-ChatMessages { flex: 1 0 auto; height: auto; overflow: visible; }
+.lanes[data-mode="race"] .lane-chat .ais-ChatMessages-scroll { height: auto; overflow: visible; }
+.lanes[data-mode="race"] .lane-chat .ais-ChatMessages-scrollToBottom { display: none; }
 .lanes[data-mode="race"] .lane-chat .ais-ChatPrompt { display: none; }
 .lanes[data-mode="race"] .lane-chat .ais-ChatHeader-clear,
 .lanes[data-mode="race"] .lane-chat .ais-ChatMessage-action[title="Regenerate"] { display: none; }
