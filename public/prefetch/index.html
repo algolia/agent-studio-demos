@@ -46,7 +46,21 @@
 .pf-source { margin: 0; font-size: 14px; color: var(--ink-2); flex: 1 1 320px; min-width: 0; }
 .pf-source b { color: var(--ink); font-weight: 600; }
 .pf-bar .btn, .pf-bar .btn-quiet { padding: 7px 16px; }
-.pf-bar .btn-quiet[aria-disabled="true"] { color: var(--ink-3); }
+.pf-bar .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pf-check { margin: 0; font-size: 13px; font-weight: 500; color: var(--ink-3); }
+.pf-check[data-phase="ready"] { color: var(--ok); }
+.pf-check[data-phase="unavailable"] { color: var(--warn); flex-basis: 100%; order: 3; }
+.lanes[hidden] { display: none; }
+.pf-lane { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.pf-err {
+  margin: 0; padding: 8px 12px; font-size: 14px; color: var(--ink);
+  border: 1px solid var(--warn); border-left-width: 4px; border-radius: 6px; background: var(--surface);
+}
+/* the widget's own error says "contact support"; the note above the lane says what happened */
+.lane-chat .ais-ChatMessageError { display: none; }
+.lane.is-failed .lane-chat { opacity: 0.5; }
+/* the lane's empty chat points at main-demo's starter chips, which this page has none of */
+.lane-empty p { display: none; }
 .pf-q { margin: 0 0 12px; font-size: 14px; color: var(--ink-3); }
 .pf-q q { color: var(--ink); }
 .pf-score { margin: 0 0 16px; overflow-x: auto; }
@@ -82,17 +96,22 @@
 <main class="wrap">
   <div class="pf-bar">
     <p class="pf-source" id="source" aria-live="polite"></p>
-    <button type="button" class="btn" id="replay">Replay</button>
-    <button type="button" class="btn-quiet" id="live">Run live</button>
+    <p class="pf-check" id="check" role="status" data-phase="checking">Checking agents…</p>
+    <button type="button" class="btn" id="run" disabled>Run</button>
   </div>
-  <p class="status" id="status" role="status" hidden></p>
   <p class="pf-q">Question: <q id="question"></q></p>
 
   <section class="pf-score" id="score" aria-label="Before and after" aria-live="polite"></section>
 
-  <div class="lanes" data-mode="race">
-    <section class="lane" id="lane-a" aria-label="Without prefetch"></section>
-    <section class="lane" id="lane-b" aria-label="With prefetch"></section>
+  <div class="lanes" id="lanes" data-mode="race">
+    <div class="pf-lane">
+      <p class="pf-err" id="err-a" role="alert" hidden></p>
+      <section class="lane" id="lane-a" aria-label="Without prefetch"></section>
+    </div>
+    <div class="pf-lane">
+      <p class="pf-err" id="err-b" role="alert" hidden></p>
+      <section class="lane" id="lane-b" aria-label="With prefetch"></section>
+    </div>
   </div>
 </main>
 

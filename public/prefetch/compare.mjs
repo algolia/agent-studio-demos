@@ -17,18 +17,9 @@ export const LANES = [
 ];
 
 /* check-copy: off */
-// the replay's script answers with running shoes whatever is asked, and a
-// budget in the question makes it play the miss; this one plays the hit
-export const REPLAY_QUESTION = "Running shoes for trail and road";
 // checked against the products index by main-demo: its keywords find relevant hits
-export const LIVE_QUESTION = "A portable bluetooth speaker for the beach";
+export const QUESTION = "A portable bluetooth speaker for the beach";
 /* check-copy: on */
-
-/**
- * What the replay is. fixture.mjs writes its events by hand with made-up
- * timings: it is not a recorded run, so the page says so.
- */
-export const REPLAY = Object.freeze({ recorded: false, label: "Illustrative replay" });
 
 const count = (n) => String(n);
 const tokens = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
@@ -46,9 +37,17 @@ export const ROWS = [
     read: (r) => (r.view.status === "done" ? r.view.total : null) },
 ];
 
+/** a lane whose turn failed: its counts are not measurements, whatever they read */
+const failed = (r) => Boolean(r && r.view) && settled(r) && (r.view.status === "error" || Boolean(r.view.errors && r.view.errors.length));
+
+/** "HTTP 404", or "failed" when the error came without a status */
+export function failureText(view) {
+  return view && view.httpStatus >= 400 ? `HTTP ${view.httpStatus}` : "failed";
+}
+
 /** one lane's value for one row: a number, or null while it is not known */
 export function valueOf(row, report) {
-  if (!report || !report.view || !report.counts) return null;
+  if (!report || !report.view || !report.counts || failed(report)) return null;
   const v = row.read(report);
   return Number.isFinite(v) ? v : null;
 }
@@ -63,10 +62,11 @@ export function diffText(row, a, b) {
 }
 
 /** what a cell shows when the number is missing: pending, or why it never came */
-function blank(row, report, { replay }) {
+function blank(row, report) {
   if (!report || !report.view) return "–";
   if (!settled(report)) return "…";
-  if (row.usage) return replay ? "not in replay" : "not streamed";
+  if (failed(report)) return failureText(report.view);
+  if (row.usage) return "not streamed";
   return "–";
 }
 
@@ -74,7 +74,7 @@ function blank(row, report, { replay }) {
  * The table: one row per metric, both lanes' values as text, and B − A.
  *   [{ id, label, a, b, diff, known: { a, b } }]; known is false where the text is not a number
  */
-export function rows(reports, { replay = false } = {}) {
+export function rows(reports) {
   const ra = reports && reports.a;
   const rb = reports && reports.b;
   return ROWS.map((row) => {
@@ -83,8 +83,8 @@ export function rows(reports, { replay = false } = {}) {
     return {
       id: row.id,
       label: row.label,
-      a: a === null ? blank(row, ra, { replay }) : row.fmt(a),
-      b: b === null ? blank(row, rb, { replay }) : row.fmt(b),
+      a: a === null ? blank(row, ra) : row.fmt(a),
+      b: b === null ? blank(row, rb) : row.fmt(b),
       diff: settled(ra) && settled(rb) ? diffText(row, a, b) : "",
       known: { a: a !== null, b: b !== null },
     };
@@ -98,15 +98,15 @@ export function rows(reports, { replay = false } = {}) {
  */
 export function liveReadiness(mainDemo, fallback) {
   if (!mainDemo || typeof mainDemo !== "object") {
-    return { ok: false, why: "Live runs are off on this build: it has no Agent Studio config." };
+    return { ok: false, why: "Live unavailable: this build has no Agent Studio config." };
   }
   if (!mainDemo.agentStudioApiKey || !mainDemo.appId) {
-    return { ok: false, why: "Live runs are off on this build: the config has no app id or key." };
+    return { ok: false, why: "Live unavailable: the config has no app id or key." };
   }
   const variants = configVariants(mainDemo) || fallback || {};
   const missing = LANES.filter((l) => !(variants[configKey(l.toggles)] && variants[configKey(l.toggles)].agentId));
   if (missing.length) {
-    return { ok: false, why: `Live runs are off on this build: no agent for ${missing.map((l) => l.label.toLowerCase()).join(" or ")}.` };
+    return { ok: false, why: `Live unavailable: no agent for ${missing.map((l) => l.label.toLowerCase()).join(" or ")}.` };
   }
   return { ok: true, variants };
 }

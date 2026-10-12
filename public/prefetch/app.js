@@ -2,15 +2,17 @@
    app.js: search prefetch, before and after, on one question.
 
    Two main-demo lanes, locked to the race's two arms, and the numbers
-   their stream readers measure. Replay by default (fixture.mjs, labeled as
-   what it is); "Run live" calls the same agents main-demo does, from the
-   same mainDemo config block.
+   their stream readers measure. Live only, on the agents named in the
+   same mainDemo config block main-demo reads. Run stays off until both
+   agents pass a one-message preflight, and nothing runs until Run is
+   pressed: every run makes real model calls.
    ─────────────────────────────────────────────────────────────── */
 
 import { liteClient } from "algoliasearch/lite";
 import { mountLane } from "../main-demo/lane.js";
-import { MANIFEST, configKey, demoHost } from "../main-demo/configs.mjs";
-import { LANES, LIVE_QUESTION, REPLAY, REPLAY_QUESTION, liveReadiness, rows } from "./compare.mjs";
+import { configKey, demoHost } from "../main-demo/configs.mjs";
+import { LANES, QUESTION, liveReadiness, rows } from "./compare.mjs";
+import { cacheKey, laneFailure, preflightState, probeAgent } from "./preflight.mjs";
 
 const root = window.DEMO_CONFIG || {};
 const mainDemo = root.mainDemo || null;
@@ -19,11 +21,12 @@ CFG.host = demoHost(mainDemo);
 
 const $ = (id) => document.getElementById(id);
 const el = {
-  replay: $("replay"), live: $("live"), status: $("status"), source: $("source"),
-  question: $("question"), score: $("score"), lane: { a: $("lane-a"), b: $("lane-b") },
+  run: $("run"), check: $("check"), source: $("source"), lanes: $("lanes"),
+  question: $("question"), score: $("score"),
+  lane: { a: $("lane-a"), b: $("lane-b") }, err: { a: $("err-a"), b: $("err-b") },
 };
 
-const state = { mode: "replay", running: false, at: null, ready: null };
+const state = { running: false, at: null, ready: null, check: null, runs: 0 };
 const lanes = { a: null, b: null };
 const seen = { a: null, b: null };
 let frame = 0;
@@ -40,18 +43,6 @@ async function until(pred, timeout) {
   return true;
 }
 
-function say(text) {
-  el.status.textContent = text || "";
-  el.status.hidden = !text;
-}
-
-/** every manifest variant, served by the fixture */
-function fixtureVariants() {
-  const out = {};
-  for (const m of MANIFEST) out[configKey(m.toggles)] = { agentId: "fixture", name: m.name, model: "fixture" };
-  return out;
-}
-
 /** main-demo's local run keeps its map in variants.json; a deploy carries it in config.js */
 async function localVariants() {
   try {
@@ -64,16 +55,28 @@ async function localVariants() {
   }
 }
 
-async function backendUp() {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 2500);
-  try {
-    return (await fetch(`${CFG.host}/status`, { signal: ctl.signal })).ok;
-  } catch (_) {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
+/* ── Preflight: one short message to each agent, once a session ── */
+
+function cached(key) {
+  try { return sessionStorage.getItem(key) === "ok"; } catch (_) { return false; }
+}
+
+function remember(key) {
+  try { sessionStorage.setItem(key, "ok"); } catch (_) { /* private mode: probe again next load */ }
+}
+
+async function preflight(variants) {
+  const results = {};
+  const show = () => { state.check = preflightState(results, LANES); renderCheck(); };
+  show();
+  await Promise.all(LANES.map(async (l) => {
+    const agentId = variants[configKey(l.toggles)].agentId;
+    const key = cacheKey(CFG.host, agentId);
+    results[l.key] = cached(key) ? { ok: true }
+      : await probeAgent(window.fetch.bind(window), { host: CFG.host, appId: CFG.appId, apiKey: CFG.agentStudioApiKey }, agentId);
+    if (results[l.key].ok) remember(key);
+    show();
+  }));
 }
 
 /* ── The table ─────────────────────────────────────────────────── */
@@ -102,7 +105,7 @@ function renderScore() {
   table.append(cell("thead"));
   table.firstChild.append(head);
   const body = cell("tbody");
-  for (const r of rows(seen, { replay: state.mode === "replay" })) {
+  for (const r of rows(seen)) {
     const tr = cell("tr");
     const th = cell("th", r.label, "pf-m");
     th.scope = "row";
@@ -112,93 +115,96 @@ function renderScore() {
   }
   table.append(body);
   el.score.replaceChildren(table);
+  renderErrors();
 }
 
 function scheduleScore() {
   if (!frame) frame = requestAnimationFrame(renderScore);
 }
 
-/* ── The source line: what these numbers are ──────────────────── */
+/** a lane with no answer says so above its chat, in place of the widget's generic error */
+function renderErrors() {
+  for (const l of LANES) {
+    const why = laneFailure(seen[l.key] && seen[l.key].view);
+    el.err[l.key].textContent = why ? `${l.label}: no answer, ${why}.` : "";
+    el.err[l.key].hidden = !why;
+    el.lane[l.key].classList.toggle("is-failed", Boolean(why));
+  }
+}
+
+/* ── The bar: what the numbers are, and whether Run can run ────── */
 
 function renderSource() {
   el.source.textContent = "";
-  if (state.mode === "replay") {
-    el.source.append(cell("b", REPLAY.label), ": scripted events with made-up timings, not a measurement.");
-  } else {
-    const when = state.at ? state.at.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
-    el.source.append(cell("b", "Live run"), `, ${when}, one conversation. A second run will differ.`);
+  if (!state.at) {
+    el.source.append(cell("b", "Live"), ": each run makes real model calls, so nothing runs until you press Run.");
+    return;
   }
-  el.question.textContent = state.mode === "replay" ? REPLAY_QUESTION : LIVE_QUESTION;
+  const when = state.at.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  el.source.append(cell("b", "Live run"), `, ${when}, one conversation. A second run will differ.`);
 }
 
-function renderButtons() {
-  el.replay.disabled = state.running;
-  el.live.disabled = state.running;
-  el.live.setAttribute("aria-disabled", String(!(state.ready && state.ready.ok)));
+function renderCheck() {
+  const c = state.check || { phase: "unavailable", text: "" };
+  el.check.textContent = c.text;
+  el.check.dataset.phase = c.phase;
+  renderButton();
+}
+
+function renderButton() {
+  const ready = Boolean(state.check && state.check.phase === "ready");
+  el.run.disabled = state.running || !ready;
+  el.run.textContent = state.running ? "Running…" : state.runs ? "Run again" : "Run";
 }
 
 /* ── The lanes ─────────────────────────────────────────────────── */
 
-function mount({ fixture, variants, searchClient }) {
+function mount(variants) {
+  const searchClient = CFG.appId && CFG.searchApiKey ? liteClient(CFG.appId, CFG.searchApiKey) : null;
   for (const l of LANES) {
-    if (lanes[l.key]) lanes[l.key].unmount();
-    seen[l.key] = null;
     lanes[l.key] = mountLane(el.lane[l.key], {
-      label: l.label, cfg: CFG, variants, searchClient, initialToggles: l.toggles, fixture, locked: true,
+      label: l.label, cfg: CFG, variants, searchClient, initialToggles: l.toggles, fixture: false, locked: true,
       onView: (report) => { seen[l.key] = report; scheduleScore(); },
     });
   }
-  scheduleScore();
 }
 
-/** the question to both lanes at the same moment; resolves when both settle */
-async function run(question) {
+/** a fresh conversation in both lanes, then the question to both at the same moment */
+async function run() {
+  if (state.running || !state.check || state.check.phase !== "ready") return;
   state.running = true;
-  renderButtons();
-  const ready = await until(() => LANES.every((l) => lanes[l.key].ready()), 15000);
-  if (!ready) {
-    say("A lane did not load. Reload the page to try again.");
+  renderButton();
+  for (const l of LANES) lanes[l.key].clear();
+  const fresh = await until(() => LANES.every((l) => lanes[l.key].ready() && !(seen[l.key] && seen[l.key].view)), 15000);
+  if (!fresh) {
+    state.check = { phase: "unavailable", text: "A lane did not load. Reload the page to try again." };
   } else {
     const before = { a: seen.a ? seen.a.seq : 0, b: seen.b ? seen.b.seq : 0 };
-    const refused = LANES.filter((l) => !lanes[l.key].send(question));
-    if (refused.length) say(`No agent for ${refused.map((l) => l.label.toLowerCase()).join(" and ")}.`);
-    else await until(() => LANES.every((l) => seen[l.key] && seen[l.key].seq > before[l.key] && terminal(seen[l.key])), 180000);
+    state.at = new Date();
+    state.runs += 1;
+    renderSource();
+    for (const l of LANES) lanes[l.key].send(QUESTION);
+    await until(() => LANES.every((l) => seen[l.key] && seen[l.key].seq > before[l.key] && terminal(seen[l.key])), 180000);
   }
   state.running = false;
-  renderButtons();
+  renderCheck();
   scheduleScore();
-}
-
-async function replay() {
-  if (state.running) return;
-  state.mode = "replay";
-  say("");
-  renderSource();
-  mount({ fixture: true, variants: fixtureVariants(), searchClient: null });
-  await run(REPLAY_QUESTION);
-}
-
-async function live() {
-  if (state.running) return;
-  if (!state.ready.ok) { say(state.ready.why); return; }
-  say("Checking the Agent Studio backend…");
-  if (!(await backendUp())) { say("The Agent Studio backend did not answer. The replay still works."); return; }
-  say("");
-  state.mode = "live";
-  state.at = new Date();
-  renderSource();
-  const searchClient = CFG.appId && CFG.searchApiKey ? liteClient(CFG.appId, CFG.searchApiKey) : null;
-  mount({ fixture: false, variants: state.ready.variants, searchClient });
-  await run(LIVE_QUESTION);
 }
 
 async function main() {
+  el.question.textContent = QUESTION;
+  el.run.addEventListener("click", run);
+  renderSource();
+  scheduleScore();
   state.ready = liveReadiness(mainDemo, mainDemo && !mainDemo.variants ? await localVariants() : null);
-  el.replay.addEventListener("click", replay);
-  el.live.addEventListener("click", live);
-  if (!state.ready.ok) el.live.title = state.ready.why;
-  renderButtons();
-  await replay();
+  if (!state.ready.ok) {
+    state.check = { phase: "unavailable", text: state.ready.why };
+    renderCheck();
+    el.lanes.hidden = true;
+    return;
+  }
+  mount(state.ready.variants);
+  await preflight(state.ready.variants);
 }
 
 main();
