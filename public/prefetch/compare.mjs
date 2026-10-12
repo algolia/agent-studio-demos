@@ -41,17 +41,33 @@ const count = (n) => String(n);
 const tokens = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
 const settled = (r) => Boolean(r && r.view) && (r.view.status === "done" || r.view.status === "error");
 
-/** each row: what it reads off a lane report, and how it prints */
+/**
+ * each row: what it reads off a lane report, and how it prints. Labels are
+ * plain words for a reader who has never seen a tool call. `lead` is the
+ * headline row; `bar` rows draw both lanes' values as bars from zero.
+ */
 export const ROWS = [
-  { id: "modelCalls", label: "Model calls", fmt: count, read: (r) => r.view.modelCalls },
-  { id: "modelSearches", label: "Searches by the model", fmt: count, read: (r) => r.counts.active },
-  { id: "prefetchSearches", label: "Search before the model", fmt: count, read: (r) => r.counts.passive },
-  { id: "inputTokens", label: "Input tokens", fmt: tokens, usage: true,
-    read: (r) => (r.view.usage && Number.isFinite(r.view.usage.inputTokens) ? r.view.usage.inputTokens : null) },
-  { id: "ttft", label: "First text", fmt: ms, time: true, read: (r) => r.view.ttft },
-  { id: "total", label: "Full answer", fmt: ms, time: true,
+  { id: "modelCalls", label: "Model calls", fmt: count, lead: true, bar: true, read: (r) => r.view.modelCalls },
+  { id: "ttft", label: "First words", fmt: ms, time: true, bar: true, read: (r) => r.view.ttft },
+  { id: "total", label: "Full answer", fmt: ms, time: true, bar: true,
     read: (r) => (r.view.status === "done" ? r.view.total : null) },
+  { id: "prefetchSearches", label: "Search before the model", fmt: count, read: (r) => r.counts.passive },
+  { id: "modelSearches", label: "Searches the model asked for", fmt: count, read: (r) => r.counts.active },
+  { id: "inputTokens", label: "Tokens the model read", fmt: tokens, usage: true,
+    read: (r) => (r.view.usage && Number.isFinite(r.view.usage.inputTokens) ? r.view.usage.inputTokens : null) },
 ];
+
+/**
+ * Bar lengths for one row, in percent of the larger value: both bars start
+ * at zero on one shared scale, so their ratio is the values' ratio.
+ *   { a, b } — null for a value that is not known yet
+ */
+export function barWidths(a, b) {
+  const ok = (v) => Number.isFinite(v) && v >= 0;
+  const max = Math.max(ok(a) ? a : 0, ok(b) ? b : 0);
+  const pct = (v) => (!ok(v) ? null : max === 0 ? 0 : Math.round((v / max) * 1000) / 10);
+  return { a: pct(a), b: pct(b) };
+}
 
 /** a lane whose turn failed: its counts are not measurements, whatever they read */
 const failed = (r) => Boolean(r && r.view) && settled(r) && (r.view.status === "error" || Boolean(r.view.errors && r.view.errors.length));
@@ -87,8 +103,8 @@ function blank(row, report) {
 }
 
 /**
- * The table: one row per metric, both lanes' values as text, and B − A.
- *   [{ id, label, a, b, diff, known: { a, b } }]; known is false where the text is not a number
+ * The table: one row per metric, both lanes' values as text, bar lengths, and B − A.
+ *   [{ id, label, lead, bars, a, b, diff, known: { a, b } }]; known is false where the text is not a number
  */
 export function rows(reports) {
   const ra = reports && reports.a;
@@ -99,6 +115,8 @@ export function rows(reports) {
     return {
       id: row.id,
       label: row.label,
+      lead: Boolean(row.lead),
+      bars: row.bar ? barWidths(a, b) : null,
       a: a === null ? blank(row, ra) : row.fmt(a),
       b: b === null ? blank(row, rb) : row.fmt(b),
       diff: settled(ra) && settled(rb) ? diffText(row, a, b) : "",

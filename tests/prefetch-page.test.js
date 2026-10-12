@@ -46,7 +46,10 @@ test("a run read into rows: one model call and one search fewer with prefetch, t
   const a = await report({ prefetch: false, query: p.STARTERS[0].text });
   const b = await report({ prefetch: true, query: p.STARTERS[0].text });
   const t = Object.fromEntries(p.rows({ a, b }).map((r) => [r.id, r]));
-  assert.deepEqual(Object.keys(t), ["modelCalls", "modelSearches", "prefetchSearches", "inputTokens", "ttft", "total"]);
+  assert.deepEqual(Object.keys(t), ["modelCalls", "ttft", "total", "prefetchSearches", "modelSearches", "inputTokens"]);
+  assert.equal(t.modelCalls.lead, true, "model calls is the headline row");
+  assert.deepEqual(t.modelCalls.bars, { a: 100, b: 66.7 }, "3 against 2, on one scale from zero");
+  assert.equal(t.inputTokens.bars, null, "only calls and times draw bars");
   assert.deepEqual([t.modelCalls.a, t.modelCalls.b, t.modelCalls.diff], ["3", "2", "−1"]);
   assert.deepEqual([t.modelSearches.a, t.modelSearches.b], ["1", "0"]);
   assert.deepEqual([t.prefetchSearches.a, t.prefetchSearches.b, t.prefetchSearches.diff], ["0", "1", "+1"]);
@@ -82,6 +85,15 @@ test("the visitor asks: a form and chips, both sending one question to both lane
   const app = fs.readFileSync(path.join(PUBLIC, "prefetch", "app.js"), "utf8");
   assert.match(app, /for \(const l of LANES\) lanes\[l\.key\]\.send\(q\)/, "one question, both lanes, same loop");
   assert.doesNotMatch(app, /QUESTION/, "no question is written into the page");
+});
+
+test("bars start at zero on one shared scale: the longer value is full width, a zero is no bar", async () => {
+  const p = await load("prefetch/compare.mjs");
+  assert.deepEqual(p.barWidths(9800, 8450), { a: 100, b: 86.2 });
+  assert.deepEqual(p.barWidths(1, 0), { a: 100, b: 0 });
+  assert.deepEqual(p.barWidths(0, 0), { a: 0, b: 0 });
+  assert.deepEqual(p.barWidths(null, 5), { a: null, b: 100 }, "an unknown value draws nothing");
+  assert.deepEqual(p.barWidths(-1, 5), { a: null, b: 100 });
 });
 
 test("streamed usage prints as tokens, with a signed difference", async () => {
