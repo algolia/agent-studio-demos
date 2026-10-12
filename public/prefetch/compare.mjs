@@ -19,16 +19,18 @@ export const LANES = [
 /* check-copy: off */
 /**
  * Starter questions, each checked against esci_products_us (a product catalog
- * with no price field). `fit: "good"`: the raw sentence, which is what
- * prefetch searches, finds relevant hits. `fit: "poor"`: it does not, so the
- * prefetched search is wasted or skipped and the model searches anyway.
+ * with no price field) with the agent's own search settings, words dropped
+ * when nothing matches. `fit: "good"`: the raw sentence, which is what
+ * prefetch searches, finds relevant hits. `fit: "poor"`: it finds the wrong
+ * ones (a greeting matches junk; "not Nike" matches only Nike), so the
+ * prefetched search is wasted and the model has to search on its own.
  */
 export const STARTERS = [
   { text: "A portable bluetooth speaker for the beach", fit: "good" },
   { text: "Noise cancelling headphones for long flights", fit: "good" },
   { text: "Waterproof hiking boots for women", fit: "good" },
   { text: "Hi! What can you help me with?", fit: "poor" },
-  { text: "Wireless earbuds under $50", fit: "poor" },
+  { text: "Running shoes, but not Nike", fit: "poor" },
 ];
 /* check-copy: on */
 
