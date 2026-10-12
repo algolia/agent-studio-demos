@@ -60,7 +60,7 @@ export const ROWS = [
 /**
  * Bar lengths for one row, in percent of the larger value: both bars start
  * at zero on one shared scale, so their ratio is the values' ratio.
- *   { a, b } — null for a value that is not known yet
+ *   { a, b }: null for a value that is not known yet
  */
 export function barWidths(a, b) {
   const ok = (v) => Number.isFinite(v) && v >= 0;
@@ -128,7 +128,7 @@ export function rows(reports) {
 /**
  * The config block this page reads: `prefetchDemo` when the deploy gives the
  * page its own agent pair, else main-demo's `mainDemo`. Same shape either way.
- *   { block, name } — block is null when neither is set
+ *   { block, name }: block is null when neither is set
  */
 export function pageConfig(root) {
   const r = root && typeof root === "object" ? root : {};
