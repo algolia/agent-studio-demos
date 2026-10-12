@@ -114,3 +114,12 @@ export function laneFailure(view) {
   }
   return null;
 }
+
+/** the state after a run: Run stays on, but a lane with no answer is said, not "Ready" */
+export function afterRun(reports, lanes) {
+  const r = reports || {};
+  const failed = lanes.filter((l) => laneFailure(r[l.key] && r[l.key].view));
+  if (!failed.length) return { phase: "ready", text: "Ready" };
+  const who = failed.map((l) => l.label).join(" and ");
+  return { phase: "retry", text: `Last run: no answer from ${who}. Run to try again.` };
+}

@@ -12,7 +12,7 @@ import { liteClient } from "algoliasearch/lite";
 import { mountLane } from "../main-demo/lane.js";
 import { configKey, demoHost } from "../main-demo/configs.mjs";
 import { LANES, QUESTION, liveReadiness, rows } from "./compare.mjs";
-import { cacheKey, laneFailure, preflightState, probeAgent } from "./preflight.mjs";
+import { afterRun, cacheKey, laneFailure, preflightState, probeAgent } from "./preflight.mjs";
 
 const root = window.DEMO_CONFIG || {};
 const mainDemo = root.mainDemo || null;
@@ -152,7 +152,7 @@ function renderCheck() {
 }
 
 function renderButton() {
-  const ready = Boolean(state.check && state.check.phase === "ready");
+  const ready = Boolean(state.check && (state.check.phase === "ready" || state.check.phase === "retry"));
   el.run.disabled = state.running || !ready;
   el.run.textContent = state.running ? "Running…" : state.runs ? "Run again" : "Run";
 }
@@ -171,7 +171,7 @@ function mount(variants) {
 
 /** a fresh conversation in both lanes, then the question to both at the same moment */
 async function run() {
-  if (state.running || !state.check || state.check.phase !== "ready") return;
+  if (state.running || !state.check || !["ready", "retry"].includes(state.check.phase)) return;
   state.running = true;
   renderButton();
   for (const l of LANES) lanes[l.key].clear();
@@ -185,6 +185,7 @@ async function run() {
     renderSource();
     for (const l of LANES) lanes[l.key].send(QUESTION);
     await until(() => LANES.every((l) => seen[l.key] && seen[l.key].seq > before[l.key] && terminal(seen[l.key])), 180000);
+    state.check = afterRun(seen, LANES);
   }
   state.running = false;
   renderCheck();

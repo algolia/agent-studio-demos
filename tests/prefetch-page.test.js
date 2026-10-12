@@ -221,3 +221,17 @@ test("mid-race failures: a lane says why it has no answer, and the table shows n
   assert.equal(calls.a, "failed");
   assert.equal(calls.diff, "");
 });
+
+test("after a run: Ready only when both lanes answered; a failed lane is named and Run stays on", async () => {
+  const f = await load("prefetch/preflight.mjs");
+  const p = await load("prefetch/compare.mjs");
+  const ok = await report({ prefetch: false, query: p.QUESTION });
+  assert.deepEqual(f.afterRun({ a: ok, b: ok }, p.LANES), { phase: "ready", text: "Ready" });
+  const refused = { view: { status: "error", httpStatus: 404, errors: ["HTTP 404"] } };
+  const one = f.afterRun({ a: ok, b: refused }, p.LANES);
+  assert.equal(one.phase, "retry");
+  assert.equal(one.text, "Last run: no answer from With prefetch. Run to try again.");
+  assert.match(f.afterRun({ a: refused, b: refused }, p.LANES).text, /Without prefetch and With prefetch/);
+  const app = fs.readFileSync(path.join(PUBLIC, "prefetch", "app.js"), "utf8");
+  assert.match(app, /state\.check = afterRun\(seen, LANES\)/, "the check line is set from the run, not left at Ready");
+});
