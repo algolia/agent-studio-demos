@@ -17,9 +17,25 @@ export const LANES = [
 ];
 
 /* check-copy: off */
-// checked against the products index by main-demo: its keywords find relevant hits
-export const QUESTION = "A portable bluetooth speaker for the beach";
+/**
+ * Starter questions, each checked against esci_products_us (a product catalog
+ * with no price field). `fit: "good"`: the raw sentence, which is what
+ * prefetch searches, finds relevant hits. `fit: "poor"`: it does not, so the
+ * prefetched search is wasted or skipped and the model searches anyway.
+ */
+export const STARTERS = [
+  { text: "A portable bluetooth speaker for the beach", fit: "good" },
+  { text: "Noise cancelling headphones for long flights", fit: "good" },
+  { text: "Waterproof hiking boots for women", fit: "good" },
+  { text: "Hi! What can you help me with?", fit: "poor" },
+  { text: "Wireless earbuds under $50", fit: "poor" },
+];
 /* check-copy: on */
+
+/** a question as both lanes get it: trimmed, one line, or "" when there is nothing to ask */
+export function questionOf(text) {
+  return String(text || "").replace(/\s+/g, " ").trim().slice(0, 300);
+}
 
 const count = (n) => String(n);
 const tokens = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));

@@ -11,7 +11,7 @@
 import { liteClient } from "algoliasearch/lite";
 import { mountLane } from "../main-demo/lane.js";
 import { configKey, demoHost } from "../main-demo/configs.mjs";
-import { LANES, QUESTION, liveReadiness, rows } from "./compare.mjs";
+import { LANES, STARTERS, liveReadiness, questionOf, rows } from "./compare.mjs";
 import { afterRun, cacheKey, laneFailure, preflightState, probeAgent } from "./preflight.mjs";
 
 const root = window.DEMO_CONFIG || {};
@@ -22,6 +22,7 @@ CFG.host = demoHost(mainDemo);
 const $ = (id) => document.getElementById(id);
 const el = {
   run: $("run"), check: $("check"), source: $("source"), lanes: $("lanes"),
+  form: $("ask-form"), ask: $("ask"), chips: $("chips"), asked: $("asked"),
   question: $("question"), score: $("score"),
   lane: { a: $("lane-a"), b: $("lane-b") }, err: { a: $("err-a"), b: $("err-b") },
 };
@@ -151,10 +152,25 @@ function renderCheck() {
   renderButton();
 }
 
+function canRun() {
+  return !state.running && Boolean(state.check && (state.check.phase === "ready" || state.check.phase === "retry"));
+}
+
 function renderButton() {
-  const ready = Boolean(state.check && (state.check.phase === "ready" || state.check.phase === "retry"));
-  el.run.disabled = state.running || !ready;
-  el.run.textContent = state.running ? "Running…" : state.runs ? "Run again" : "Run";
+  el.run.disabled = !canRun();
+  el.run.textContent = state.running ? "Running…" : "Run";
+  for (const b of el.chips.children) b.disabled = !canRun();
+}
+
+/** one chip per starter; a tap asks it, exactly as typing it would */
+function renderChips() {
+  el.chips.replaceChildren(...STARTERS.map((s) => {
+    const b = cell("button", s.text, "chip");
+    b.type = "button";
+    b.dataset.fit = s.fit;
+    b.addEventListener("click", () => { el.ask.value = s.text; run(s.text); });
+    return b;
+  }));
 }
 
 /* ── The lanes ─────────────────────────────────────────────────── */
@@ -170,8 +186,9 @@ function mount(variants) {
 }
 
 /** a fresh conversation in both lanes, then the question to both at the same moment */
-async function run() {
-  if (state.running || !state.check || !["ready", "retry"].includes(state.check.phase)) return;
+async function run(text) {
+  const q = questionOf(text);
+  if (!q || !canRun()) return;
   state.running = true;
   renderButton();
   for (const l of LANES) lanes[l.key].clear();
@@ -182,8 +199,10 @@ async function run() {
     const before = { a: seen.a ? seen.a.seq : 0, b: seen.b ? seen.b.seq : 0 };
     state.at = new Date();
     state.runs += 1;
+    el.question.textContent = q;
+    el.asked.hidden = false;
     renderSource();
-    for (const l of LANES) lanes[l.key].send(QUESTION);
+    for (const l of LANES) lanes[l.key].send(q);
     await until(() => LANES.every((l) => seen[l.key] && seen[l.key].seq > before[l.key] && terminal(seen[l.key])), 180000);
     state.check = afterRun(seen, LANES);
   }
@@ -193,8 +212,8 @@ async function run() {
 }
 
 async function main() {
-  el.question.textContent = QUESTION;
-  el.run.addEventListener("click", run);
+  renderChips();
+  el.form.addEventListener("submit", (e) => { e.preventDefault(); run(el.ask.value); });
   renderSource();
   scheduleScore();
   state.ready = liveReadiness(mainDemo, mainDemo && !mainDemo.variants ? await localVariants() : null);

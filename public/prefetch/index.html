@@ -63,6 +63,10 @@
 /* the lane's empty chat points at main-demo's starter chips, which this page has none of */
 .lane-empty p { display: none; }
 .pf-q { margin: 0 0 12px; font-size: 14px; color: var(--ink-3); }
+.pf-q[hidden] { display: none; }
+.pf-ask { margin: 0 0 10px; }
+.pf-chips { margin: 0 0 16px; }
+.chip:disabled { opacity: 0.5; cursor: not-allowed; }
 .pf-q q { color: var(--ink); }
 .pf-score { margin: 0 0 16px; overflow-x: auto; }
 .pf-score table { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; max-width: 760px; }
@@ -98,9 +102,14 @@
   <div class="pf-bar">
     <p class="pf-source" id="source" aria-live="polite"></p>
     <p class="pf-check" id="check" role="status" data-phase="checking">Checking agents…</p>
-    <button type="button" class="btn" id="run" disabled>Run</button>
   </div>
-  <p class="pf-q">Question: <q id="question"></q></p>
+  <form class="race-row pf-ask" id="ask-form" autocomplete="off">
+    <label class="sr-only" for="ask">Ask both agents</label>
+    <input id="ask" type="text" maxlength="300" placeholder="Ask both agents the same question">
+    <button type="submit" class="btn" id="run" disabled>Run</button>
+  </form>
+  <p class="chips pf-chips" id="chips"></p>
+  <p class="pf-q" id="asked" hidden>Question: <q id="question"></q></p>
 
   <section class="pf-score" id="score" aria-label="Before and after" aria-live="polite"></section>
 

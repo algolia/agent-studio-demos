@@ -43,8 +43,8 @@ test("the two lanes are the race's two arms: the base agent, then the same with 
 
 test("a run read into rows: one model call and one search fewer with prefetch, tokens marked as absent", async () => {
   const p = await load("prefetch/compare.mjs");
-  const a = await report({ prefetch: false, query: p.QUESTION });
-  const b = await report({ prefetch: true, query: p.QUESTION });
+  const a = await report({ prefetch: false, query: p.STARTERS[0].text });
+  const b = await report({ prefetch: true, query: p.STARTERS[0].text });
   const t = Object.fromEntries(p.rows({ a, b }).map((r) => [r.id, r]));
   assert.deepEqual(Object.keys(t), ["modelCalls", "modelSearches", "prefetchSearches", "inputTokens", "ttft", "total"]);
   assert.deepEqual([t.modelCalls.a, t.modelCalls.b, t.modelCalls.diff], ["3", "2", "−1"]);
@@ -59,11 +59,36 @@ test("a run read into rows: one model call and one search fewer with prefetch, t
   }
 });
 
+test("starters: three good fits for prefetch and two poor ones, one line each", async () => {
+  const p = await load("prefetch/compare.mjs");
+  assert.equal(p.STARTERS.length, 5);
+  assert.deepEqual(p.STARTERS.map((s) => s.fit), ["good", "good", "good", "poor", "poor"]);
+  for (const s of p.STARTERS) assert.equal(p.questionOf(s.text), s.text);
+});
+
+test("a typed question is trimmed to one line; blank asks nothing", async () => {
+  const p = await load("prefetch/compare.mjs");
+  assert.equal(p.questionOf("  red\n  shoes  "), "red shoes");
+  assert.equal(p.questionOf("   "), "");
+  assert.equal(p.questionOf(null), "");
+  assert.equal(p.questionOf("x".repeat(400)).length, 300);
+});
+
+test("the visitor asks: a form and chips, both sending one question to both lanes", () => {
+  const html = fs.readFileSync(path.join(PUBLIC, "prefetch", "index.html"), "utf8");
+  assert.match(html, /<form[^>]*id="ask-form"/);
+  assert.match(html, /<input id="ask"/);
+  assert.match(html, /id="chips"/);
+  const app = fs.readFileSync(path.join(PUBLIC, "prefetch", "app.js"), "utf8");
+  assert.match(app, /for \(const l of LANES\) lanes\[l\.key\]\.send\(q\)/, "one question, both lanes, same loop");
+  assert.doesNotMatch(app, /QUESTION/, "no question is written into the page");
+});
+
 test("streamed usage prints as tokens, with a signed difference", async () => {
   const p = await load("prefetch/compare.mjs");
   const withUsage = (r, n) => ({ ...r, view: { ...r.view, usage: { inputTokens: n, outputTokens: 10 } } });
-  const a = withUsage(await report({ prefetch: false, query: p.QUESTION }), 2100);
-  const b = withUsage(await report({ prefetch: true, query: p.QUESTION }), 3300);
+  const a = withUsage(await report({ prefetch: false, query: p.STARTERS[0].text }), 2100);
+  const b = withUsage(await report({ prefetch: true, query: p.STARTERS[0].text }), 3300);
   const row = p.rows({ a, b }).find((r) => r.id === "inputTokens");
   assert.deepEqual([row.a, row.b, row.diff], ["2.1k", "3.3k", "+1.2k"]);
 });
@@ -73,7 +98,7 @@ test("before a run every cell is a dash (an en dash); mid-run, an ellipsis and n
   for (const r of p.rows({ a: null, b: null })) {
     assert.deepEqual([r.a, r.b, r.diff], ["–", "–", ""]);
   }
-  const done = await report({ prefetch: false, query: p.QUESTION });
+  const done = await report({ prefetch: false, query: p.STARTERS[0].text });
   const streaming = { ...done, view: { ...done.view, status: "streaming", total: null, ttft: null } };
   const total = p.rows({ a: done, b: streaming }).find((r) => r.id === "total");
   assert.equal(total.b, "…");
@@ -130,12 +155,12 @@ test("the page is live only: no module of it loads the fixture, and nothing runs
 test("a lane the backend refused prints its HTTP status, never a zero that reads as a count", async () => {
   const p = await load("prefetch/compare.mjs");
   const st = await load("main-demo/stream.mjs");
-  const turn = st.createTurn({ text: p.QUESTION });
+  const turn = st.createTurn({ text: p.STARTERS[0].text });
   turn.headers(80, { status: 404, get: () => null });
   turn.finish(81, { error: "HTTP 404" });
   const view = turn.view();
   const refused = { view, counts: st.searchCounts(false, view), seq: 1 };
-  const ok = await report({ prefetch: true, query: p.QUESTION });
+  const ok = await report({ prefetch: true, query: p.STARTERS[0].text });
   for (const r of p.rows({ a: refused, b: ok })) {
     assert.equal(r.a, "HTTP 404", r.id);
     assert.equal(r.known.a, false);
@@ -215,7 +240,7 @@ test("mid-race failures: a lane says why it has no answer, and the table shows n
   assert.equal(f.laneFailure({ status: "error", httpStatus: 404, errors: ["HTTP 404"] }), "agent not found on this backend");
   assert.equal(f.laneFailure({ status: "done", httpStatus: 200, errors: ["model overloaded"] }), "model overloaded");
   // a 200 stream that carried an error event: the widget shows "contact support"; the table shows no numbers
-  const ok = await report({ prefetch: true, query: p.QUESTION });
+  const ok = await report({ prefetch: true, query: p.STARTERS[0].text });
   const streamedError = { ...ok, view: { ...ok.view, errors: ["model overloaded"] } };
   const calls = p.rows({ a: streamedError, b: ok }).find((r) => r.id === "modelCalls");
   assert.equal(calls.a, "failed");
@@ -225,7 +250,7 @@ test("mid-race failures: a lane says why it has no answer, and the table shows n
 test("after a run: Ready only when both lanes answered; a failed lane is named and Run stays on", async () => {
   const f = await load("prefetch/preflight.mjs");
   const p = await load("prefetch/compare.mjs");
-  const ok = await report({ prefetch: false, query: p.QUESTION });
+  const ok = await report({ prefetch: false, query: p.STARTERS[0].text });
   assert.deepEqual(f.afterRun({ a: ok, b: ok }, p.LANES), { phase: "ready", text: "Ready" });
   const refused = { view: { status: "error", httpStatus: 404, errors: ["HTTP 404"] } };
   const one = f.afterRun({ a: ok, b: refused }, p.LANES);
