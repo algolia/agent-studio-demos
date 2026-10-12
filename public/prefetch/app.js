@@ -21,13 +21,12 @@ CFG.host = demoHost(mainDemo);
 
 const $ = (id) => document.getElementById(id);
 const el = {
-  run: $("run"), check: $("check"), source: $("source"), lanes: $("lanes"),
-  form: $("ask-form"), ask: $("ask"), chips: $("chips"), asked: $("asked"),
-  question: $("question"), score: $("score"),
+  run: $("run"), check: $("check"), lanes: $("lanes"), detail: $("detail"),
+  form: $("ask-form"), ask: $("ask"), chips: $("chips"), score: $("score"),
   lane: { a: $("lane-a"), b: $("lane-b") }, err: { a: $("err-a"), b: $("err-b") },
 };
 
-const state = { running: false, at: null, ready: null, check: null, runs: 0 };
+const state = { running: false, at: null, question: "", ready: null, check: null, runs: 0 };
 const lanes = { a: null, b: null };
 const seen = { a: null, b: null };
 let frame = 0;
@@ -89,29 +88,61 @@ function cell(tag, text, cls) {
   return n;
 }
 
+/** a value with its bar: the bar starts at zero, on the row's shared scale */
+function valueCell(r, k) {
+  const td = cell("td", undefined, "pf-v" + (r.known[k] ? "" : " is-blank"));
+  td.append(cell("span", r[k], "pf-num"));
+  const w = r.bars && r.bars[k];
+  if (w !== null && w !== undefined) {
+    const bar = cell("span", undefined, "pf-bar");
+    bar.setAttribute("aria-hidden", "true");
+    const fill = cell("i");
+    fill.style.width = `${w}%`;
+    bar.append(fill);
+    td.append(bar);
+  }
+  return td;
+}
+
+/** what the numbers are: the question, and that this is one run of many possible */
+function caption() {
+  const c = cell("caption");
+  if (!state.at) {
+    c.append("Pick a question. Both agents get it at the same moment.");
+    return c;
+  }
+  const when = state.at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  c.append(cell("q", state.question), cell("span", `One live run, ${when}. The next one will differ.`, "pf-n"));
+  return c;
+}
+
 function renderScore() {
   frame = 0;
   const table = cell("table");
+  table.append(caption());
+  const cols = cell("colgroup");
+  for (const c of ["pf-c-m", "pf-c-v", "pf-c-v", "pf-c-d"]) cols.append(cell("col", undefined, c));
+  table.append(cols);
   const head = cell("tr");
-  head.append(cell("th", "", "pf-m"));
+  head.append(cell("td", "", "pf-m"));
   for (const l of LANES) {
     const th = cell("th", l.label, "pf-col" + (l.key === "b" ? " is-on" : ""));
     th.scope = "col";
     head.append(th);
   }
-  const d = cell("th", "B − A", "pf-d");
+  const d = cell("th", "Change", "pf-d");
   d.scope = "col";
-  d.title = "With prefetch minus without, from this one run";
+  d.title = "With prefetch minus without, in this one run";
   head.append(d);
-  table.append(cell("thead"));
-  table.firstChild.append(head);
+  const thead = cell("thead");
+  thead.append(head);
+  table.append(thead);
   const body = cell("tbody");
   for (const r of rows(seen)) {
-    const tr = cell("tr");
+    const tr = cell("tr", undefined, r.lead ? "is-lead" : "");
     const th = cell("th", r.label, "pf-m");
     th.scope = "row";
-    const val = (k) => cell("td", r[k], "pf-v" + (r.known[k] ? "" : " is-blank"));
-    tr.append(th, val("a"), val("b"), cell("td", r.diff, "pf-d"));
+    tr.append(th, valueCell(r, "a"), valueCell(r, "b"), cell("td", r.diff, "pf-d"));
     body.append(tr);
   }
   table.append(body);
@@ -135,16 +166,6 @@ function renderErrors() {
 
 /* ── The bar: what the numbers are, and whether Run can run ────── */
 
-function renderSource() {
-  el.source.textContent = "";
-  if (!state.at) {
-    el.source.append(cell("b", "Live"), ": each run makes real model calls, so nothing runs until you press Run.");
-    return;
-  }
-  const when = state.at.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  el.source.append(cell("b", "Live run"), `, ${when}, one conversation. A second run will differ.`);
-}
-
 function renderCheck() {
   const c = state.check || { phase: "unavailable", text: "" };
   el.check.textContent = c.text;
@@ -159,18 +180,27 @@ function canRun() {
 function renderButton() {
   el.run.disabled = !canRun();
   el.run.textContent = state.running ? "Running…" : "Run";
-  for (const b of el.chips.children) b.disabled = !canRun();
+  for (const b of el.chips.querySelectorAll("button")) b.disabled = !canRun();
 }
 
-/** one chip per starter; a tap asks it, exactly as typing it would */
+/** one chip per starter, in two groups: where prefetch fits, and where it won't help */
 function renderChips() {
-  el.chips.replaceChildren(...STARTERS.map((s) => {
-    const b = cell("button", s.text, "chip");
-    b.type = "button";
-    b.dataset.fit = s.fit;
-    b.addEventListener("click", () => { el.ask.value = s.text; run(s.text); });
-    return b;
-  }));
+  for (const fit of ["good", "poor"]) {
+    const box = el.chips.querySelector(`[data-fit="${fit}"] .chips`);
+    box.replaceChildren(...STARTERS.filter((s) => s.fit === fit).map((s) => {
+      const b = cell("button", s.text, "chip");
+      b.type = "button";
+      b.addEventListener("click", () => { el.ask.value = s.text; run(s.text); });
+      return b;
+    }));
+  }
+}
+
+/** timings, tool calls and the raw stream: there for engineers, folded for everyone else */
+function renderDetail(on) {
+  el.lanes.classList.toggle("is-detailed", on);
+  el.detail.setAttribute("aria-pressed", String(on));
+  el.detail.textContent = on ? "Hide timings and tool calls" : "Show timings and tool calls";
 }
 
 /* ── The lanes ─────────────────────────────────────────────────── */
@@ -199,9 +229,7 @@ async function run(text) {
     const before = { a: seen.a ? seen.a.seq : 0, b: seen.b ? seen.b.seq : 0 };
     state.at = new Date();
     state.runs += 1;
-    el.question.textContent = q;
-    el.asked.hidden = false;
-    renderSource();
+    state.question = q;
     for (const l of LANES) lanes[l.key].send(q);
     await until(() => LANES.every((l) => seen[l.key] && seen[l.key].seq > before[l.key] && terminal(seen[l.key])), 180000);
     state.check = afterRun(seen, LANES);
@@ -213,8 +241,9 @@ async function run(text) {
 
 async function main() {
   renderChips();
+  renderDetail(false);
+  el.detail.addEventListener("click", () => renderDetail(!el.lanes.classList.contains("is-detailed")));
   el.form.addEventListener("submit", (e) => { e.preventDefault(); run(el.ask.value); });
-  renderSource();
   scheduleScore();
   // variants.json is main-demo's local map: it only stands in for mainDemo
   const local = blockName === "mainDemo" && !mainDemo.variants ? await localVariants() : null;
@@ -223,6 +252,7 @@ async function main() {
     state.check = { phase: "unavailable", text: state.ready.why };
     renderCheck();
     el.lanes.hidden = true;
+    el.detail.hidden = true;
     return;
   }
   mount(state.ready.variants);

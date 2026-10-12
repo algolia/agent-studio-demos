@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Search prefetch, before and after</title>
-<meta name="description" content="One Agent Studio agent, one question, with and without search prefetch, side by side: model calls, searches, tokens and timings.">
+<meta name="description" content="Ask one question to the same Agent Studio agent with and without search prefetch, and compare model calls and timings from one live run.">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,50 +41,83 @@
 <script src="../shared/config.js" onerror="window.DEMO_CONFIG = window.DEMO_CONFIG || null"></script>
 <style>
 /* layered on main-demo/style.css: only the page's own pieces */
-.pf-caption { margin: 10px 0 0; color: var(--ink-2); font-size: 15px; max-width: 64ch; }
-.pf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin: 20px 0 10px; }
-.pf-source { margin: 0; font-size: 14px; color: var(--ink-2); flex: 1 1 320px; min-width: 0; }
-.pf-source b { color: var(--ink); font-weight: 600; }
-.pf-bar .btn, .pf-bar .btn-quiet { padding: 7px 16px; }
-.pf-bar .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.hero .lede { max-width: 62ch; text-wrap: pretty; }
+
+/* ── Ask: one question, both agents ── */
+.pf-ask { display: grid; gap: 12px; margin: 24px 0 28px; max-width: 980px; }
+.pf-ask .race-row input { font-size: 16px; padding: 11px 14px; }
+.pf-ask .btn { min-width: 88px; }
+.pf-ask .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.pf-starters { display: grid; gap: 8px; }
+.pf-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.pf-group-h { flex: 0 0 auto; min-width: 9.5em; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.pf-group .chips { margin: 0; flex: 1 1 300px; min-width: 0; }
+.pf-group[data-fit="poor"] .chip { border-style: dashed; }
+.chip:disabled { opacity: 0.45; cursor: not-allowed; }
+.chip:disabled:hover { border-color: var(--line); color: var(--ink-2); }
+.chip:focus-visible, .pf-ask input:focus-visible, .btn:focus-visible, .btn-quiet:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
 .pf-check { margin: 0; font-size: 13px; font-weight: 500; color: var(--ink-3); }
 .pf-check[data-phase="ready"] { color: var(--ok); }
-.pf-check[data-phase="unavailable"] { color: var(--warn); flex-basis: 100%; order: 3; }
-.pf-check[data-phase="retry"] { color: var(--warn); }
+.pf-check[data-phase="unavailable"], .pf-check[data-phase="retry"] { color: var(--warn); }
+
+/* ── The scoreboard: the numbers carry the story ── */
+.pf-score { margin: 0 0 28px; max-width: 980px; }
+.pf-score table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; table-layout: fixed; }
+.pf-score caption { caption-side: top; text-align: left; padding: 0 0 12px; font-size: 14px; color: var(--ink-2); text-wrap: pretty; }
+.pf-score caption q { color: var(--ink); font-weight: 600; margin-right: 8px; }
+.pf-score caption .pf-n { color: var(--ink-2); }
+.pf-score th, .pf-score td { padding: 10px 16px 10px 0; text-align: left; font-weight: 400; vertical-align: middle; }
+.pf-score thead th { font-size: 13px; font-weight: 600; color: var(--ink-2); padding-bottom: 8px; border-bottom: 1px solid var(--line-strong); }
+.pf-score thead .pf-col.is-on { color: var(--accent); }
+.pf-score tbody tr + tr > * { border-top: 1px solid var(--line); }
+.pf-score col.pf-c-m { width: 32%; }
+.pf-score col.pf-c-d { width: 14%; }
+.pf-score .pf-m { color: var(--ink-2); font-size: 15px; }
+.pf-v { color: var(--ink); }
+.pf-num { display: block; font-size: 17px; font-weight: 500; white-space: nowrap; }
+.pf-v.is-blank .pf-num { font-size: 14px; color: var(--ink-3); font-weight: 400; }
+.pf-bar { display: block; height: 6px; margin-top: 6px; }
+.pf-bar i { display: block; height: 100%; border-radius: 3px; background: var(--line-strong); transition: width 200ms cubic-bezier(0.22, 1, 0.36, 1); }
+.pf-score td:nth-child(3) .pf-bar i { background: var(--accent); }
+.pf-score .is-lead .pf-m { color: var(--ink); font-weight: 600; font-size: 17px; }
+.pf-score .is-lead .pf-num { font-size: 36px; font-weight: 600; line-height: 1.1; letter-spacing: -0.01em; }
+.pf-score .is-lead .pf-bar { height: 10px; border-radius: 5px; }
+.pf-score .is-lead > * { padding-top: 14px; padding-bottom: 16px; }
+.pf-score .pf-d { font-family: var(--mono); font-size: 13px; color: var(--ink-2); padding-right: 0; white-space: nowrap; }
+.pf-score thead .pf-d { font-family: var(--body); cursor: help; }
+.pf-score .is-lead .pf-d { font-size: 15px; color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .pf-bar i { transition: none; } }
+
+/* ── Lanes: the two answers; engineering detail on request ── */
+.pf-lanes-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; }
+.pf-lanes-h h2 { margin: 0; font: 600 17px var(--body); color: var(--ink); }
+.pf-lanes-h .btn-quiet { font-size: 13px; }
 .lanes[hidden] { display: none; }
 .pf-lane { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.lanes:not(.is-detailed) :is(.searches, .tl, .hits, .wire, .pf-pill, .lane-chat .ais-ChatHeader) { display: none; }
+#lanes[data-mode="race"] .lane-chat .ais-Chat-container { min-height: 96px; }
 .pf-err {
   margin: 0; padding: 8px 12px; font-size: 14px; color: var(--ink);
-  border: 1px solid var(--warn); border-left-width: 4px; border-radius: 6px; background: var(--surface);
+  border: 1px solid var(--warn); border-radius: 6px; background: color-mix(in srgb, var(--warn) 10%, var(--surface));
 }
 /* the widget's own error says "contact support"; the note above the lane says what happened */
 .lane-chat .ais-ChatMessageError { display: none; }
 .lane.is-failed .lane-chat { opacity: 0.5; }
-/* the lane's empty chat points at main-demo's starter chips, which this page has none of */
+/* the lane's empty chat points at main-demo's starter chips, which sit above here */
 .lane-empty p { display: none; }
-.pf-q { margin: 0 0 12px; font-size: 14px; color: var(--ink-3); }
-.pf-q[hidden] { display: none; }
-.pf-ask { margin: 0 0 10px; }
-.pf-chips { margin: 0 0 16px; }
-.chip:disabled { opacity: 0.5; cursor: not-allowed; }
-.pf-q q { color: var(--ink); }
-.pf-score { margin: 0 0 16px; overflow-x: auto; }
-.pf-score table { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; max-width: 760px; }
-.pf-score th, .pf-score td { padding: 7px 20px 7px 0; text-align: left; font-weight: 400; white-space: nowrap; }
-.pf-score thead th { font-size: 13px; font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--line); }
-.pf-score thead .pf-col.is-on { color: var(--accent); }
-.pf-score tbody tr + tr th, .pf-score tbody tr + tr td { border-top: 1px solid var(--line); }
-.pf-score .pf-m { color: var(--ink-2); font-size: 14px; }
-.pf-score .pf-v { font-family: var(--mono); font-size: 15px; color: var(--ink); }
-.pf-score .pf-v.is-blank { font-family: var(--body); font-size: 13px; color: var(--ink-3); }
-.pf-score .pf-d { font-family: var(--mono); font-size: 13px; color: var(--ink-3); padding-right: 0; }
-.pf-score thead .pf-d { font-family: var(--body); cursor: help; }
-@media (max-width: 480px) {
+
+@media (max-width: 560px) {
+  .pf-score col.pf-c-m { width: 36%; }
+  .pf-score col.pf-c-d, .pf-score .pf-d { display: none; }
   .pf-score th, .pf-score td { padding-right: 10px; }
-  .pf-score .pf-m { white-space: normal; font-size: 13px; }
-  .pf-score .pf-v { font-size: 13px; }
-  .pf-score .pf-v.is-blank { font-size: 12px; white-space: normal; }
-  .pf-score thead th { white-space: normal; }
+  .pf-score .pf-m { font-size: 13px; }
+  .pf-num { font-size: 15px; }
+  .pf-score .is-lead .pf-m { font-size: 14px; }
+  .pf-score .is-lead .pf-num { font-size: 28px; }
+  .pf-group-h { min-width: 0; flex-basis: 100%; }
+  .pf-score caption .pf-n { display: block; margin-top: 2px; }
 }
 </style>
 </head>
@@ -94,25 +127,29 @@
 <header class="hero wrap">
   <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
   <h1>Search prefetch, before and after</h1>
-  <p class="lede">One agent, one question, twice: as is, then with search prefetch on.</p>
-  <p class="pf-caption">Searches your index before the first model call, so the answer often starts sooner.</p>
+  <p class="lede">Searches your index before the first model call, so the answer often starts sooner.</p>
 </header>
 
 <main class="wrap">
-  <div class="pf-bar">
-    <p class="pf-source" id="source" aria-live="polite"></p>
+  <form class="pf-ask" id="ask-form" autocomplete="off">
+    <div class="race-row">
+      <label class="sr-only" for="ask">Ask both agents</label>
+      <input id="ask" type="text" maxlength="300" placeholder="Ask anything about the product catalog">
+      <button type="submit" class="btn" id="run" disabled>Run</button>
+    </div>
+    <div class="pf-starters" id="chips">
+      <div class="pf-group" data-fit="good"><span class="pf-group-h">Good fit</span><p class="chips"></p></div>
+      <div class="pf-group" data-fit="poor"><span class="pf-group-h">Poor fit</span><p class="chips"></p></div>
+    </div>
     <p class="pf-check" id="check" role="status" data-phase="checking">Checking agents…</p>
-  </div>
-  <form class="race-row pf-ask" id="ask-form" autocomplete="off">
-    <label class="sr-only" for="ask">Ask both agents</label>
-    <input id="ask" type="text" maxlength="300" placeholder="Ask both agents the same question">
-    <button type="submit" class="btn" id="run" disabled>Run</button>
   </form>
-  <p class="chips pf-chips" id="chips"></p>
-  <p class="pf-q" id="asked" hidden>Question: <q id="question"></q></p>
 
   <section class="pf-score" id="score" aria-label="Before and after" aria-live="polite"></section>
 
+  <div class="pf-lanes-h">
+    <h2>The two answers</h2>
+    <button type="button" class="btn-quiet" id="detail" aria-pressed="false">Show timings and tool calls</button>
+  </div>
   <div class="lanes" id="lanes" data-mode="race">
     <div class="pf-lane">
       <p class="pf-err" id="err-a" role="alert" hidden></p>
