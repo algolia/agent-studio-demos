@@ -331,3 +331,16 @@ test("the demo leads: no echoed question or toggle, one small caveat in the foot
   const order = ["id=\"ask-form\"", "id=\"race\"", "id=\"score\"", "id=\"lanes\""].map((m) => html.indexOf(m));
   assert.deepEqual([...order].sort((x, y) => x - y), order, "question, timeline, numbers, then the lanes");
 });
+
+test("every page points at the setup guide from its header, in a new tab", () => {
+  const GUIDE = "https://www.algolia.com/doc/guides/algolia-ai/agent-studio/how-to/search-prefetch";
+  for (const page of ["index.html", "askai/index.html", "assist/index.html"]) {
+    const html = fs.readFileSync(path.join(PUBLIC, "prefetch", page), "utf8");
+    const hero = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+    const cta = hero.match(/<a class="pf-cta" href="([^"]+)" target="_blank" rel="noopener">([^<]+)/);
+    assert.ok(cta, `${page}: the call to action sits in the header`);
+    assert.equal(cta[1], GUIDE, page);
+    assert.equal(cta[2].trim(), "Add it to your agent", page);
+    assert.ok(html.indexOf("pf-cta") < html.indexOf('id="ask-form"'), `${page}: above the question`);
+  }
+});

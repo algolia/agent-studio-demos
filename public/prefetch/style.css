@@ -4,6 +4,17 @@
 .hero { padding-top: 20px; padding-bottom: 0; }
 .hero h1 { font-size: clamp(28px, 5vw, 38px); margin-bottom: 4px; }
 .hero .lede { max-width: 72ch; text-wrap: pretty; font-size: 16px; }
+.hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 32px; }
+.pf-hero-text { flex: 1 1 520px; min-width: 0; }
+/* the way out: from the demo to the docs page that turns prefetch on */
+.pf-cta {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px;
+  font: 600 15px var(--body); color: var(--accent); text-decoration: none;
+  border: 1.5px solid var(--accent); border-radius: 6px; padding: 10px 16px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.pf-cta:hover { background: var(--accent); color: var(--surface); }
+.pf-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Ask: one question, both agents ── */
 .pf-ask { display: grid; gap: 10px; margin: 16px 0 20px; max-width: 980px; }
@@ -109,6 +120,8 @@
 .pf-foot p { margin: 28px 0 32px; font-size: 12px; color: var(--ink-3); }
 
 @media (max-width: 560px) {
+  .hero { gap: 10px; }
+  .pf-cta { font-size: 14px; padding: 7px 12px; }
   .pf-score col.pf-c-m { width: 32%; }
   .pf-score col.pf-c-d { width: 22%; }
   .pf-score th, .pf-score td { padding-right: 8px; }
