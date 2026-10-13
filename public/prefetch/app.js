@@ -27,7 +27,7 @@ const el = {
   lane: { a: $("lane-a"), b: $("lane-b") }, err: { a: $("err-a"), b: $("err-b") },
 };
 
-const state = { running: false, at: null, question: "", ready: null, check: null, runs: 0 };
+const state = { running: false, ready: null, check: null };
 const lanes = { a: null, b: null };
 const seen = { a: null, b: null };
 let frame = 0;
@@ -89,38 +89,15 @@ function cell(tag, text, cls) {
   return n;
 }
 
-/** a value with its bar: the bar starts at zero, on the row's shared scale */
 function valueCell(r, k) {
   const td = cell("td", undefined, "pf-v" + (r.known[k] ? "" : " is-blank"));
   td.append(cell("span", r[k], "pf-num"));
-  const w = r.bars && r.bars[k];
-  if (w !== null && w !== undefined) {
-    const bar = cell("span", undefined, "pf-bar");
-    bar.setAttribute("aria-hidden", "true");
-    const fill = cell("i");
-    fill.style.width = `${w}%`;
-    bar.append(fill);
-    td.append(bar);
-  }
   return td;
-}
-
-/** what the numbers are: the question, and that this is one run of many possible */
-function caption() {
-  const c = cell("caption");
-  if (!state.at) {
-    c.append("Pick a question. Both agents get it at the same moment.");
-    return c;
-  }
-  const when = state.at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  c.append(cell("q", state.question), cell("span", `One live run, ${when}. The next one will differ.`, "pf-n"));
-  return c;
 }
 
 function renderScore() {
   frame = 0;
   const table = cell("table");
-  table.append(caption());
   const cols = cell("colgroup");
   for (const c of ["pf-c-m", "pf-c-v", "pf-c-v", "pf-c-d"]) cols.append(cell("col", undefined, c));
   table.append(cols);
@@ -274,9 +251,6 @@ async function run(text) {
     state.check = { phase: "unavailable", text: "A lane did not load. Reload the page to try again." };
   } else {
     const before = { a: seen.a ? seen.a.seq : 0, b: seen.b ? seen.b.seq : 0 };
-    state.at = new Date();
-    state.runs += 1;
-    state.question = q;
     for (const l of LANES) lanes[l.key].send(q);
     await until(() => LANES.every((l) => seen[l.key] && seen[l.key].seq > before[l.key] && terminal(seen[l.key])), 180000);
     state.check = afterRun(seen, LANES);
