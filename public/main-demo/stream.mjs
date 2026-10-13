@@ -262,8 +262,19 @@ export function viewOf(s) {
     prefetchPart: s.prefetchPart, prefetchParts: s.prefetchParts, cache: s.cache, errors: s.errors,
     modelCalls: s.modelCalls, toolCalls: s.started.filter((id) => id !== passiveId).length, toolErrors: s.toolErrors, usage: s.usage,
     hits: s.hits, hitsTool: s.hitsTool, grouped: s.grouped, texts,
-    httpStatus: s.httpStatus,
+    httpStatus: s.httpStatus, answered: Boolean(s.answer.trim()),
   };
+}
+
+/**
+ * A turn that closed cleanly with nothing to show: no text, no grouped
+ * results, no error part. Gemini does this now and then on a tool step: its
+ * stream ends OK and empty, and the backend passes it on as a bare
+ * start-step, finish-step, finish.
+ */
+export function emptyTurn(view) {
+  return Boolean(view) && view.status === "done" && view.answered === false && !view.grouped
+    && !(view.errors && view.errors.length);
 }
 
 /**
