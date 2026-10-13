@@ -4,17 +4,17 @@
    Two main-demo lanes, locked to the race's two arms, and the numbers
    their stream readers measure. Live only, on the agents named in the
    page's demo blocks (demos.mjs): prefetchDemo or main-demo's mainDemo for
-   the catalog, one block each for the other use cases. Run stays off until both
-   agents pass a one-message preflight, and nothing runs until Run is
-   pressed: every run makes real model calls.
+   the catalog, one block each for the other use cases. Run is on from the
+   first paint, and nothing runs until it is pressed: every run makes real
+   model calls. A lane that cannot answer says so in its own alert line.
    ─────────────────────────────────────────────────────────────── */
 
 import { liteClient } from "algoliasearch/lite";
 import { mountLane } from "../main-demo/lane.js";
-import { configKey, demoHost } from "../main-demo/configs.mjs";
+import { demoHost } from "../main-demo/configs.mjs";
 import { LANES, PHASES, axis, laneEnd, liveReadiness, pageConfig, phases, questionOf, rows, tickText } from "./compare.mjs";
 import { ms } from "../main-demo/stream.mjs";
-import { afterRun, cacheKey, laneFailure, preflightState, probeAgent } from "./preflight.mjs";
+import { afterRun, laneFailure } from "./outcome.mjs";
 import { demoConfig, demoOf } from "./demos.mjs";
 
 // the page names its use case; the demo says which config blocks hold its agents
@@ -57,30 +57,6 @@ async function localVariants() {
   } catch (_) {
     return null;
   }
-}
-
-/* ── Preflight: one short message to each agent, once a session ── */
-
-function cached(key) {
-  try { return sessionStorage.getItem(key) === "ok"; } catch (_) { return false; }
-}
-
-function remember(key) {
-  try { sessionStorage.setItem(key, "ok"); } catch (_) { /* private mode: probe again next load */ }
-}
-
-async function preflight(variants) {
-  const results = {};
-  const show = () => { state.check = preflightState(results, LANES); renderCheck(); };
-  show();
-  await Promise.all(LANES.map(async (l) => {
-    const agentId = variants[configKey(l.toggles)].agentId;
-    const key = cacheKey(CFG.host, agentId);
-    results[l.key] = cached(key) ? { ok: true }
-      : await probeAgent(window.fetch.bind(window), { host: CFG.host, appId: CFG.appId, apiKey: CFG.agentStudioApiKey }, agentId);
-    if (results[l.key].ok) remember(key);
-    show();
-  }));
 }
 
 /* ── The table ─────────────────────────────────────────────────── */
@@ -201,14 +177,14 @@ function renderErrors() {
 /* ── The bar: what the numbers are, and whether Run can run ────── */
 
 function renderCheck() {
-  const c = state.check || { phase: "unavailable", text: "" };
+  const c = state.check || { phase: "ready", text: "" };
   el.check.textContent = c.text;
   el.check.dataset.phase = c.phase;
   renderButton();
 }
 
 function canRun() {
-  return !state.running && Boolean(state.check && (state.check.phase === "ready" || state.check.phase === "retry"));
+  return !state.running && !(state.check && state.check.phase === "unavailable");
 }
 
 function renderButton() {
@@ -248,8 +224,12 @@ async function run(text) {
   if (!q || !canRun()) return;
   state.running = true;
   renderButton();
-  for (const l of LANES) lanes[l.key].clear();
-  const fresh = await until(() => LANES.every((l) => lanes[l.key].ready() && !(seen[l.key] && seen[l.key].view)), 15000);
+  // a click before the lanes are up waits for them, rather than being dropped
+  const off = () => Boolean(state.check && state.check.phase === "unavailable");
+  const up = await until(() => off() || LANES.every((l) => lanes[l.key] && lanes[l.key].ready()), 15000);
+  if (off()) { state.running = false; renderButton(); return; }
+  if (up) for (const l of LANES) lanes[l.key].clear();
+  const fresh = up && await until(() => LANES.every((l) => lanes[l.key].ready() && !(seen[l.key] && seen[l.key].view)), 15000);
   if (!fresh) {
     state.check = { phase: "unavailable", text: "A lane did not load. Reload the page to try again." };
   } else {
@@ -267,6 +247,7 @@ async function main() {
   el.ask.placeholder = DEMO.placeholder;
   renderChips();
   el.form.addEventListener("submit", (e) => { e.preventDefault(); run(el.ask.value); });
+  renderCheck();
   scheduleScore();
   // variants.json is main-demo's local map: it only stands in for mainDemo
   const local = blockName === "mainDemo" && !mainDemo.variants ? await localVariants() : null;
@@ -278,7 +259,8 @@ async function main() {
     return;
   }
   mount(state.ready.variants);
-  await preflight(state.ready.variants);
+  // a Run pressed before this script loaded: the page's inline handler kept it
+  if (el.form.dataset.early) run(el.ask.value);
 }
 
 main();

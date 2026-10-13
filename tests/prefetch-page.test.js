@@ -10,7 +10,6 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { ReadableStream } = require("node:stream/web");
 
 const PUBLIC = path.join(__dirname, "..", "public");
 const load = (rel) => import(pathToFileURL(path.join(PUBLIC, rel)).href);
@@ -196,70 +195,23 @@ test("a lane the backend refused prints its HTTP status, never a zero that reads
   assert.equal(p.failureText({ status: "error", httpStatus: null }), "failed");
 });
 
-/* ── preflight: can both agents answer before Run is offered ── */
+/* ── no preflight: Run is on at once, and a lane says its own failure ── */
 
-const sse = (events, { hang = false } = {}) => new Response(new ReadableStream({
-  start(ctl) {
-    for (const e of events) ctl.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`));
-    if (!hang) ctl.close();
-  },
-}), { status: 200, headers: { "content-type": "text/event-stream" } });
-const CFG = { host: "https://as.example", appId: "APP", apiKey: "k" };
-
-test("preflight request: the lane's own completions call, one short user message", async () => {
-  const f = await load("prefetch/preflight.mjs");
-  const c = await load("main-demo/configs.mjs");
-  const { url, init } = f.probeRequest(CFG, "agent-1");
-  assert.equal(url, `https://as.example/1/agents/agent-1/completions?${new URLSearchParams(c.completionQuery())}`);
-  assert.equal(init.method, "POST");
-  assert.equal(init.headers["x-algolia-application-id"], "APP");
-  const msgs = JSON.parse(init.body).messages;
-  assert.equal(msgs.length, 1);
-  assert.deepEqual(msgs[0].parts, [{ type: "text", text: f.PROBE_TEXT }]);
-  const fx = await load("main-demo/fixture.mjs");
-  assert.equal(fx.fixtureSkips(f.PROBE_TEXT), true, "under prefetch's word gate: the probe runs no search");
-});
-
-test("preflight passes at the model's first text or tool call, without reading the rest", async () => {
-  const f = await load("prefetch/preflight.mjs");
-  const text = await f.probeAgent(async () => sse([{ type: "start" }, { type: "start-step" }, { type: "text-delta", delta: "Hi" }], { hang: true }), CFG, "a");
-  assert.deepEqual(text, { ok: true });
-  const tool = await f.probeAgent(async () => sse([{ type: "tool-input-start", toolCallId: "t", toolName: "search" }], { hang: true }), CFG, "a");
-  assert.deepEqual(tool, { ok: true });
-});
-
-test("preflight fails with a short reason: missing agent, refused key, streamed error, silence", async () => {
-  const f = await load("prefetch/preflight.mjs");
-  const json = (status, body) => async () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
-  assert.deepEqual(await f.probeAgent(json(404, { message: "Agent with ID a not found." }), CFG, "a"),
-    { ok: false, reason: "agent not found on this backend" });
-  assert.equal((await f.probeAgent(json(403, {}), CFG, "a")).reason, "the key was refused");
-  assert.equal((await f.probeAgent(json(502, {}), CFG, "a")).reason, "backend error (HTTP 502)");
-  assert.equal((await f.probeAgent(json(422, { message: "bad body" }), CFG, "a")).reason, "bad body");
-  const streamed = await f.probeAgent(async () => sse([{ type: "start" }, { type: "error", errorText: "provider key invalid" }]), CFG, "a");
-  assert.deepEqual(streamed, { ok: false, reason: "provider key invalid" });
-  assert.equal((await f.probeAgent(async () => sse([{ type: "start" }, { type: "finish" }]), CFG, "a")).reason, "no answer");
-  assert.equal((await f.probeAgent(async () => { throw new TypeError("fetch failed"); }, CFG, "a")).reason, "backend unreachable");
-  const slow = (url, init) => new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(new Error("aborted"))));
-  assert.equal((await f.probeAgent(slow, CFG, "a", { timeoutMs: 30 })).reason, "no answer in time");
-});
-
-test("preflight state: checking until both report, unavailable as soon as one fails, ready when both pass", async () => {
-  const f = await load("prefetch/preflight.mjs");
-  const p = await load("prefetch/compare.mjs");
-  assert.equal(f.preflightState({}, p.LANES).phase, "checking");
-  assert.equal(f.preflightState({ a: { ok: true } }, p.LANES).phase, "checking");
-  const one = f.preflightState({ b: { ok: false, reason: "agent not found on this backend" } }, p.LANES);
-  assert.equal(one.phase, "unavailable");
-  assert.equal(one.text, "Live unavailable: With prefetch: agent not found on this backend.");
-  const both = f.preflightState({ a: { ok: false, reason: "x" }, b: { ok: false, reason: "y" } }, p.LANES);
-  assert.equal(both.text, "Live unavailable: Without prefetch: x; With prefetch: y.");
-  assert.deepEqual(f.preflightState({ a: { ok: true }, b: { ok: true } }, p.LANES), { phase: "ready", text: "Ready" });
-  assert.notEqual(f.cacheKey("h1", "a"), f.cacheKey("h2", "a"), "a pass on one backend says nothing about another");
+test("no check before Run: every page offers Run at once and probes nothing", () => {
+  const app = fs.readFileSync(path.join(PUBLIC, "prefetch", "app.js"), "utf8");
+  assert.doesNotMatch(app, /probeAgent|preflight/i, "no call goes out before Run");
+  assert.equal(fs.existsSync(path.join(PUBLIC, "prefetch", "preflight.mjs")), false);
+  for (const page of ["index.html", "askai/index.html", "assist/index.html"]) {
+    const html = fs.readFileSync(path.join(PUBLIC, "prefetch", page), "utf8");
+    assert.doesNotMatch(html, /Checking agents/, page);
+    assert.match(html, /<button type="submit" class="btn" id="run">Run<\/button>/, `${page}: Run is not disabled`);
+    assert.match(html, /id="ask-form"[^>]*onsubmit="event\.preventDefault\(\); this\.dataset\.early = '1'"/, `${page}: an early Run is kept`);
+  }
+  assert.match(app, /if \(el\.form\.dataset\.early\) run\(el\.ask\.value\)/, "and run once the lanes mount");
 });
 
 test("mid-race failures: a lane says why it has no answer, and the table shows no counts for it", async () => {
-  const f = await load("prefetch/preflight.mjs");
+  const f = await load("prefetch/outcome.mjs");
   const p = await load("prefetch/compare.mjs");
   assert.equal(f.laneFailure(null), null);
   assert.equal(f.laneFailure({ status: "streaming", errors: [] }), null);
@@ -275,7 +227,7 @@ test("mid-race failures: a lane says why it has no answer, and the table shows n
 });
 
 test("an empty reply: a clean 200 close with no text is a failed lane, said above its chat", async () => {
-  const f = await load("prefetch/preflight.mjs");
+  const f = await load("prefetch/outcome.mjs");
   const p = await load("prefetch/compare.mjs");
   const st = await load("main-demo/stream.mjs");
   const ok = await report({ prefetch: true, query: p.STARTERS[0].text });
@@ -319,7 +271,7 @@ test("an empty reply: a clean 200 close with no text is a failed lane, said abov
 });
 
 test("after a run: Ready only when both lanes answered; a failed lane is named and Run stays on", async () => {
-  const f = await load("prefetch/preflight.mjs");
+  const f = await load("prefetch/outcome.mjs");
   const p = await load("prefetch/compare.mjs");
   const ok = await report({ prefetch: false, query: p.STARTERS[0].text });
   assert.deepEqual(f.afterRun({ a: ok, b: ok }, p.LANES), { phase: "ready", text: "Ready" });

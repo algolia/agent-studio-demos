@@ -51,17 +51,17 @@
 </header>
 
 <main class="wrap">
-  <form class="pf-ask" id="ask-form" autocomplete="off">
+  <form class="pf-ask" id="ask-form" autocomplete="off" onsubmit="event.preventDefault(); this.dataset.early = '1'">
     <div class="race-row">
       <label class="sr-only" for="ask">Ask both agents</label>
       <input id="ask" type="text" maxlength="300" placeholder="Ask a question about the Algolia docs">
-      <button type="submit" class="btn" id="run" disabled>Run</button>
+      <button type="submit" class="btn" id="run">Run</button>
     </div>
     <div class="pf-starters" id="chips">
       <div class="pf-group" data-fit="good"><span class="pf-group-h">Good fit</span><p class="chips"></p></div>
       <div class="pf-group" data-fit="poor"><span class="pf-group-h">Poor fit</span><p class="chips"></p></div>
     </div>
-    <p class="pf-check" id="check" role="status" data-phase="checking">Checking agents…</p>
+    <p class="pf-check" id="check" role="status"></p>
   </form>
 
   <div class="pf-board">
