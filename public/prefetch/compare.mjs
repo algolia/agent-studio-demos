@@ -218,10 +218,9 @@ export function axis(...ends) {
   return { max, ticks };
 }
 
-/** "0 s", "0.5 s", "12 s": a tick's label */
+/** "0 s", "0.5 s", "1.25 s", "12 s": a tick's label, never rounded off its tick */
 export function tickText(t) {
-  const s = t / 1000;
-  return `${Number.isInteger(s) ? s : s.toFixed(s < 1 ? 2 : 1).replace(/0$/, "")} s`;
+  return `${Number((t / 1000).toFixed(2))}\u00a0s`;
 }
 
 /** a lane's end on the axis: the turn's total, or its running span */

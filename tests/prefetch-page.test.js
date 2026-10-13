@@ -322,7 +322,7 @@ test("one axis for both lanes: whole-second ticks, the longer lane sets the scal
   assert.deepEqual(p.axis(7029, 4875), { max: 8000, ticks: [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000] });
   assert.deepEqual(p.axis(1800, null).ticks, [0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000]);
   assert.deepEqual(p.axis(null, undefined), { max: 0, ticks: [] });
-  assert.deepEqual([0, 500, 2000, 1500].map(p.tickText), ["0 s", "0.5 s", "2 s", "1.5 s"]);
+  assert.deepEqual([0, 500, 2000, 1500, 1250].map(p.tickText), ["0 s", "0.5 s", "2 s", "1.5 s", "1.25 s"].map((x) => x.replace(" ", "\u00a0")));
 });
 
 test("the demo leads: no echoed question or toggle, one small caveat in the footer", () => {
