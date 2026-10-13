@@ -168,6 +168,7 @@ test("the landing page links the prefetch page", () => {
 test("the page is live only: no module of it loads the fixture, and nothing runs on load", () => {
   const dir = path.join(PUBLIC, "prefetch");
   const files = fs.readdirSync(dir, { recursive: true }).filter((f) => fs.statSync(path.join(dir, f)).isFile());
+  assert.ok(files.includes(path.join("askai", "index.html")));
   for (const f of files) {
     const src = fs.readFileSync(path.join(dir, f), "utf8");
     assert.doesNotMatch(src, /fixture\.mjs|createFixtureFetch|fixtureEvents/, f);

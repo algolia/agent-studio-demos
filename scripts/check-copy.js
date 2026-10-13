@@ -65,6 +65,7 @@ const LIMITS = {
 const PAGES = [
   "index.html", "chat-with-book/index.html", "infinite-conversation/index.html", "jev-attributes/index.html",
   "guardrails-arena/index.html", "guardrails-game/index.html", "main-demo/index.html", "prefetch/index.html",
+  "prefetch/askai/index.html",
 ];
 const JS_FILES = [
   "chat-with-book/app.js", "infinite-conversation/app.js",

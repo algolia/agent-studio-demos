@@ -244,4 +244,19 @@ window.DEMO_CONFIG = {
   //     "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID" },
   //   },
   // },
+
+  // Optional: /prefetch/askai/ (DocSearch Ask AI, on a docs index). Same
+  // shape as prefetchDemo, and no fallback: without its block the page says
+  // live is unavailable. A search-only key serves both fields.
+  // prefetchAskai: {
+  //   region: "us",
+  //   appId: "YOUR_DOCS_APP_ID",
+  //   searchApiKey: "YOUR_SEARCH_ONLY_API_KEY",
+  //   agentStudioApiKey: "YOUR_SEARCH_ONLY_API_KEY",
+  //   indexName: "YOUR_DOCSEARCH_INDEX",
+  //   variants: {
+  //     "prefetch=0,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_BASE_AGENT_ID", name: "DEMO_askai-base" },
+  //     "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID", name: "DEMO_askai-prefetch" },
+  //   },
+  // },
 };

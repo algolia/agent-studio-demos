@@ -24,6 +24,18 @@ export const DEMOS = {
     starters: STARTERS,
     fields: null,
   },
+  // DocSearch Ask AI: questions about a docs site, on its DocSearch crawler records
+  askai: {
+    blocks: ["prefetchAskai"],
+    placeholder: "Ask a question about the Algolia docs",
+    starters: [
+      { text: "How do I install the JavaScript API client?", fit: "good" },
+      { text: "How do I stream agent completions?", fit: "good" },
+      { text: "Set up Algolia with Ruby on Rails", fit: "good" },
+      { text: "Which plan should I pick for my startup?", fit: "poor" },
+    ],
+    fields: { title: ["hierarchy.lvl1", "hierarchy.lvl0"], line: ["hierarchy.lvl2", "content"] },
+  },
 };
 /* check-copy: on */
 
