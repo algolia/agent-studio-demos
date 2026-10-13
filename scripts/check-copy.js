@@ -75,7 +75,7 @@ const JS_FILES = [
   "guardrails-arena/label-game.js", "guardrails-game/game-ui.js",
   "main-demo/app.js", "main-demo/lane.js", "main-demo/configs.mjs", "main-demo/stream.mjs",
   "main-demo/fixture.mjs", "main-demo/fields.mjs", "main-demo/race.mjs", "main-demo/agents.mjs",
-  "prefetch/app.js", "prefetch/compare.mjs", "prefetch/preflight.mjs",
+  "prefetch/app.js", "prefetch/compare.mjs", "prefetch/preflight.mjs", "prefetch/demos.mjs",
 ];
 
 /* ── Text extraction ──────────────────────────────────────────── */

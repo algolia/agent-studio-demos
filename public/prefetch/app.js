@@ -3,7 +3,8 @@
 
    Two main-demo lanes, locked to the race's two arms, and the numbers
    their stream readers measure. Live only, on the agents named in the
-   prefetchDemo config block, or main-demo's mainDemo. Run stays off until both
+   page's demo blocks (demos.mjs): prefetchDemo or main-demo's mainDemo for
+   the catalog, one block each for the other use cases. Run stays off until both
    agents pass a one-message preflight, and nothing runs until Run is
    pressed: every run makes real model calls.
    ─────────────────────────────────────────────────────────────── */
@@ -11,13 +12,15 @@
 import { liteClient } from "algoliasearch/lite";
 import { mountLane } from "../main-demo/lane.js";
 import { configKey, demoHost } from "../main-demo/configs.mjs";
-import { LANES, PHASES, STARTERS, axis, laneEnd, liveReadiness, pageConfig, phases, questionOf, rows, tickText } from "./compare.mjs";
+import { LANES, PHASES, axis, laneEnd, liveReadiness, pageConfig, phases, questionOf, rows, tickText } from "./compare.mjs";
 import { ms } from "../main-demo/stream.mjs";
 import { afterRun, cacheKey, laneFailure, preflightState, probeAgent } from "./preflight.mjs";
+import { demoConfig, demoOf } from "./demos.mjs";
 
-// prefetchDemo when the deploy gives this page its own agent pair, else mainDemo
-const { block: mainDemo, name: blockName } = pageConfig(window.DEMO_CONFIG);
-const CFG = { indexName: "products", ...(mainDemo || {}) };
+// the page names its use case; the demo says which config blocks hold its agents
+const DEMO = demoOf(document.documentElement.dataset.demo);
+const { block: mainDemo, name: blockName } = pageConfig(window.DEMO_CONFIG, DEMO.blocks);
+const CFG = demoConfig(DEMO, mainDemo);
 CFG.host = demoHost(mainDemo);
 
 const $ = (id) => document.getElementById(id);
@@ -218,7 +221,7 @@ function renderButton() {
 function renderChips() {
   for (const fit of ["good", "poor"]) {
     const box = el.chips.querySelector(`[data-fit="${fit}"] .chips`);
-    box.replaceChildren(...STARTERS.filter((s) => s.fit === fit).map((s) => {
+    box.replaceChildren(...DEMO.starters.filter((s) => s.fit === fit).map((s) => {
       const b = cell("button", s.text, "chip");
       b.type = "button";
       b.addEventListener("click", () => { el.ask.value = s.text; run(s.text); });
@@ -261,6 +264,7 @@ async function run(text) {
 }
 
 async function main() {
+  el.ask.placeholder = DEMO.placeholder;
   renderChips();
   el.form.addEventListener("submit", (e) => { e.preventDefault(); run(el.ask.value); });
   scheduleScore();

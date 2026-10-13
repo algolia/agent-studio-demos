@@ -1,0 +1,117 @@
+/* prefetch/style.css: the race page's own pieces, layered on main-demo/style.css.
+   Every page under prefetch/ links it. */
+
+.hero { padding-top: 20px; padding-bottom: 0; }
+.hero h1 { font-size: clamp(28px, 5vw, 38px); margin-bottom: 4px; }
+.hero .lede { max-width: 72ch; text-wrap: pretty; font-size: 16px; }
+
+/* ── Ask: one question, both agents ── */
+.pf-ask { display: grid; gap: 10px; margin: 16px 0 20px; max-width: 980px; }
+.pf-ask .race-row input { font-size: 16px; padding: 11px 14px; }
+.pf-ask .btn { min-width: 88px; }
+.pf-ask .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.pf-starters { display: grid; gap: 6px; }
+.pf-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.pf-group-h { flex: 0 0 auto; min-width: 9.5em; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.pf-group .chips { margin: 0; flex: 1 1 300px; min-width: 0; }
+.pf-group[data-fit="poor"] .chip { border-style: dashed; }
+.chip:disabled { opacity: 0.45; cursor: not-allowed; }
+.chip:disabled:hover { border-color: var(--line); color: var(--ink-2); }
+.chip:focus-visible, .pf-ask input:focus-visible, .btn:focus-visible, .btn-quiet:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.pf-check { margin: 0; font-size: 12px; font-weight: 500; color: var(--ink-3); }
+.pf-check[data-phase="ready"] { color: var(--ok); }
+.pf-check[data-phase="unavailable"], .pf-check[data-phase="retry"] { color: var(--warn); }
+
+/* ── The timeline: both lanes on one time axis, phases end to end ── */
+.pf-board { display: grid; gap: 16px 40px; margin: 0 0 20px; align-items: start; }
+@media (min-width: 1100px) { .pf-board { grid-template-columns: minmax(0, 1fr) 360px; } }
+.pf-race { min-width: 0; }
+.pf-tl { display: grid; gap: 6px; }
+.pf-tl-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; }
+.pf-tl-row > .pf-tl-name { grid-area: 1 / 1; }
+.pf-tl-row > .pf-tl-end { grid-area: 1 / 2; }
+.pf-tl-row > .pf-tl-track, .pf-tl-row > .pf-tl-axis { grid-column: 1 / -1; grid-row: 2; }
+.pf-tl-row.is-axis > :not(.pf-tl-axis) { display: none; }
+.pf-tl-name { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.pf-tl-row.is-on .pf-tl-name { color: var(--accent); }
+.pf-tl-end { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); text-align: right; white-space: nowrap; }
+.pf-tl-track { position: relative; height: 30px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.pf-seg {
+  position: absolute; top: 0; bottom: 0; container-type: inline-size; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 4px;
+  box-shadow: inset -1px 0 0 var(--surface); white-space: nowrap;
+  font-size: 11px; line-height: 1; transition: left 200ms ease-out, width 200ms ease-out;
+}
+.pf-seg b { font-weight: 600; }
+.pf-seg i { font-style: normal; font-variant-numeric: tabular-nums; opacity: 0.85; }
+@container (max-width: 92px) { .pf-seg i { display: none; } }
+@container (max-width: 50px) { .pf-seg b { display: none; } }
+.pf-seg.is-wait, .pf-tl-key .is-wait::before { background: var(--line); color: var(--ink-2); }
+.pf-seg.is-prefetch, .pf-tl-key .is-prefetch::before { background: var(--ok); color: var(--surface); }
+.pf-seg.is-search, .pf-tl-key .is-search::before { background: var(--accent); color: var(--surface); }
+.pf-seg.is-model, .pf-tl-key .is-model::before {
+  background: light-dark(color-mix(in srgb, var(--ink-3) 32%, var(--surface)), color-mix(in srgb, var(--ink-3) 55%, var(--surface)));
+  color: var(--ink);
+}
+.pf-seg.is-tool, .pf-tl-key .is-tool::before { background: color-mix(in srgb, var(--warn) 34%, var(--surface)); color: var(--ink); }
+.pf-seg.is-answer, .pf-tl-key .is-answer::before { background: var(--crease); color: var(--surface); }
+.pf-tl-axis { position: relative; height: 16px; border-top: 1px solid var(--line-strong); }
+.pf-tick { position: absolute; top: 3px; transform: translateX(-50%); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap; }
+.pf-tick:first-child { transform: none; }
+.pf-tick:last-child { transform: translateX(-100%); }
+.pf-tl-empty { margin: 0; font-size: 13px; color: var(--ink-3); }
+.pf-tl-key { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
+.pf-tl-key li { display: inline-flex; align-items: center; gap: 6px; }
+.pf-tl-key li::before { content: ""; width: 10px; height: 10px; border-radius: 2px; }
+/* the shared timeline above stands in for each lane's own strip */
+.pf-lane .tl { display: none; }
+@media (prefers-reduced-motion: reduce) { .pf-seg { transition: none; } }
+
+/* ── The scoreboard: the headline numbers ── */
+.pf-score { min-width: 0; }
+.pf-score table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; table-layout: fixed; }
+.pf-score th, .pf-score td { padding: 6px 12px 6px 0; text-align: left; font-weight: 400; vertical-align: baseline; }
+.pf-score thead th { font-size: 12px; font-weight: 600; color: var(--ink-2); padding-top: 0; border-bottom: 1px solid var(--line-strong); }
+.pf-score thead .pf-col.is-on { color: var(--accent); }
+.pf-score tbody tr + tr > * { border-top: 1px solid var(--line); }
+.pf-score col.pf-c-m { width: 34%; }
+.pf-score col.pf-c-d { width: 20%; }
+.pf-score .pf-m { color: var(--ink-2); font-size: 13px; }
+.pf-v { color: var(--ink); }
+.pf-num { font-size: 16px; font-weight: 500; white-space: nowrap; }
+.pf-v.is-blank .pf-num { font-size: 13px; color: var(--ink-3); font-weight: 400; }
+.pf-score .is-lead .pf-m { color: var(--ink); font-weight: 600; }
+.pf-score .is-lead .pf-num { font-size: 24px; font-weight: 600; }
+.pf-score .pf-d { font-size: 13px; color: var(--ink-2); padding-right: 0; white-space: nowrap; }
+.pf-score thead .pf-d { cursor: help; }
+.pf-score .is-lead .pf-d { color: var(--ink); }
+
+/* ── Lanes: the two answers, timings and tool calls in view ── */
+.lanes[hidden] { display: none; }
+.pf-lane { display: grid; gap: 8px; align-content: start; min-width: 0; }
+#lanes[data-mode="race"] .lane-chat .ais-Chat-container { min-height: 96px; }
+.pf-err {
+  margin: 0; padding: 8px 12px; font-size: 14px; color: var(--ink);
+  border: 1px solid var(--warn); border-radius: 6px; background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+}
+/* the widget's own error says "contact support"; the note above the lane says what happened */
+.lane-chat .ais-ChatMessageError { display: none; }
+.lane.is-failed .lane-chat { opacity: 0.5; }
+/* the lane's empty chat points at main-demo's starter chips, which sit above here */
+.lane-empty p { display: none; }
+
+.pf-foot p { margin: 28px 0 32px; font-size: 12px; color: var(--ink-3); }
+
+@media (max-width: 560px) {
+  .pf-score col.pf-c-m { width: 32%; }
+  .pf-score col.pf-c-d { width: 22%; }
+  .pf-score th, .pf-score td { padding-right: 8px; }
+  .pf-num { font-size: 15px; }
+  .pf-score .is-lead .pf-num { font-size: 20px; }
+  .pf-group-h { min-width: 0; flex-basis: 100%; }
+  /* starters scroll sideways on a phone, so the lanes stay near the top */
+  .pf-group .chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .pf-group .chip { flex: 0 0 auto; }
+}

@@ -133,7 +133,7 @@ test("prefetchDemo wins over mainDemo, and mainDemo stands in when it is absent"
   assert.deepEqual(p.pageConfig(null), { block: null, name: null });
   assert.deepEqual(p.pageConfig({ prefetchDemo: [] }), { block: null, name: null });
   const app = fs.readFileSync(path.join(PUBLIC, "prefetch", "app.js"), "utf8");
-  assert.match(app, /pageConfig\(window\.DEMO_CONFIG\)/);
+  assert.match(app, /pageConfig\(window\.DEMO_CONFIG, DEMO\.blocks\)/, "the page's demo names the blocks");
   assert.doesNotMatch(app, /root\.mainDemo/, "the page never reads mainDemo directly");
 });
 
@@ -167,7 +167,8 @@ test("the landing page links the prefetch page", () => {
 
 test("the page is live only: no module of it loads the fixture, and nothing runs on load", () => {
   const dir = path.join(PUBLIC, "prefetch");
-  for (const f of fs.readdirSync(dir)) {
+  const files = fs.readdirSync(dir, { recursive: true }).filter((f) => fs.statSync(path.join(dir, f)).isFile());
+  for (const f of files) {
     const src = fs.readFileSync(path.join(dir, f), "utf8");
     assert.doesNotMatch(src, /fixture\.mjs|createFixtureFetch|fixtureEvents/, f);
   }
