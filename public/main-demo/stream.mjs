@@ -126,6 +126,7 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
     usage: null,             // { inputTokens, outputTokens }, when the agent streams usage (see usageOf)
     tools: new Map(),        // toolCallId → { name, start, end, error, input }
     toolOrder: [],
+    texts: [],               // [{ id, start, end }]: first to last token of each answer text
     hits: [],                // latest search output
     hitsTool: null,
     grouped: null,           // { intro, groups } of a grouped-results input
@@ -163,10 +164,19 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
         case "start-step":
           s.modelCalls += 1;
           break;
-        case "text-delta":
+        case "text-delta": {
           if (s.ttft === null) s.ttft = t;
           s.answer += evt.delta || "";
+          const open = s.texts.find((x) => x.id === (evt.id ?? null) && !x.closed);
+          if (open) open.end = t;
+          else s.texts.push({ id: evt.id ?? null, start: t, end: t, closed: false });
           break;
+        }
+        case "text-end": {
+          const open = s.texts.find((x) => x.id === (evt.id ?? null) && !x.closed);
+          if (open) { open.end = t; open.closed = true; }
+          break;
+        }
         case "tool-input-start":
           tool(evt.toolCallId, evt.toolName, t);
           if (!s.started.includes(evt.toolCallId)) s.started.push(evt.toolCallId);
@@ -237,6 +247,7 @@ export function viewOf(s) {
       search: id !== passiveId && isSearchTool(r.name),
     };
   });
+  const texts = s.texts.map((x) => ({ start: x.start, end: s.total !== null ? Math.min(x.end, s.total) : x.end }));
   const span = s.total !== null ? s.total
     : Math.max(s.ttfb || 0, s.ttft || 0, ...tools.map((x) => x.end || x.start || 0), 1);
   const marks = [
@@ -250,7 +261,7 @@ export function viewOf(s) {
     ttfb: s.ttfb, ttft: s.ttft, total: s.total,
     prefetchPart: s.prefetchPart, prefetchParts: s.prefetchParts, cache: s.cache, errors: s.errors,
     modelCalls: s.modelCalls, toolCalls: s.started.filter((id) => id !== passiveId).length, toolErrors: s.toolErrors, usage: s.usage,
-    hits: s.hits, hitsTool: s.hitsTool, grouped: s.grouped,
+    hits: s.hits, hitsTool: s.hitsTool, grouped: s.grouped, texts,
     httpStatus: s.httpStatus,
   };
 }

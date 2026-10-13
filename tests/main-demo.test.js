@@ -349,6 +349,20 @@ test("no tool outlasts its turn: an open call closes at the turn's end", async (
   for (const x of v.tools) assert.ok(x.start + x.duration <= v.total, `${x.name} ends inside the turn`);
 });
 
+test("answer texts: each runs from its first token to its text-end, inside the turn", async () => {
+  const { createTurn } = await load("stream.mjs");
+  const turn = createTurn();
+  turn.headers(100, { status: 200, get: () => null });
+  turn.observe(400, { type: "text-start", id: "t1" });
+  turn.observe(450, { type: "text-delta", id: "t1", delta: "Let me look." });
+  turn.observe(500, { type: "text-end", id: "t1" });
+  turn.observe(900, { type: "text-delta", id: "t2", delta: "Here" });
+  turn.observe(1300, { type: "text-delta", id: "t2", delta: " they are." });
+  turn.finish(1250);
+  assert.deepEqual(turn.view().texts, [{ start: 450, end: 500 }, { start: 900, end: 1250 }]);
+  assert.equal(turn.view().ttft, 450);
+});
+
 test("race: medians, paired deltas and a tally across repeated runs", async () => {
   const r = await load("race.mjs");
   const run = (a, b) => ({ a: { ok: true, ...a }, b: { ok: true, ...b } });
