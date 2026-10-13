@@ -119,16 +119,43 @@
 
 .pf-foot p { margin: 28px 0 32px; font-size: 12px; color: var(--ink-3); }
 
+/* ── On a phone: the numbers above the fold, one answer at a time ── */
 @media (max-width: 560px) {
-  .hero { gap: 10px; }
-  .pf-cta { font-size: 14px; padding: 7px 12px; }
-  .pf-score col.pf-c-m { width: 32%; }
-  .pf-score col.pf-c-d { width: 22%; }
-  .pf-score th, .pf-score td { padding-right: 8px; }
-  .pf-num { font-size: 15px; }
-  .pf-score .is-lead .pf-num { font-size: 20px; }
-  .pf-group-h { min-width: 0; flex-basis: 100%; }
-  /* starters scroll sideways on a phone, so the lanes stay near the top */
-  .pf-group .chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
-  .pf-group .chip { flex: 0 0 auto; }
+  .hero { padding-top: 12px; gap: 10px; }
+  .hero h1 { font-size: 26px; }
+  .hero .lede { font-size: 15px; line-height: 1.45; }
+  .eyebrow a { display: inline-block; padding: 12px 0; margin: -12px 0; }
+  .pf-cta { font-size: 15px; min-height: 44px; padding: 0 14px; }
+
+  .pf-ask { gap: 8px; margin: 12px 0 14px; }
+  .pf-ask .race-row input, .pf-ask .btn { min-height: 44px; }
+  .pf-check[data-phase="ready"] { display: none; }
+  /* both groups of starters on one row that scrolls sideways; its edge fades to say there is more */
+  .pf-starters {
+    display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+    margin: 0 -16px; padding: 0 16px;
+    mask-image: linear-gradient(to right, #000 85%, transparent);
+  }
+  .pf-starters::-webkit-scrollbar { display: none; }
+  .pf-group { flex: 0 0 auto; flex-wrap: nowrap; align-items: center; gap: 8px; }
+  .pf-group-h { min-width: 0; font-size: 12px; white-space: nowrap; }
+  .pf-group .chips { flex: 0 0 auto; flex-wrap: nowrap; gap: 8px; }
+  .pf-group .chip { flex: 0 0 auto; min-height: 44px; }
+  .pf-group[data-fit="poor"] { padding-right: 32px; }
+
+  /* inside a lane: the answer, without the widget's chrome or the debug drawers */
+  .lane-inner { padding: 12px; gap: 8px; }
+  /* the question is in the box above, the same for both lanes */
+  .lane-chat .ais-ChatMessage--right { display: none; }
+  /* before the first question the chat is an empty box: the pill and its line say enough */
+  .lane-chat:has(.lane-empty) { display: none; }
+  .lane-chat .ais-Button--ghost { min-height: 44px; }
+  .lane-chat .ais-ChatHeader, .lane-chat .ais-ChatMessage-actions, .pf-lane .hits, .pf-lane .hits-h, .pf-lane .wire { display: none; }
+  .lane-chat .ais-ChatInlineLayout .ais-Chat-container { border: 0; }
+  .lane-chat .ais-ChatMessages-content { padding: 4px 0; }
+  .lane-chat .pcard-img { display: none; }
+  .lane-chat .ais-Carousel-item { width: 168px; }
+  #lanes[data-mode="race"] .lane-chat .ais-ChatInlineLayout,
+  #lanes[data-mode="race"] .lane-chat .ais-Chat-container { min-height: 0; }
+  .pf-foot p { margin: 20px 0 24px; }
 }
