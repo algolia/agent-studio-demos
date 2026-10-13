@@ -84,6 +84,7 @@
 .pf-v.is-blank .pf-num { font-size: 13px; color: var(--ink-3); font-weight: 400; }
 .pf-score .is-lead .pf-m { color: var(--ink); font-weight: 600; }
 .pf-score .is-lead .pf-num { font-size: 24px; font-weight: 600; }
+.pf-score .is-lead .pf-v.is-blank .pf-num { font-size: 13px; font-weight: 400; }
 .pf-score .pf-d { font-size: 13px; color: var(--ink-2); padding-right: 0; white-space: nowrap; }
 .pf-score thead .pf-d { cursor: help; }
 .pf-score .is-lead .pf-d { color: var(--ink); }
