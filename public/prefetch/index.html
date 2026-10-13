@@ -91,7 +91,10 @@
 .pf-seg.is-wait, .pf-tl-key .is-wait::before { background: var(--line); color: var(--ink-2); }
 .pf-seg.is-prefetch, .pf-tl-key .is-prefetch::before { background: var(--ok); color: var(--surface); }
 .pf-seg.is-search, .pf-tl-key .is-search::before { background: var(--accent); color: var(--surface); }
-.pf-seg.is-model, .pf-tl-key .is-model::before { background: color-mix(in srgb, var(--ink-3) 32%, var(--surface)); color: var(--ink); }
+.pf-seg.is-model, .pf-tl-key .is-model::before {
+  background: light-dark(color-mix(in srgb, var(--ink-3) 32%, var(--surface)), color-mix(in srgb, var(--ink-3) 55%, var(--surface)));
+  color: var(--ink);
+}
 .pf-seg.is-tool, .pf-tl-key .is-tool::before { background: color-mix(in srgb, var(--warn) 34%, var(--surface)); color: var(--ink); }
 .pf-seg.is-answer, .pf-tl-key .is-answer::before { background: var(--crease); color: var(--surface); }
 .pf-tl-axis { position: relative; height: 16px; border-top: 1px solid var(--line-strong); }
