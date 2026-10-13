@@ -298,3 +298,42 @@ test("after a run: Ready only when both lanes answered; a failed lane is named a
   const app = fs.readFileSync(path.join(PUBLIC, "prefetch", "app.js"), "utf8");
   assert.match(app, /state\.check = afterRun\(seen, LANES\)/, "the check line is set from the run, not left at Ready");
 });
+
+test("timeline: a lane's time cut into back-to-back phases, read off the stream", async () => {
+  const p = await load("prefetch/compare.mjs");
+  const a = await report({ prefetch: false, query: p.STARTERS[0].text });
+  const b = await report({ prefetch: true, query: p.STARTERS[0].text });
+  for (const r of [a, b]) {
+    const parts = p.phases(r.view);
+    assert.equal(parts[0].start, 0, "from the moment the question went out");
+    assert.equal(parts[parts.length - 1].end, r.view.total, "to the turn's end");
+    for (let i = 1; i < parts.length; i++) {
+      assert.equal(parts[i].start, parts[i - 1].end, "no unlabelled gap");
+      const same = parts[i].kind === parts[i - 1].kind && parts[i].name === parts[i - 1].name;
+      assert.ok(!same, "neighbours of one kind merge into one phase");
+    }
+    assert.equal(parts[parts.length - 1].kind, "answer");
+    for (const x of parts) assert.ok(p.PHASES.some((ph) => ph.id === x.kind), x.kind);
+  }
+  const kinds = (r) => p.phases(r.view).map((x) => x.kind);
+  assert.ok(kinds(b).includes("prefetch") && !kinds(a).includes("prefetch"), "only the prefetch lane searches before the model");
+  assert.ok(kinds(a).includes("search"), "the base lane's model runs its own search");
+  assert.ok(kinds(a).includes("model"), "the time between is the model's, and says so");
+  assert.deepEqual(p.phases(null), []);
+});
+
+test("timeline: before the first byte the lane waits; an open tool runs to the live edge", async () => {
+  const p = await load("prefetch/compare.mjs");
+  const view = { status: "streaming", total: null, span: 3000, ttfb: 400, texts: [],
+    tools: [{ name: "algolia_search_index_x", start: 1000, end: null, search: true }] };
+  assert.deepEqual(p.phases(view).map((x) => [x.kind, x.start, x.end]),
+    [["wait", 0, 400], ["model", 400, 1000], ["search", 1000, 3000]]);
+});
+
+test("one axis for both lanes: whole-second ticks, the longer lane sets the scale", async () => {
+  const p = await load("prefetch/compare.mjs");
+  assert.deepEqual(p.axis(7029, 4875), { max: 8000, ticks: [0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000] });
+  assert.deepEqual(p.axis(1800, null).ticks, [0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000]);
+  assert.deepEqual(p.axis(null, undefined), { max: 0, ticks: [] });
+  assert.deepEqual([0, 500, 2000, 1500].map(p.tickText), ["0 s", "0.5 s", "2 s", "1.5 s"]);
+});

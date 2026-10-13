@@ -159,3 +159,88 @@ export function liveReadiness(mainDemo, fallback) {
   }
   return { ok: true, variants };
 }
+
+/* ── The timeline: where each lane's time went, on one axis ────── */
+
+/* check-copy: off */
+/** the phases a turn's time splits into, in legend order; `short` labels the segment */
+export const PHASES = [
+  { id: "wait", short: "wait", label: "Waiting for the server" },
+  { id: "prefetch", short: "prefetch", label: "Prefetch search" },
+  { id: "search", short: "search", label: "Model's search" },
+  { id: "model", short: "model", label: "Model thinking" },
+  { id: "tool", short: "tool", label: "Other tool call" },
+  { id: "answer", short: "answer", label: "Answer streaming" },
+];
+/* check-copy: on */
+
+/**
+ * One lane's time, cut into back-to-back phases from 0 to the turn's end.
+ * Read off the stream, nothing estimated: before the first byte the lane
+ * waits; a tool call's span is its own (the prefetch, the model's searches,
+ * any other tool); the answer runs from each text's first token to its last;
+ * whatever is left between is the model working. The stream's close after
+ * the last text counts as the answer.
+ *   [{ kind, start, end, name }]; name is the tool's, for a tool phase
+ */
+export function phases(view) {
+  if (!view) return [];
+  const end = Number.isFinite(view.total) ? view.total : view.span;
+  if (!(end > 0)) return [];
+  const clamp = (t) => Math.min(end, Math.max(0, t));
+  const firstByte = Number.isFinite(view.ttfb) ? clamp(view.ttfb) : end;
+  const rank = { prefetch: 0, search: 1, tool: 2 };
+  const tools = (view.tools || [])
+    .map((x) => ({ kind: x.passive ? "prefetch" : x.search ? "search" : "tool", name: x.name,
+      start: clamp(x.start), end: clamp(Number.isFinite(x.end) ? x.end : end) }))
+    .filter((x) => x.end > x.start);
+  const texts = (view.texts || []).map((x) => ({ start: clamp(x.start), end: clamp(x.end) })).filter((x) => x.end >= x.start);
+  const lastText = texts.length ? Math.max(...texts.map((x) => x.end)) : null;
+  const closed = view.status === "done";
+  const cuts = [...new Set([0, end, firstByte, ...tools.flatMap((x) => [x.start, x.end]), ...texts.flatMap((x) => [x.start, x.end])])]
+    .sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const [p, q] = [cuts[i], cuts[i + 1]];
+    if (q <= p) continue;
+    const mid = (p + q) / 2;
+    const tool = tools.filter((x) => x.start <= mid && mid < x.end).sort((a, b) => rank[a.kind] - rank[b.kind])[0];
+    const kind = tool ? tool.kind
+      : texts.some((x) => x.start <= mid && mid < x.end) ? "answer"
+        : mid < firstByte ? "wait"
+          : closed && lastText !== null && mid >= lastText && !tools.some((x) => x.start >= lastText) ? "answer"
+            : "model";
+    const prev = out[out.length - 1];
+    if (prev && prev.kind === kind && (prev.name || null) === (tool ? tool.name : null)) prev.end = q;
+    else out.push({ kind, start: p, end: q, ...(tool ? { name: tool.name } : {}) });
+  }
+  return out;
+}
+
+/**
+ * The shared axis: one scale for both lanes, so the shorter turn draws
+ * shorter. Ticks every 0.25, 0.5, 1, 2, 5, 10, 20, 30 or 60 seconds, at most 8 steps.
+ *   { max, ticks: [ms] }; max is 0 until a lane has time on it
+ */
+export function axis(...ends) {
+  const top = Math.max(0, ...ends.filter((v) => Number.isFinite(v)));
+  if (top <= 0) return { max: 0, ticks: [] };
+  const step = [250, 500, 1000, 2000, 5000, 10000, 20000, 30000, 60000].find((s) => top / s <= 8) || 60000;
+  const max = Math.ceil(top / step) * step;
+  const ticks = [];
+  for (let t = 0; t <= max + 1e-6; t += step) ticks.push(t);
+  return { max, ticks };
+}
+
+/** "0 s", "0.5 s", "12 s": a tick's label */
+export function tickText(t) {
+  const s = t / 1000;
+  return `${Number.isInteger(s) ? s : s.toFixed(s < 1 ? 2 : 1).replace(/0$/, "")} s`;
+}
+
+/** a lane's end on the axis: the turn's total, or its running span */
+export function laneEnd(report) {
+  const v = report && report.view;
+  if (!v) return null;
+  return Number.isFinite(v.total) ? v.total : v.span;
+}

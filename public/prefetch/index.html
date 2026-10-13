@@ -62,6 +62,42 @@
 .pf-check[data-phase="ready"] { color: var(--ok); }
 .pf-check[data-phase="unavailable"], .pf-check[data-phase="retry"] { color: var(--warn); }
 
+/* ── The timeline: both lanes on one time axis, phases end to end ── */
+.pf-race { margin: 0 0 24px; max-width: 980px; }
+.pf-tl { display: grid; gap: 6px; }
+.pf-tl-row { display: grid; grid-template-columns: 8.5em minmax(0, 1fr) 4.5em; align-items: center; gap: 10px; }
+.pf-tl-name { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.pf-tl-row.is-on .pf-tl-name { color: var(--accent); }
+.pf-tl-end { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); text-align: right; white-space: nowrap; }
+.pf-tl-track { position: relative; height: 30px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.pf-seg {
+  position: absolute; top: 0; bottom: 0; container-type: inline-size; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 4px;
+  box-shadow: inset -1px 0 0 var(--surface); white-space: nowrap;
+  font-size: 11px; line-height: 1; transition: left 200ms ease-out, width 200ms ease-out;
+}
+.pf-seg b { font-weight: 600; }
+.pf-seg i { font-style: normal; font-variant-numeric: tabular-nums; opacity: 0.85; }
+@container (max-width: 92px) { .pf-seg i { display: none; } }
+@container (max-width: 44px) { .pf-seg b { display: none; } }
+.pf-seg.is-wait, .pf-tl-key .is-wait::before { background: var(--line); color: var(--ink-2); }
+.pf-seg.is-prefetch, .pf-tl-key .is-prefetch::before { background: var(--ok); color: var(--surface); }
+.pf-seg.is-search, .pf-tl-key .is-search::before { background: var(--accent); color: var(--surface); }
+.pf-seg.is-model, .pf-tl-key .is-model::before { background: color-mix(in srgb, var(--ink-3) 32%, var(--surface)); color: var(--ink); }
+.pf-seg.is-tool, .pf-tl-key .is-tool::before { background: color-mix(in srgb, var(--warn) 34%, var(--surface)); color: var(--ink); }
+.pf-seg.is-answer, .pf-tl-key .is-answer::before { background: var(--crease); color: var(--surface); }
+.pf-tl-axis { position: relative; height: 16px; border-top: 1px solid var(--line-strong); }
+.pf-tick { position: absolute; top: 3px; transform: translateX(-50%); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--ink-3); white-space: nowrap; }
+.pf-tick:first-child { transform: none; }
+.pf-tick:last-child { transform: translateX(-100%); }
+.pf-tl-empty { margin: 0; font-size: 13px; color: var(--ink-3); }
+.pf-tl-key { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
+.pf-tl-key li { display: inline-flex; align-items: center; gap: 6px; }
+.pf-tl-key li::before { content: ""; width: 10px; height: 10px; border-radius: 2px; }
+/* the shared timeline above stands in for each lane's own strip */
+.pf-lane .tl { display: none; }
+@media (prefers-reduced-motion: reduce) { .pf-seg { transition: none; } }
+
 /* ── The scoreboard: the numbers carry the story ── */
 .pf-score { margin: 0 0 28px; max-width: 980px; }
 .pf-score table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; table-layout: fixed; }
@@ -107,6 +143,10 @@
 .lane-empty p { display: none; }
 
 @media (max-width: 560px) {
+  .pf-tl-row { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; }
+  .pf-tl-row .pf-tl-track, .pf-tl-row .pf-tl-axis { grid-column: 1 / -1; grid-row: 2; }
+  .pf-tl-row.is-axis .pf-tl-name, .pf-tl-row.is-axis .pf-tl-end { display: none; }
+  .pf-tl-row.is-axis .pf-tl-axis { grid-row: 1; }
   .pf-score col.pf-c-m { width: 36%; }
   .pf-score col.pf-c-d, .pf-score .pf-d { display: none; }
   .pf-score th, .pf-score td { padding-right: 10px; }
@@ -141,6 +181,8 @@
     </div>
     <p class="pf-check" id="check" role="status" data-phase="checking">Checking agents…</p>
   </form>
+
+  <section class="pf-race" id="race" aria-label="Where the time went"></section>
 
   <section class="pf-score" id="score" aria-label="Before and after" aria-live="polite"></section>
 

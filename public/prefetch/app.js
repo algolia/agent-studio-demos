@@ -11,7 +11,8 @@
 import { liteClient } from "algoliasearch/lite";
 import { mountLane } from "../main-demo/lane.js";
 import { configKey, demoHost } from "../main-demo/configs.mjs";
-import { LANES, STARTERS, liveReadiness, pageConfig, questionOf, rows } from "./compare.mjs";
+import { LANES, PHASES, STARTERS, axis, laneEnd, liveReadiness, pageConfig, phases, questionOf, rows, tickText } from "./compare.mjs";
+import { ms } from "../main-demo/stream.mjs";
 import { afterRun, cacheKey, laneFailure, preflightState, probeAgent } from "./preflight.mjs";
 
 // prefetchDemo when the deploy gives this page its own agent pair, else mainDemo
@@ -22,7 +23,7 @@ CFG.host = demoHost(mainDemo);
 const $ = (id) => document.getElementById(id);
 const el = {
   run: $("run"), check: $("check"), lanes: $("lanes"),
-  form: $("ask-form"), ask: $("ask"), chips: $("chips"), score: $("score"),
+  form: $("ask-form"), ask: $("ask"), chips: $("chips"), score: $("score"), race: $("race"),
   lane: { a: $("lane-a"), b: $("lane-b") }, err: { a: $("err-a"), b: $("err-b") },
 };
 
@@ -147,7 +148,60 @@ function renderScore() {
   }
   table.append(body);
   el.score.replaceChildren(table);
+  renderRace();
   renderErrors();
+}
+
+/* ── The timeline: both lanes on one time axis ─────────────────── */
+
+const PHASE = Object.fromEntries(PHASES.map((p) => [p.id, p]));
+
+/** one lane's row: its name, its phases end to end, and when its answer was complete */
+function raceRow(l, scale) {
+  const r = seen[l.key];
+  const v = r && r.view;
+  const parts = phases(v);
+  const row = cell("div", undefined, "pf-tl-row" + (l.key === "b" ? " is-on" : ""));
+  const track = cell("div", undefined, "pf-tl-track");
+  track.setAttribute("role", "img");
+  track.setAttribute("aria-label", parts.length
+    ? `${l.label}: ` + parts.map((p) => `${PHASE[p.kind].short} ${ms(p.end - p.start)}`).join(", ")
+    : `${l.label}: no run yet`);
+  for (const p of parts) {
+    const seg = cell("span", undefined, "pf-seg is-" + p.kind);
+    seg.style.left = `${(p.start / scale) * 100}%`;
+    seg.style.width = `${((p.end - p.start) / scale) * 100}%`;
+    const d = ms(p.end - p.start);
+    seg.title = `${PHASE[p.kind].label}${p.name ? ` (${p.name})` : ""}: ${d}`;
+    seg.append(cell("b", PHASE[p.kind].short), cell("i", d));
+    track.append(seg);
+  }
+  const live = v && (v.status === "sending" || v.status === "streaming");
+  const failed = laneFailure(v);
+  const end = failed ? "no answer" : !v ? "" : live ? "…" : ms(v.total);
+  row.append(cell("span", l.label, "pf-tl-name"), track, cell("span", end, "pf-tl-end"));
+  return row;
+}
+
+function renderRace() {
+  const { max, ticks } = axis(...LANES.map((l) => laneEnd(seen[l.key])));
+  const scale = max || 1;
+  const box = cell("div", undefined, "pf-tl");
+  for (const l of LANES) box.append(raceRow(l, scale));
+  const scaleRow = cell("div", undefined, "pf-tl-row is-axis");
+  const ax = cell("div", undefined, "pf-tl-axis");
+  ax.setAttribute("aria-hidden", "true");
+  for (const t of ticks) {
+    const tick = cell("span", tickText(t), "pf-tick");
+    tick.style.left = `${(t / scale) * 100}%`;
+    ax.append(tick);
+  }
+  scaleRow.append(cell("span", "", "pf-tl-name"), ax, cell("span", "", "pf-tl-end"));
+  if (ticks.length) box.append(scaleRow);
+  else box.append(cell("p", "Both agents get the question at the same moment. Their time shows here, on one scale.", "pf-tl-empty"));
+  const key = cell("ul", undefined, "pf-tl-key");
+  for (const p of PHASES) key.append(cell("li", p.label, "is-" + p.id));
+  el.race.replaceChildren(box, key);
 }
 
 function scheduleScore() {
