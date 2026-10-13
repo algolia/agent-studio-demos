@@ -119,6 +119,9 @@
 
 .pf-foot p { margin: 28px 0 32px; font-size: 12px; color: var(--ink-3); }
 
+/* ── The phone's own pieces: hidden on a wider screen ── */
+.pf-sum, .pf-tabs, .pf-more { display: none; }
+
 /* ── On a phone: the numbers above the fold, one answer at a time ── */
 @media (max-width: 560px) {
   .hero { padding-top: 12px; gap: 10px; }
@@ -143,8 +146,48 @@
   .pf-group .chip { flex: 0 0 auto; min-height: 44px; }
   .pf-group[data-fit="poor"] { padding-right: 32px; }
 
+  /* the headline: each lane's numbers in its own box, before the timeline */
+  .pf-board { gap: 14px; margin-bottom: 16px; }
+  .pf-sum:not([hidden]) { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pf-sum-lane {
+    display: grid; gap: 2px; padding: 10px 12px; min-width: 0;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  }
+  .pf-sum-lane.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+  .pf-sum-lane p { margin: 0; }
+  .pf-sum-h { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .pf-sum-lane.is-on .pf-sum-h { color: var(--accent); }
+  .pf-sum-v { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pf-sum-v b { font-size: 17px; font-weight: 600; color: var(--ink); }
+  .pf-sum-v.is-lead b { font-size: 28px; line-height: 1.15; }
+  .pf-sum-v.is-blank b { font-size: 15px; font-weight: 500; color: var(--ink-3); }
+  /* the table says the same, row by row: on a phone the boxes above stand in for it */
+  .pf-score { display: none; }
+
+  /* the timeline: legend for what this run had, every other tick when they crowd */
+  .pf-tl-key .is-absent { display: none; }
+  .pf-tl-axis:is([data-n="7"], [data-n="8"], [data-n="9"]) .pf-tick:nth-child(even):not(:last-child) { display: none; }
+
+  /* one lane at a time, picked by tab; the other keeps streaming out of sight */
+  .pf-tabs:not([hidden]) {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 0 0 10px; padding: 4px;
+    border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line);
+  }
+  .pf-tab {
+    min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+    line-height: 1.2;
+    font: 600 14px var(--body); color: var(--ink-2); background: none; border: 0; border-radius: 7px; cursor: pointer;
+  }
+  .pf-tab i { font-style: normal; font-weight: 500; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .pf-tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+  .pf-tab[data-lane="b"][aria-selected="true"] { color: var(--accent); }
+  .pf-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #lanes[data-show="a"] > .pf-lane:nth-child(2), #lanes[data-show="b"] > .pf-lane:nth-child(1) { display: none; }
+
   /* inside a lane: the answer, without the widget's chrome or the debug drawers */
   .lane-inner { padding: 12px; gap: 8px; }
+  /* the tab names the lane; the pill says what differs */
+  .lane-label { display: none; }
   /* the question is in the box above, the same for both lanes */
   .lane-chat .ais-ChatMessage--right { display: none; }
   /* before the first question the chat is an empty box: the pill and its line say enough */
@@ -157,5 +200,15 @@
   .lane-chat .ais-Carousel-item { width: 168px; }
   #lanes[data-mode="race"] .lane-chat .ais-ChatInlineLayout,
   #lanes[data-mode="race"] .lane-chat .ais-Chat-container { min-height: 0; }
+  /* a long answer folds; one tap opens it */
+  .pf-lane:not(.is-full) .lane-chat { max-height: 520px; overflow: hidden; }
+  .pf-lane.is-clamped .lane-chat { mask-image: linear-gradient(to bottom, #000 78%, transparent); }
+  .pf-more:not([hidden]) {
+    display: block; width: 100%; min-height: 44px; margin-top: -4px;
+    font: 600 14px var(--body); color: var(--accent); cursor: pointer;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px;
+  }
+  .pf-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   .pf-foot p { margin: 20px 0 24px; }
 }
