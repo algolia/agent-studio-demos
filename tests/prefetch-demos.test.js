@@ -15,6 +15,7 @@ const load = (rel) => import(pathToFileURL(path.join(PUBLIC, rel)).href);
 const page = (rel) => fs.readFileSync(path.join(PUBLIC, "prefetch", rel), "utf8");
 const SUB = [
   { demo: "askai", file: "askai/index.html", h1: "Ask AI on docs", block: "prefetchAskai" },
+  { demo: "assist", file: "assist/index.html", h1: "AI Assist", block: "prefetchAssist" },
 ];
 
 test("the catalog demo reads what the page always read", async () => {
@@ -97,7 +98,7 @@ test("the pages carry the same race markup as the catalog page", () => {
 test("the copy claims no more than often sooner, with no em dash", () => {
   for (const s of SUB) {
     const html = page(s.file);
-    assert.doesNotMatch(html, /—|&mdash;/, `${s.file}: no em dash`);
+    assert.doesNotMatch(html, /\u2014|&mdash;/, `${s.file}: no em dash`);
     const prose = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
     assert.match(prose, /often starts sooner/);
     assert.doesNotMatch(prose, /\b(speedup|speeds? up|quicker|saves?|\d+(\.\d+)?\s*[x×])\b/i);
@@ -107,7 +108,7 @@ test("the copy claims no more than often sooner, with no em dash", () => {
     assert.match(html, /<footer[^>]*>[\s\S]*Timings vary from run to run\.[\s\S]*<\/footer>/);
   }
   const src = fs.readFileSync(path.join(PUBLIC, "prefetch", "demos.mjs"), "utf8");
-  assert.doesNotMatch(src, /—/);
+  assert.doesNotMatch(src, /\u2014/);
 });
 
 test("the config template documents each sub-page block with the two variant keys", async () => {

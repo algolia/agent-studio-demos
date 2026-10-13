@@ -36,6 +36,18 @@ export const DEMOS = {
     ],
     fields: { title: ["hierarchy.lvl1", "hierarchy.lvl0"], line: ["hierarchy.lvl2", "content"] },
   },
+  // AI Assist: a site assistant, here on the support center's articles
+  assist: {
+    blocks: ["prefetchAssist"],
+    placeholder: "Ask the support site",
+    starters: [
+      { text: "How do I remove the Search by Algolia logo?", fit: "good" },
+      { text: "Why is my record count higher than expected?", fit: "good" },
+      { text: "Why are typos not applying to my synonyms?", fit: "good" },
+      { text: "Do you have a phone number I can call?", fit: "poor" },
+    ],
+    fields: { title: ["title"], line: ["text"] },
+  },
 };
 /* check-copy: on */
 
