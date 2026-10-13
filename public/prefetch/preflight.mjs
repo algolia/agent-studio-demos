@@ -11,7 +11,7 @@
    ─────────────────────────────────────────────────────────────── */
 
 import { completionQuery } from "../main-demo/configs.mjs";
-import { createSseParser } from "../main-demo/stream.mjs";
+import { createSseParser, emptyTurn } from "../main-demo/stream.mjs";
 
 /* check-copy: off */
 /** the probe's message: short, and under prefetch's two-word gate, so no search runs */
@@ -112,6 +112,8 @@ export function laneFailure(view) {
   if (view.status === "error" || (view.errors && view.errors.length)) {
     return String((view.errors && view.errors[0]) || "the call failed").slice(0, 80);
   }
+  // a clean close with no text: the Chat widget draws nothing, so the lane says it
+  if (emptyTurn(view)) return view.toolCalls > 0 ? "the model stopped after its search, with no text" : "the model sent back an empty reply";
   return null;
 }
 

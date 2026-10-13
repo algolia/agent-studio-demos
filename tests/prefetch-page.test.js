@@ -274,6 +274,50 @@ test("mid-race failures: a lane says why it has no answer, and the table shows n
   assert.equal(calls.diff, "");
 });
 
+test("an empty reply: a clean 200 close with no text is a failed lane, said above its chat", async () => {
+  const f = await load("prefetch/preflight.mjs");
+  const p = await load("prefetch/compare.mjs");
+  const st = await load("main-demo/stream.mjs");
+  const ok = await report({ prefetch: true, query: p.STARTERS[0].text });
+  assert.equal(ok.view.answered, true);
+  assert.equal(st.emptyTurn(ok.view), false);
+  const empty = (events) => {
+    const turn = st.createTurn({ text: "How do I stream agent completions?" });
+    turn.headers(400, { status: 200, get: () => null });
+    events.forEach((e, i) => turn.observe(500 + i * 100, e));
+    turn.finish(500 + events.length * 100);
+    const view = turn.view();
+    return { view, counts: st.searchCounts(false, view), seq: 1 };
+  };
+  // the four events Gemini's empty stream comes back as
+  const bare = empty([{ type: "start", messageId: "m" }, { type: "start-step" }, { type: "finish-step" }, { type: "finish" }]);
+  assert.equal(bare.view.status, "done");
+  assert.equal(st.emptyTurn(bare.view), true);
+  assert.equal(f.laneFailure(bare.view), "the model sent back an empty reply");
+  const searched = empty([{ type: "start" }, { type: "start-step" },
+    { type: "tool-input-start", toolCallId: "t1", toolName: "algolia_search_index_docs" },
+    { type: "tool-output-available", toolCallId: "t1", output: { hits: [] } },
+    { type: "finish-step" }, { type: "start-step" }, { type: "finish-step" }, { type: "finish" }]);
+  assert.equal(f.laneFailure(searched.view), "the model stopped after its search, with no text");
+  for (const r of p.rows({ a: bare, b: ok })) {
+    assert.equal(r.a, "no answer", r.id);
+    assert.equal(r.known.a, false);
+    assert.equal(r.diff, "", r.id);
+  }
+  assert.deepEqual(f.afterRun({ a: bare, b: ok }, p.LANES),
+    { phase: "retry", text: "Last run: no answer from Without prefetch. Run to try again." });
+  // grouped results are an answer without text; a hand-built view with no flag is left alone
+  assert.equal(st.emptyTurn({ ...bare.view, grouped: { groups: [] } }), false);
+  assert.equal(f.laneFailure({ status: "done", errors: [] }), null);
+  // the page writes laneFailure into the lane's alert line and dims its chat
+  const app = fs.readFileSync(path.join(PUBLIC, "prefetch", "app.js"), "utf8");
+  assert.match(app, /el\.err\[l\.key\]\.textContent = why \? `\$\{l\.label\}: no answer, \$\{why\}\.`/);
+  for (const demo of ["askai", "assist"]) {
+    const page = fs.readFileSync(path.join(PUBLIC, "prefetch", demo, "index.html"), "utf8");
+    assert.match(page, /id="err-a" role="alert"/, demo);
+  }
+});
+
 test("after a run: Ready only when both lanes answered; a failed lane is named and Run stays on", async () => {
   const f = await load("prefetch/preflight.mjs");
   const p = await load("prefetch/compare.mjs");

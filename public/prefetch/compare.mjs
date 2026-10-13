@@ -8,7 +8,7 @@
    ─────────────────────────────────────────────────────────────── */
 
 import { MANIFEST, configKey, configVariants } from "../main-demo/configs.mjs";
-import { ms } from "../main-demo/stream.mjs";
+import { emptyTurn, ms } from "../main-demo/stream.mjs";
 
 /** the two lanes: the base agent, and the same agent with prefetch on */
 export const LANES = [
@@ -59,11 +59,13 @@ export const ROWS = [
 ];
 
 /** a lane whose turn failed: its counts are not measurements, whatever they read */
-const failed = (r) => Boolean(r && r.view) && settled(r) && (r.view.status === "error" || Boolean(r.view.errors && r.view.errors.length));
+const failed = (r) => Boolean(r && r.view) && settled(r)
+  && (r.view.status === "error" || Boolean(r.view.errors && r.view.errors.length) || emptyTurn(r.view));
 
-/** "HTTP 404", or "failed" when the error came without a status */
+/** "HTTP 404"; "no answer" for a clean close with no text; "failed" for an error without a status */
 export function failureText(view) {
-  return view && view.httpStatus >= 400 ? `HTTP ${view.httpStatus}` : "failed";
+  if (view && view.httpStatus >= 400) return `HTTP ${view.httpStatus}`;
+  return emptyTurn(view) ? "no answer" : "failed";
 }
 
 /** one lane's value for one row: a number, or null while it is not known */
