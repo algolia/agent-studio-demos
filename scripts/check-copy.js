@@ -64,7 +64,8 @@ const LIMITS = {
 
 const PAGES = [
   "index.html", "chat-with-book/index.html", "infinite-conversation/index.html", "jev-attributes/index.html",
-  "guardrails-arena/index.html", "guardrails-game/index.html", "main-demo/index.html",
+  "guardrails-arena/index.html", "guardrails-game/index.html", "main-demo/index.html", "prefetch/index.html",
+  "prefetch/askai/index.html", "prefetch/assist/index.html",
 ];
 const JS_FILES = [
   "chat-with-book/app.js", "infinite-conversation/app.js",
@@ -75,6 +76,7 @@ const JS_FILES = [
   "guardrails-arena/label-game.js", "guardrails-game/game-ui.js",
   "main-demo/app.js", "main-demo/lane.js", "main-demo/configs.mjs", "main-demo/stream.mjs",
   "main-demo/fixture.mjs", "main-demo/fields.mjs", "main-demo/race.mjs", "main-demo/agents.mjs",
+  "prefetch/app.js", "prefetch/compare.mjs", "prefetch/outcome.mjs", "prefetch/demos.mjs",
 ];
 
 /* ── Text extraction ──────────────────────────────────────────── */

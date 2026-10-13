@@ -84,3 +84,44 @@ export function lineText(v) {
   const s = Array.isArray(v) ? v.join(", ") : String(v || "");
   return s.length > 90 ? s.slice(0, 88).trimEnd() + "…" : s;
 }
+
+/* check-copy: off */
+/** product types a title may name, as the tile prints them; `|stem` when a title may spell it singular */
+const TYPES = [
+  "Headphones|headphone", "Headset", "Earbuds|earbud", "Earphones|earphone", "Speaker", "Soundbar", "Microphone", "Radio",
+  "Boots|boot", "Shoes|shoe", "Sneakers|sneaker", "Sandals|sandal", "Slippers|slipper", "Socks|sock", "Jacket", "Coat",
+  "Vest", "Hoodie", "Sweater", "Shirt", "Dress", "Skirt", "Pants", "Jeans", "Shorts", "Leggings", "Hat", "Cap",
+  "Gloves|glove", "Backpack", "Bag", "Wallet", "Watch", "Sunglasses", "Glasses", "Ring", "Necklace", "Bracelet",
+  "Earrings|earring", "Phone", "Tablet", "Laptop", "Keyboard", "Mouse", "Monitor", "Camera", "Drone", "Charger",
+  "Cable", "Adapter", "Battery", "Case", "Cover", "Stand", "Mount", "Lamp", "Light", "Fan", "Heater",
+  "Chair", "Table", "Desk", "Shelf", "Mattress", "Pillow", "Blanket", "Towel", "Rug", "Curtain",
+  "Mug", "Cup", "Bottle", "Pan", "Pot", "Knife", "Blender", "Kettle", "Toaster", "Tent", "Sleeping bag",
+  "Toy", "Puzzle", "Game", "Book", "Pen", "Notebook", "Brush", "Razor", "Shampoo", "Soap", "Lotion",
+];
+/* check-copy: on */
+
+const TYPE_RE = TYPES.map((e) => {
+  const [label, stem] = e.split("|");
+  const root = (stem || label).toLowerCase().replace(/ /g, "\\s+");
+  return [label, new RegExp(`\\b${root}(e?s)?\\b`, "i")];
+});
+
+/**
+ * A card with no image: a tile named after the product's type, read from
+ * its title, tinted by that type so alike products look alike. When
+ * the title names no known type, its first word (often the brand) stands in.
+ *   { word, hue } with hue in 0..359, or null for an empty title
+ */
+export function tileOf(title) {
+  const t = String(title || "").trim();
+  if (!t) return null;
+  let best = null;
+  for (const [w, re] of TYPE_RE) {
+    const m = re.exec(t);
+    if (m && (best === null || m.index < best.at)) best = { at: m.index, word: w };
+  }
+  const word = best ? best.word : t.split(/[\s,.:;/()-]+/).filter(Boolean)[0] || t.slice(0, 1);
+  let h = 0;
+  for (const c of word.toLowerCase()) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return { word: word.charAt(0).toUpperCase() + word.slice(1), hue: h };
+}

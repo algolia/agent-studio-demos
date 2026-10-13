@@ -8,12 +8,13 @@
          [--config '{"searchPrefetch":{…},…}'] [--sync-instructions] [--dry-run]
          [--base NAME] [--out FILE] [--print-config]
          [--seed --provider NAME --model ID [--index NAME]] [--converge]
+         [--prefix DEMO_main-demo-NAME-] [--send-usage]
 
    --seed creates the base agent when the host has none: a shopping
    assistant on --index (products by default) with the Algolia search and
    grouped-results tools, on --provider NAME with --model ID, Algolia MCP
    on (search prefetch only runs through it) and prefetch off. Run without
-   --provider, it lists the providers named TEST_… to pick from.
+   --provider, it lists the providers the fence allows (below) to pick from.
 
    An adopted agent is checked against what the shipped backend reads: a
    prefetch block with keys it ignores, or Algolia MCP not on, is reported.
@@ -24,7 +25,9 @@
    hosts and keeps the one where the app has providers. On any host that is
    not this machine, a write fence holds: a new agent must be named DEMO_…
    or EVAL_…, only such agents are ever written, and the base agent's
-   provider must be one named TEST_…, which every variant then inherits.
+   provider must be one named TEST_… or the Algolia-managed one
+   (providerName algolia_managed_llm: free, its credential held by the
+   server), which every variant then inherits.
 
    Reads the variant manifest from public/main-demo/configs.mjs (the same
    module the page uses), lists the agents on HOST, and for each variant:
@@ -44,6 +47,16 @@
 
    Then writes public/main-demo/variants.json (gitignored): config key →
    agent id. Idempotent: a second run creates nothing.
+
+   --prefix names a second pair next to the first, for a run on another
+   provider or model: DEMO_main-demo-openai- gives DEMO_main-demo-openai-base
+   and DEMO_main-demo-openai-prefetch. It must start with DEMO_main-demo-, and
+   a run with it reads, writes and syncs only its own pair. The page keys
+   agents by id, so either pair can back it.
+
+   --send-usage has the pair stream token usage (config sendUsage: true),
+   which the race's input-token row reads: --seed writes it, and with
+   --converge an agent of the pair that lacks it gets it.
 
    --print-config also prints the variants map to stdout, as JSON, for
    mainDemo.variants in a deploy's config.js (variants.json is gitignored).
@@ -67,7 +80,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_OUT = path.join(HERE, "..", "public", "main-demo", "variants.json");
 
 function parseArgs(argv) {
-  const out = { add: [], configs: [], sync: false, dryRun: false, printConfig: false, out: DEFAULT_OUT, base: BASE_AGENT };
+  const out = { add: [], configs: [], sync: false, dryRun: false, printConfig: false, out: DEFAULT_OUT, base: null, prefix: NAME_PREFIX };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--add") out.add.push(argv[++i]);
@@ -83,10 +96,36 @@ function parseArgs(argv) {
     else if (a === "--provider") out.provider = argv[++i];
     else if (a === "--model") out.model = argv[++i];
     else if (a === "--index") out.index = argv[++i];
+    else if (a === "--prefix") out.prefix = argv[++i];
+    else if (a === "--send-usage") out.sendUsage = true;
     else if (a === "--help" || a === "-h") out.help = true;
     else throw new Error(`unknown argument: ${a}`);
   }
+  checkPrefix(out.prefix);
+  if (out.prefix !== NAME_PREFIX && out.configs.length) throw new Error("--config makes DEMO_main-demo-<hash> agents; it does not take --prefix");
+  if (!out.base) out.base = `${out.prefix}base`;
   return out;
+}
+
+/** a pair prefix: under this demo's own, so the fence and the DEMO_ rule still hold */
+export function checkPrefix(prefix) {
+  if (!String(prefix || "").startsWith(NAME_PREFIX) || !/^[A-Za-z0-9_-]+-$/.test(prefix)) {
+    throw new Error(`--prefix must start with ${NAME_PREFIX} and end with -, not ${prefix}`);
+  }
+  return prefix;
+}
+
+/** a variant's agent name under a pair prefix */
+export function prefixedName(prefix, toggles) {
+  return prefix + agentName(toggles).slice(NAME_PREFIX.length);
+}
+
+const VARIANT_REST = /^(prefetch|memory|guardrails|suggestions)(-(prefetch|memory|guardrails|suggestions))*$|^[0-9a-f]{8}$/;
+
+/** an agent of this run's pair: its prefix, then a variant's flags or a config hash; never another pair's */
+export function inPair(prefix, name) {
+  const n = String(name || "");
+  return n.startsWith(prefix) && VARIANT_REST.test(n.slice(prefix.length));
 }
 
 function env() {
@@ -128,6 +167,11 @@ export async function hostForRegion(region, callFor, hosts = HOSTS) {
 
 export const isDemoName = (name) => /^(DEMO|EVAL)_/.test(String(name || ""));
 export const isTestProvider = (provider) => Boolean(provider) && /^TEST_/.test(String(provider.name || ""));
+/** Algolia's own managed LLMs: free to the app, and no customer credential behind them */
+export const MANAGED_PROVIDER = "algolia_managed_llm";
+export const isManagedProvider = (provider) => Boolean(provider) && provider.providerName === MANAGED_PROVIDER;
+/** what the fence lets a base agent run on, off this machine */
+export const isAllowedProvider = (provider) => isTestProvider(provider) || isManagedProvider(provider);
 
 /**
  * Off this machine, every write goes through here: a new agent must carry a
@@ -154,12 +198,12 @@ export function fenced(call, { local }) {
   return guarded;
 }
 
-/** off this machine the base must run on a TEST_ provider; the variants copy its providerId */
+/** off this machine the base must run on a TEST_ or the managed provider; the variants copy its providerId */
 export function checkProvider(base, providers, { local }) {
   if (local) return;
   const p = providers.get(base.providerId);
-  if (!isTestProvider(p)) {
-    throw new Error(`refused: ${base.name} runs on provider ${p ? p.name : base.providerId || "none"}; use one named TEST_…`);
+  if (!isAllowedProvider(p)) {
+    throw new Error(`refused: ${base.name} runs on provider ${p ? p.name : base.providerId || "none"}; use one named TEST_… or the Algolia-managed one`);
   }
 }
 
@@ -168,12 +212,26 @@ export function checkProvider(base, providers, { local }) {
    the same prompt, tools and search parameters, so the race on production
    compares the same two agents. */
 
-const PRODUCTS = {
-  description: "General product catalog (electronics, sports, home, toys, fashion, books): title, brand, "
-    + "price, categories, product group, color, features and image.",
-  attributes: ["title", "brand", "manufacturer", "price", "priceDisplay", "largeImage", "categories",
-    "productGroup", "color", "features", "url"],
+/** the catalogs --index knows: what the search tool says about each, and what it retrieves */
+const CATALOGS = {
+  products: {
+    description: "General product catalog (electronics, sports, home, toys, fashion, books): title, brand, "
+      + "price, categories, product group, color, features and image.",
+    attributes: ["title", "brand", "manufacturer", "price", "priceDisplay", "largeImage", "categories",
+      "productGroup", "color", "features", "url"],
+    prices: true,
+  },
+  // the public ESCI shopping-queries dataset: no price, no image; description is
+  // left out because it mostly repeats the bullets and doubles every hit's tokens
+  esci_products_us: {
+    description: "Product catalog from the ESCI shopping dataset (US): title, brand, color and feature "
+      + "bullets. It lists no prices and no images.",
+    attributes: ["title", "brand", "color", "bullets"],
+    prices: false,
+  },
 };
+const NO_PRICES = "Mention the brand when it helps the shopper choose. This catalog lists no prices: "
+  + "never state or guess one, and say so if the shopper asks.";
 
 const SEED_INSTRUCTIONS = "You are a shopping assistant for an online store. Help shoppers find products from the "
   + "catalog. Search the catalog before recommending anything, and only recommend products "
@@ -184,11 +242,18 @@ const SEED_INSTRUCTIONS = "You are a shopping assistant for an online store. Hel
   + "(the product category, a synonym, fewer words, no filters). Never answer with nothing: "
   + "recommend the closest products you found and say in a few words how they differ from the request.";
 
+/** the seed prompt for a catalog: a catalog without prices gets no price to mention */
+export function seedInstructions(index) {
+  const catalog = CATALOGS[index];
+  if (!catalog || catalog.prices) return SEED_INSTRUCTIONS;
+  return SEED_INSTRUCTIONS.replace("Mention price and brand when they help the shopper choose.", NO_PRICES);
+}
+
 /** the base agent --seed creates: prefetch off, Algolia MCP on, so both arms search the same way */
-export function seedBody({ name = BASE_AGENT, providerId, model, index = "products" }) {
-  const known = index === "products";
+export function seedBody({ name = BASE_AGENT, providerId, model, index = "products", sendUsage = false }) {
+  const catalog = CATALOGS[index];
   const searchParameters = {
-    ...(known ? { attributesToRetrieve: PRODUCTS.attributes } : {}),
+    ...(catalog ? { attributesToRetrieve: catalog.attributes } : {}),
     hitsPerPage: 7,
     // a chat query with one word the catalog lacks finds nothing under strict settings
     removeWordsIfNoResults: "allOptional", ignorePlurals: true, typoTolerance: "min",
@@ -197,24 +262,25 @@ export function seedBody({ name = BASE_AGENT, providerId, model, index = "produc
     name,
     description: "Search prefetch race: the base arm, and the template every variant copies",
     providerId, model,
-    instructions: SEED_INSTRUCTIONS,
-    config: { enableAlgoliaMcp: true, ...agentConfigPatch(BASE_TOGGLES) },
+    instructions: seedInstructions(index),
+    config: { enableAlgoliaMcp: true, ...agentConfigPatch(BASE_TOGGLES), ...(sendUsage ? { sendUsage: true } : {}) },
     tools: [
       { type: "algolia_search_index", name: "algolia_search_index",
-        indices: [{ index, description: known ? PRODUCTS.description : `The ${index} catalog.`, searchParameters }] },
+        indices: [{ index, description: catalog ? catalog.description : `The ${index} catalog.`, searchParameters }] },
       { type: "algolia_grouped_results", name: "algolia_grouped_results" },
     ],
   };
 }
 
-/** the provider --seed names, refused off this machine unless it is a TEST_ one */
+/** the provider --seed names, refused off this machine unless the fence allows it */
 export function seedProvider(providers, name, { local }) {
-  const tests = [...providers.values()].filter(isTestProvider).map((p) => p.name).sort();
-  const hint = tests.length ? `providers named TEST_… here: ${tests.join(", ")}` : "no provider here is named TEST_…";
+  const allowed = [...providers.values()].filter(isAllowedProvider).map((p) => p.name).sort();
+  const hint = allowed.length ? `providers allowed here (TEST_… or Algolia-managed): ${allowed.join(", ")}`
+    : "no provider here is named TEST_… or Algolia-managed";
   if (!name) throw new Error(`--seed needs --provider NAME; ${hint}`);
   const found = [...providers.entries()].find(([, p]) => p.name === name);
   if (!found) throw new Error(`no provider named ${name}; ${hint}`);
-  if (!local && !isTestProvider(found[1])) throw new Error(`refused: ${name} is not a TEST_ provider; ${hint}`);
+  if (!local && !isAllowedProvider(found[1])) throw new Error(`refused: ${name} is neither a TEST_ provider nor the Algolia-managed one; ${hint}`);
   return found[0];
 }
 
@@ -288,17 +354,17 @@ async function listAgents(call) {
 async function listProviders(call) {
   try {
     const items = itemsOf(await call("GET", "/1/providers?limit=100"));
-    return new Map(items.map((p) => [p.id, { name: p.name || null, label: p.providerName || p.name || null }]));
+    return new Map(items.map((p) => [p.id, { name: p.name || null, label: p.providerName || p.name || null, providerName: p.providerName || null }]));
   } catch (_) {
     return new Map();
   }
 }
 
-function variantBody(base, toggles) {
+function variantBody(base, toggles, name = agentName(toggles)) {
   const config = { ...(base.config || {}) };
   delete config.searchPrefetch;
   delete config.search_prefetch;
-  return { ...baseTemplate(base), name: agentName(toggles), config: { ...config, ...agentConfigPatch(toggles) } };
+  return { ...baseTemplate(base), name, config: { ...config, ...agentConfigPatch(toggles) } };
 }
 
 async function existingFormat(file) {
@@ -318,7 +384,7 @@ async function main() {
   if (args.help) {
     log("usage: MAIN_DEMO_HOST=… APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs"
       + " [--add KEY]… [--config JSON]… [--sync-instructions] [--dry-run] [--out FILE] [--base NAME]"
-      + " [--print-config] [--region eu|us|auto] [--seed --provider NAME --model ID [--index NAME]]");
+      + " [--print-config] [--region eu|us|auto] [--seed --provider NAME --model ID [--index NAME]] [--prefix P]");
     return;
   }
   const e = env();
@@ -329,7 +395,7 @@ async function main() {
   }
   const local = isLocalHost(e.host);
   const call = fenced(client(e), { local });
-  log(`host ${e.host} · app ${e.appId.slice(0, 3)}… · key from env${local ? "" : " · DEMO_ names and TEST_ providers only"}`);
+  log(`host ${e.host} · app ${e.appId.slice(0, 3)}… · key from env${local ? "" : " · DEMO_ names, TEST_ or managed providers only"}`);
 
   const wanted = new Map();
   for (const m of MANIFEST) wanted.set(configKey(m.toggles), m.toggles);
@@ -350,7 +416,7 @@ async function main() {
   } else {
     const providerId = seedProvider(providers, args.provider, { local });
     if (!args.model) throw new Error("--seed needs --model ID, a model the provider serves");
-    const body = seedBody({ name: args.base, providerId, model: args.model, index: args.index });
+    const body = seedBody({ name: args.base, providerId, model: args.model, index: args.index, sendUsage: args.sendUsage });
     if (args.dryRun) {
       log(`seed   ${args.base}  (dry run: skipped)`);
       base = { ...body, id: "dry-run" };
@@ -389,15 +455,17 @@ async function main() {
   };
 
   for (const [key, toggles] of wanted) {
-    const name = agentName(toggles);
+    const name = prefixedName(args.prefix, toggles);
     const found = byName.get(name);
     if (found) {
       let full = found.config ? found : await call("GET", `/1/agents/${found.id}`);
       const issues = configDrift(full.config);
       const reads = configKey(togglesFromAgentConfig(full.config));
       if (reads !== key) issues.push(`its config reads as ${reads}`);
+      if (args.sendUsage && full.config && full.config.sendUsage !== true) issues.push("it does not stream token usage");
       if (issues.length && args.converge && !args.dryRun) {
-        await call("PATCH", `/1/agents/${found.id}`, { config: convergedConfig(full.config, toggles) });
+        const config = convergedConfig(full.config, toggles);
+        await call("PATCH", `/1/agents/${found.id}`, { config: args.sendUsage ? { ...config, sendUsage: true } : config });
         await publish(found.id);
         full = await call("GET", `/1/agents/${found.id}`);
         if (found.id === base.id) base = full; // the variants still to create copy the fixed config
@@ -411,7 +479,7 @@ async function main() {
       continue;
     }
     if (args.dryRun) { log(`create ${name}  (dry run: skipped)`); continue; }
-    const created = await call("POST", "/1/agents", variantBody(base, toggles));
+    const created = await call("POST", "/1/agents", variantBody(base, toggles, name));
     try {
       await call("POST", `/1/agents/${created.id}/publish`);
     } catch (err) {
@@ -425,6 +493,7 @@ async function main() {
   // edited configs: the ones asked for, and every DEMO_main-demo-<hash> already there
   const customs = new Map(args.configs.map((b) => [customKey(b), b]));
   for (const a of agents) {
+    if (args.prefix !== NAME_PREFIX) break;
     if (!(a.name.startsWith(NAME_PREFIX) && /^[0-9a-f]{8}$/.test(a.name.slice(NAME_PREFIX.length)))) continue;
     const full = a.config ? a : await call("GET", `/1/agents/${a.id}`);
     const blocks = blocksFromConfig(full.config);
@@ -444,7 +513,7 @@ async function main() {
 
   if (args.sync) {
     for (const a of agents) {
-      if (!a.name.startsWith(NAME_PREFIX) || a.name === args.base || a.id === base.id) continue;
+      if (!inPair(args.prefix, a.name) || a.name === args.base || a.id === base.id) continue;
       const full = await call("GET", `/1/agents/${a.id}`);
       if (full.instructions === base.instructions && full.systemPrompt === base.systemPrompt) {
         log(`same   ${a.name}`);

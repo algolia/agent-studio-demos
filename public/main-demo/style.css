@@ -93,6 +93,10 @@
 .pf-pill:hover { border-color: var(--accent); }
 .pf-pill.is-on { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
 .pf-pill.is-on:hover { border-color: var(--accent); }
+/* a locked lane (mountLane's `locked`): the pill labels, it does not open anything */
+.pf-pill.is-locked { cursor: default; }
+.pf-pill.is-locked:hover { border-color: var(--line-strong); }
+.pf-pill.is-locked.is-on:hover { border-color: transparent; }
 .pf-edited { font: 500 11px var(--mono); color: var(--crease); }
 
 .searches {
@@ -229,6 +233,12 @@
 }
 .pcard-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .pcard-blur { width: 100%; height: 100%; display: block; }
+.pcard-tile {
+  width: 100%; height: 100%; display: grid; place-items: center; padding: 8px; text-align: center;
+  font: 700 17px/1.15 var(--display); overflow-wrap: anywhere;
+  background: light-dark(oklch(93% 0.045 var(--h)), oklch(30% 0.05 var(--h)));
+  color: light-dark(oklch(40% 0.11 var(--h)), oklch(86% 0.07 var(--h)));
+}
 .pcard-body { padding: 8px 10px 10px; display: grid; gap: 2px; }
 .pcard-body p { margin: 0; }
 .pcard-title {
@@ -339,6 +349,14 @@
 .lane-chat .ais-ChatInlineLayout, .lane-chat .ais-Chat-container {
   height: 480px; max-height: 70vh; width: 100%; max-width: 100%;
 }
+/* a race compares two whole answers: each chat grows to its turn instead of
+   scrolling inside a fixed box, which pinned the latest text in view and pushed
+   the product cards above it out of sight in one lane but not the other */
+.lanes[data-mode="race"] .lane-chat .ais-ChatInlineLayout,
+.lanes[data-mode="race"] .lane-chat .ais-Chat-container { height: auto; max-height: none; min-height: 240px; }
+.lanes[data-mode="race"] .lane-chat .ais-ChatMessages { flex: 1 0 auto; height: auto; overflow: visible; }
+.lanes[data-mode="race"] .lane-chat .ais-ChatMessages-scroll { height: auto; overflow: visible; }
+.lanes[data-mode="race"] .lane-chat .ais-ChatMessages-scrollToBottom { display: none; }
 .lanes[data-mode="race"] .lane-chat .ais-ChatPrompt { display: none; }
 .lanes[data-mode="race"] .lane-chat .ais-ChatHeader-clear,
 .lanes[data-mode="race"] .lane-chat .ais-ChatMessage-action[title="Regenerate"] { display: none; }

@@ -349,6 +349,32 @@ test("no tool outlasts its turn: an open call closes at the turn's end", async (
   for (const x of v.tools) assert.ok(x.start + x.duration <= v.total, `${x.name} ends inside the turn`);
 });
 
+test("answer texts: each runs from its first token to its text-end, inside the turn", async () => {
+  const { createTurn } = await load("stream.mjs");
+  const turn = createTurn();
+  turn.headers(100, { status: 200, get: () => null });
+  turn.observe(400, { type: "text-start", id: "t1" });
+  turn.observe(450, { type: "text-delta", id: "t1", delta: "Let me look." });
+  turn.observe(500, { type: "text-end", id: "t1" });
+  turn.observe(900, { type: "text-delta", id: "t2", delta: "Here" });
+  turn.observe(1300, { type: "text-delta", id: "t2", delta: " they are." });
+  turn.finish(1250);
+  assert.deepEqual(turn.view().texts, [{ start: 450, end: 500 }, { start: 900, end: 1250 }]);
+  assert.equal(turn.view().ttft, 450);
+});
+
+test("a card with no image names the product's type from its title, one tint per type", async () => {
+  const f = await load("fields.mjs");
+  const boot = f.tileOf("Columbia Women's Newton Ridge Plus Waterproof Hiking Boot");
+  const boots = f.tileOf("KEEN Targhee Waterproof Hiking Boots");
+  assert.equal(boot.word, "Boots");
+  assert.deepEqual(boots, boot, "alike products look alike, singular or plural");
+  assert.equal(f.tileOf("JBL FLIP 5, Waterproof Portable Bluetooth Speaker").word, "Speaker");
+  assert.equal(f.tileOf("Bose QuietComfort 25 Acoustic Noise Cancelling").word, "Bose", "no known type: the first word");
+  assert.equal(f.tileOf("  "), null);
+  for (const t of ["a", "Zzz", "Headphones"]) assert.ok(f.tileOf(t).hue >= 0 && f.tileOf(t).hue < 360);
+});
+
 test("race: medians, paired deltas and a tally across repeated runs", async () => {
   const r = await load("race.mjs");
   const run = (a, b) => ({ a: { ok: true, ...a }, b: { ok: true, ...b } });
@@ -535,4 +561,30 @@ test("provision --print-config: stdout is the map, the progress goes to stderr, 
     server.close();
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+test("in a race each chat grows to its turn, so no lane's product cards scroll out of sight", () => {
+  const css = require("node:fs").readFileSync(path.join(dir, "style.css"), "utf8");
+  const rule = (sel) => {
+    const at = css.indexOf(sel);
+    assert.ok(at >= 0, `missing rule for ${sel}`);
+    return css.slice(at, css.indexOf("}", at));
+  };
+  assert.match(rule('.lanes[data-mode="race"] .lane-chat .ais-Chat-container'), /height: auto; max-height: none/);
+  assert.match(rule('.lanes[data-mode="race"] .lane-chat .ais-ChatMessages {'), /overflow: visible/);
+  assert.match(rule('.lanes[data-mode="race"] .lane-chat .ais-ChatMessages-scroll'), /height: auto; overflow: visible/);
+});
+
+test("the prefetched search hands its hits to the cards like the model's own search does", async () => {
+  const st = await load("stream.mjs");
+  const turn = st.createTurn({ text: "boots" });
+  const id = "prefetch_abc";
+  turn.headers(10, { status: 200, get: () => null });
+  turn.observe(20, { type: "data-search_prefetch", id: "search_prefetch", data: { decision: "injected_candidate", toolCallId: id, latencyMs: 200 } });
+  turn.observe(21, { type: "tool-input-start", toolCallId: id, toolName: "algolia_search_index_products" });
+  turn.observe(22, { type: "tool-output-available", toolCallId: id, output: { hits: [{ objectID: "1" }, { objectID: "2" }] } });
+  turn.finish(30);
+  const v = turn.view();
+  assert.deepEqual(v.hits.map((h) => h.objectID), ["1", "2"]);
+  assert.equal(v.hitsTool, "algolia_search_index_products");
 });

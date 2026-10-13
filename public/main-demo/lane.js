@@ -24,7 +24,7 @@ import {
 import { apiClient, ensureCustomAgent, loadLocal, saveLocal } from "./agents.mjs";
 import { createSseParser, createTurn, decisionLabel, ms, searchCounts } from "./stream.mjs";
 import { createFixtureFetch } from "./fixture.mjs";
-import { pick, imageCandidates, fieldsFrom, priceText, lineText } from "./fields.mjs";
+import { pick, imageCandidates, fieldsFrom, priceText, lineText, tileOf } from "./fields.mjs";
 import { decode as decodeBlurhash } from "blurhash";
 
 const html = htm.bind(React.createElement);
@@ -44,9 +44,16 @@ function Blur({ hash }) {
       const img = ctx.createImageData(32, 24);
       img.data.set(px);
       ctx.putImageData(img, 0, 0);
-    } catch (_) { /* not a valid hash: the letter underneath shows */ }
+    } catch (_) { /* not a valid hash: the canvas stays blank */ }
   }, [hash]);
   return html`<canvas ref=${ref} width="32" height="24" class="pcard-blur" aria-hidden="true"></canvas>`;
+}
+
+/** no image and no blur: the product's type on a tile tinted by it */
+function Tile({ title }) {
+  const tile = tileOf(title);
+  if (!tile) return null;
+  return html`<span class="pcard-tile" style=${{ "--h": tile.hue }} aria-hidden="true">${tile.word}</span>`;
 }
 
 let imageFailureLogged = false;
@@ -72,7 +79,7 @@ function makeCard(fields) {
         ? html`<img key=${src} src=${String(src)} alt="" loading="lazy" onError=${failed} />`
         : blur
           ? html`<${Blur} hash=${String(blur)} />`
-          : html`<span aria-hidden="true">${String(title).slice(0, 1)}</span>`}</div>
+          : html`<${Tile} title=${String(title)} />`}</div>
       <div class="pcard-body">
         <p class="pcard-title">${String(title)}</p>
         <p class="pcard-price">${priceText(pick(item, fields.price), pick(item, fields.currency))}</p>
@@ -334,7 +341,7 @@ const STUB_CLIENT = {
   }),
 };
 
-function LaneApp({ controller, label, cfg, variants, searchClient, initialToggles, fixture, onView }) {
+function LaneApp({ controller, label, cfg, variants, searchClient, initialToggles, fixture, onView, locked }) {
   const [toggles, setToggles] = useState(() => normalize(initialToggles));
   const [edits, setEdits] = useState(null);          // edited config blocks over the toggles, or null
   const [local, setLocal] = useState(() => loadLocal());
@@ -484,17 +491,20 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     <header class="lane-h">
       <div class="lane-id">
         <p class="lane-label">${label}</p>
-        <button type="button" class=${"pf-pill" + (prefetchOn ? " is-on" : "")} aria-haspopup="true"
+        ${locked
+          ? html`<span class=${"pf-pill is-locked" + (prefetchOn ? " is-on" : "")}
+              title=${counts.part ? decisionLabel(counts.part.decision) : ""}>${prefetchOn ? "Prefetch on" : "Prefetch off"}</span>`
+          : html`<button type="button" class=${"pf-pill" + (prefetchOn ? " is-on" : "")} aria-haspopup="true"
           title=${counts.part ? decisionLabel(counts.part.decision) : "Edit the prefetch block"}
           onClick=${() => openEditor("searchPrefetch")}>
           ${prefetchOn ? "Prefetch on" : "Prefetch off"}
-          ${edits && edits.searchPrefetch && html`<span class="pf-edited">edited</span>`}</button>
+          ${edits && edits.searchPrefetch && html`<span class="pf-edited">edited</span>`}</button>`}
       </div>
       <${Searches} counts=${counts} view=${view} prefetchOn=${prefetchOn} />
     </header>
-    <${ConfigPanel} toggles=${toggles} edits=${edits} onToggles=${onToggles} onEdits=${onEdits}
+    ${!locked && html`<${ConfigPanel} toggles=${toggles} edits=${edits} onToggles=${onToggles} onEdits=${onEdits}
       resolution=${resolution} disabled=${busy} open=${cfgOpen} setOpen=${setCfgOpen}
-      editing=${editing} setEditing=${setEditing} />
+      editing=${editing} setEditing=${setEditing} />`}
     <${Timeline} view=${view} fixture=${fixture} />
     <div class="lane-chat">
       ${transport
@@ -520,13 +530,14 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
  * Mount one lane. Returns the controller the page drives:
  *   { send(text) → boolean, ready() → boolean, clear(), unmount() }
  * `onView({ label, view, counts, prefetchOn, seq })` runs after every redraw;
- * `seq` counts the turns this lane has started.
+ * `seq` counts the turns this lane has started. `locked` fixes the lane to its
+ * initial toggles: no config panel, and the prefetch pill is a label.
  */
-export function mountLane(el, { label, cfg, variants, searchClient, initialToggles, fixture, onView }) {
+export function mountLane(el, { label, cfg, variants, searchClient, initialToggles, fixture, onView, locked = false }) {
   const controller = { send: () => false, ready: () => false, clear: () => {} };
   const root = createRoot(el);
   root.render(html`<${LaneApp} controller=${controller} label=${label} cfg=${cfg} variants=${variants}
-    searchClient=${searchClient} initialToggles=${initialToggles} fixture=${fixture} onView=${onView} />`);
+    searchClient=${searchClient} initialToggles=${initialToggles} fixture=${fixture} onView=${onView} locked=${locked} />`);
   controller.unmount = () => root.unmount();
   return controller;
 }

@@ -227,4 +227,48 @@ window.DEMO_CONFIG = {
     //   "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID", name: "DEMO_main-demo-prefetch" },
     // },
   },
+
+  // Optional: /prefetch/ on its own agent pair. Same shape as mainDemo; when
+  // set, the prefetch page reads it and ignores mainDemo, so main-demo's block
+  // (and its memory, guardrails and suggestions switches) stays as it is.
+  // The page needs the two variants below: the base agent, and the same agent
+  // with search prefetch on.
+  // prefetchDemo: {
+  //   region: "eu",
+  //   appId: "YOUR_APP_ID",
+  //   searchApiKey: "YOUR_SEARCH_ONLY_API_KEY",
+  //   agentStudioApiKey: "YOUR_AGENT_STUDIO_API_KEY",
+  //   indexName: "YOUR_PRODUCTS_INDEX",
+  //   variants: {
+  //     "prefetch=0,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_BASE_AGENT_ID" },
+  //     "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID" },
+  //   },
+  // },
+
+  // Optional: /prefetch/askai/ (DocSearch Ask AI, on a docs index) and
+  // /prefetch/assist/ (AI Assist, on a site's content). Same shape as
+  // prefetchDemo, one block each, and no fallback: without its block a page
+  // says live is unavailable. A search-only key serves both fields.
+  // prefetchAskai: {
+  //   region: "us",
+  //   appId: "YOUR_DOCS_APP_ID",
+  //   searchApiKey: "YOUR_SEARCH_ONLY_API_KEY",
+  //   agentStudioApiKey: "YOUR_SEARCH_ONLY_API_KEY",
+  //   indexName: "YOUR_DOCSEARCH_INDEX",
+  //   variants: {
+  //     "prefetch=0,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_BASE_AGENT_ID", name: "DEMO_askai-base" },
+  //     "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID", name: "DEMO_askai-prefetch" },
+  //   },
+  // },
+  // prefetchAssist: {
+  //   region: "eu",
+  //   appId: "YOUR_SITE_APP_ID",
+  //   searchApiKey: "YOUR_SEARCH_ONLY_API_KEY",
+  //   agentStudioApiKey: "YOUR_SEARCH_ONLY_API_KEY",
+  //   indexName: "YOUR_SITE_CONTENT_INDEX",
+  //   variants: {
+  //     "prefetch=0,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_BASE_AGENT_ID", name: "DEMO_assist-base" },
+  //     "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID", name: "DEMO_assist-prefetch" },
+  //   },
+  // },
 };

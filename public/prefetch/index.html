@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en" data-demo="catalog">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search prefetch, before and after</title>
+<meta name="description" content="Ask one question to the same Agent Studio agent with and without search prefetch, and compare model calls and timings from one live run.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/instantsearch.css@8.23.0/components/chat-min.css">
+<link rel="stylesheet" href="../shared/tokens.css">
+<link rel="stylesheet" href="../main-demo/style.css">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:,">
+<script>
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
+    var dark = saved ? saved === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
+
+<!-- The lanes are main-demo's: the same pinned packages, one shared React. -->
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19.1.1",
+    "react/": "https://esm.sh/react@19.1.1/",
+    "react-dom": "https://esm.sh/react-dom@19.1.1?external=react",
+    "react-dom/client": "https://esm.sh/react-dom@19.1.1/client?external=react",
+    "react-instantsearch": "https://esm.sh/react-instantsearch@7.50.1?external=react,react-dom",
+    "algoliasearch/lite": "https://esm.sh/algoliasearch@5.59.0/lite",
+    "htm": "https://esm.sh/htm@3.1.1",
+    "blurhash": "https://esm.sh/blurhash@2.0.5"
+  }
+}
+</script>
+<script src="../shared/config.js" onerror="window.DEMO_CONFIG = window.DEMO_CONFIG || null"></script>
+</head>
+<body>
+<a class="skip" href="#score">Skip to the numbers</a>
+
+<header class="hero wrap">
+  <div class="pf-hero-text">
+    <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
+    <h1>Search prefetch, before and after</h1>
+    <p class="lede">Searches your index before the first model call, so the answer often starts sooner.</p>
+  </div>
+  <a class="pf-cta" href="https://www.algolia.com/doc/guides/algolia-ai/agent-studio/how-to/search-prefetch" target="_blank" rel="noopener">Add it to your agent <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+</header>
+
+<main class="wrap">
+  <form class="pf-ask" id="ask-form" autocomplete="off" onsubmit="event.preventDefault(); this.dataset.early = '1'">
+    <div class="race-row">
+      <label class="sr-only" for="ask">Ask both agents</label>
+      <input id="ask" type="text" maxlength="300" placeholder="Ask anything about the product catalog">
+      <button type="submit" class="btn" id="run">Run</button>
+    </div>
+    <div class="pf-starters" id="chips">
+      <div class="pf-group" data-fit="good"><span class="pf-group-h">Good fit</span><p class="chips"></p></div>
+      <div class="pf-group" data-fit="poor"><span class="pf-group-h">Poor fit</span><p class="chips"></p></div>
+    </div>
+    <p class="pf-check" id="check" role="status"></p>
+  </form>
+
+  <div class="pf-board">
+    <section class="pf-race" id="race" aria-label="Where the time went"></section>
+    <section class="pf-score" id="score" aria-label="Before and after" aria-live="polite"></section>
+  </div>
+
+  <div class="lanes" id="lanes" data-mode="race">
+    <div class="pf-lane">
+      <p class="pf-err" id="err-a" role="alert" hidden></p>
+      <section class="lane" id="lane-a" aria-label="Without prefetch"></section>
+    </div>
+    <div class="pf-lane">
+      <p class="pf-err" id="err-b" role="alert" hidden></p>
+      <section class="lane" id="lane-b" aria-label="With prefetch"></section>
+    </div>
+  </div>
+</main>
+
+<footer class="wrap pf-foot">
+  <p>Live agents, one run per question. Timings vary from run to run. Also on <a href="askai/">Ask AI on docs</a> and <a href="assist/">AI Assist</a>.</p>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

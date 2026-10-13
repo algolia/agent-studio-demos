@@ -153,7 +153,7 @@ test("--seed: the base and the prefetch arm, one provider, Algolia MCP on, prefe
 test("--seed asks for what it lacks, and names only TEST_ providers", async () => {
   await withFakeHost({ agents: [], providers: PROVIDERS }, ["--seed", "--model", "m"], async (run) => {
     assert.notEqual(run.code, 0);
-    assert.match(run.stderr, /--seed needs --provider NAME; providers named TEST_… here: TEST_openai/);
+    assert.match(run.stderr, /--seed needs --provider NAME; providers allowed here \(TEST_… or Algolia-managed\): TEST_openai/);
     assert.ok(!run.stderr.includes("Customer key"));
   });
   await withFakeHost({ agents: [], providers: PROVIDERS }, [], async (run) => {
@@ -162,7 +162,7 @@ test("--seed asks for what it lacks, and names only TEST_ providers", async () =
   });
   const p = await load();
   const providers = new Map(PROVIDERS.map((x) => [x.id, { name: x.name, label: x.providerName }]));
-  assert.throws(() => p.seedProvider(providers, "Customer key", { local: false }), /not a TEST_ provider/);
+  assert.throws(() => p.seedProvider(providers, "Customer key", { local: false }), /neither a TEST_ provider nor the Algolia-managed one/);
   assert.equal(p.seedProvider(providers, "Customer key", { local: true }), "c", "a local backend may use any provider");
   assert.equal(p.seedProvider(providers, "TEST_openai", { local: false }), "t");
 });
@@ -201,5 +201,103 @@ test("drift: what the shipped backend ignores is reported, and --converge writes
     assert.deepEqual([base.config.enableAlgoliaMcp, base.config.searchPrefetch], [true, false]);
     assert.deepEqual(prefetch.config.searchPrefetch, { enabled: true });
     assert.equal(prefetch.config.search_prefetch, undefined);
+  });
+});
+
+test("fence: the base may run on a TEST_ provider or the Algolia-managed one, and on nothing else", async () => {
+  const p = await load();
+  const providers = new Map([
+    ["t", { name: "TEST_openai", label: "openai", providerName: "openai" }],
+    ["m", { name: "Algolia Managed LLMs", label: "algolia_managed_llm", providerName: "algolia_managed_llm" }],
+    ["c", { name: "Customer key", label: "openai", providerName: "openai" }],
+    ["n", { name: "algolia_managed_llm", label: "openai", providerName: "openai" }],
+  ]);
+  const base = (providerId) => ({ name: "DEMO_main-demo-base", providerId });
+  assert.doesNotThrow(() => p.checkProvider(base("t"), providers, { local: false }), "accept: named TEST_");
+  assert.doesNotThrow(() => p.checkProvider(base("m"), providers, { local: false }), "accept: the managed provider");
+  assert.throws(() => p.checkProvider(base("c"), providers, { local: false }), /Customer key; use one named TEST_… or the Algolia-managed one/);
+  assert.throws(() => p.checkProvider(base("n"), providers, { local: false }), /refused/, "the managed one is known by its providerName, not its name");
+  assert.equal(p.seedProvider(providers, "Algolia Managed LLMs", { local: false }), "m");
+  assert.equal(p.seedProvider(providers, "TEST_openai", { local: false }), "t");
+  assert.throws(() => p.seedProvider(providers, "Customer key", { local: false }), /providers allowed here \(TEST_… or Algolia-managed\): Algolia Managed LLMs, TEST_openai/);
+});
+
+test("fence: --seed on the managed provider creates the base and the prefetch arm on it, and nothing else", async () => {
+  const managed = [...PROVIDERS, { id: "m", name: "Algolia Managed LLMs", providerName: "algolia_managed_llm" }];
+  const state = { agents: [], providers: managed };
+  await withFakeHost(state, ["--seed", "--provider", "Algolia Managed LLMs", "--model", "medium", "--index", "esci_products_us"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(state.agents.map((a) => [a.name, a.providerId, a.model]),
+      [["DEMO_main-demo-base", "m", "medium"], ["DEMO_main-demo-prefetch", "m", "medium"]]);
+  });
+});
+
+test("--seed knows the ESCI catalog: its own fields, and a prompt that never quotes a price", async () => {
+  const p = await load();
+  const esci = p.seedBody({ providerId: "m", model: "medium", index: "esci_products_us" });
+  const idx = esci.tools[0].indices[0];
+  assert.equal(idx.index, "esci_products_us");
+  assert.deepEqual(idx.searchParameters.attributesToRetrieve, ["title", "brand", "color", "bullets"]);
+  assert.match(idx.description, /no prices/);
+  assert.match(esci.instructions, /lists no prices: never state or guess one/);
+  assert.doesNotMatch(esci.instructions, /Mention price/);
+  const products = p.seedBody({ providerId: "t", model: "m" });
+  assert.match(products.instructions, /Mention price and brand when they help the shopper choose\./, "the products seed is unchanged");
+  assert.ok(products.tools[0].indices[0].searchParameters.attributesToRetrieve.includes("price"));
+  const other = p.seedBody({ providerId: "t", model: "m", index: "my_index" });
+  assert.equal(other.tools[0].indices[0].searchParameters.attributesToRetrieve, undefined, "an unknown index retrieves its defaults");
+});
+
+test("--prefix: a second pair next to the first, created on its own provider, the first left alone", async () => {
+  const managed = { id: "m", name: "Algolia Managed LLMs", providerName: "algolia_managed_llm" };
+  const cfg = (prefetch) => ({ enableAlgoliaMcp: true, searchPrefetch: prefetch ? { enabled: true } : false });
+  const first = [
+    { id: "old-base", name: "DEMO_main-demo-base", providerId: "m", model: "medium", instructions: "old", tools: [], config: cfg(false) },
+    { id: "old-pf", name: "DEMO_main-demo-prefetch", providerId: "m", model: "medium", instructions: "old", tools: [], config: cfg(true) },
+  ];
+  const state = { agents: first.map((a) => ({ ...a })), providers: [...PROVIDERS, managed] };
+  const args = ["--prefix", "DEMO_main-demo-openai-", "--seed", "--provider", "TEST_openai", "--model", "gpt-4.1-mini", "--sync-instructions"];
+  await withFakeHost(state, args, async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(state.agents.slice(2).map((a) => [a.name, a.providerId, a.model]),
+      [["DEMO_main-demo-openai-base", "t", "gpt-4.1-mini"], ["DEMO_main-demo-openai-prefetch", "t", "gpt-4.1-mini"]]);
+    assert.deepEqual(state.agents.slice(0, 2), first, "the first pair is neither adopted nor synced");
+    assert.equal(state.patches, undefined);
+  });
+  const p = await load();
+  assert.equal(p.prefixedName("DEMO_main-demo-openai-", { prefetch: true }), "DEMO_main-demo-openai-prefetch");
+  assert.ok(p.inPair("DEMO_main-demo-", "DEMO_main-demo-prefetch"));
+  assert.ok(p.inPair("DEMO_main-demo-", "DEMO_main-demo-0123abcd"));
+  assert.ok(!p.inPair("DEMO_main-demo-", "DEMO_main-demo-openai-prefetch"), "the default pair never syncs another pair");
+  assert.throws(() => p.checkPrefix("EVAL_x-"), /must start with DEMO_main-demo-/);
+  assert.throws(() => p.checkPrefix("DEMO_main-demo-openai"), /end with -/);
+  await withFakeHost({ agents: [], providers: PROVIDERS }, ["--prefix", "DEMO_main-demo-x-", "--config", "{}"], async (run) => {
+    assert.notEqual(run.code, 0);
+    assert.match(run.stderr, /--config .* does not take --prefix/);
+  });
+});
+
+test("--send-usage: --seed streams usage on both arms, and --converge adds it to a pair that lacks it", async () => {
+  const p = await load();
+  assert.equal(p.seedBody({ providerId: "t", model: "m" }).config.sendUsage, undefined, "off unless asked");
+  const state = { agents: [], providers: PROVIDERS };
+  await withFakeHost(state, ["--seed", "--provider", "TEST_openai", "--model", "m", "--send-usage"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(state.agents.map((a) => a.config.sendUsage), [true, true], "the prefetch arm copies the base's config");
+  });
+  const cfg = (prefetch) => ({ enableAlgoliaMcp: true, searchPrefetch: prefetch ? { enabled: true } : false });
+  const old = { providers: PROVIDERS, agents: [
+    { id: "b", name: "DEMO_main-demo-base", providerId: "t", model: "m", config: cfg(false) },
+    { id: "f", name: "DEMO_main-demo-prefetch", providerId: "t", model: "m", config: cfg(true) },
+  ] };
+  await withFakeHost(old, ["--send-usage"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.match(run.stdout, /warn it does not stream token usage \(--converge rewrites it\)/);
+    assert.equal(old.patches, undefined);
+  });
+  await withFakeHost(old, ["--send-usage", "--converge"], async (run) => {
+    assert.equal(run.code, 0, run.stderr);
+    assert.deepEqual(old.patches, ["DEMO_main-demo-base", "DEMO_main-demo-prefetch"]);
+    assert.deepEqual(old.agents.map((a) => [a.config.sendUsage, Boolean(a.config.searchPrefetch)]), [[true, false], [true, true]]);
   });
 });

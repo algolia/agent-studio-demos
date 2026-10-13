@@ -185,8 +185,10 @@ replay.
 `tools/main-demo-provision.mjs` creates the race's two agents, or adopts them
 when they exist. On production it runs behind a fence: it creates only agents
 named `DEMO_…` or `EVAL_…`, writes only agents named `DEMO_main-demo-…`, and
-refuses a base agent whose provider is not named `TEST_…`. The variants copy the
-base's provider, model, tools and prompt.
+refuses a base agent whose provider is neither named `TEST_…` nor the
+Algolia-managed one (`providerName` `algolia_managed_llm`: free, its credential
+held by the server). The variants copy the base's provider, model, tools and
+prompt.
 
 ```bash
 # the first run: find the app's region, create the base, then the prefetch arm
@@ -199,9 +201,16 @@ APP_ID=… ADMIN_KEY=… node tools/main-demo-provision.mjs --region auto \
   `--region us` skips the question.
 - `--seed` creates `DEMO_main-demo-base` when there is none: the products
   index with the search and Grouped Results tools, the shopping prompt, Algolia
-  MCP on, prefetch off. Without `--provider` it lists the app's `TEST_`
-  providers to pick from.
+  MCP on, prefetch off. Without `--provider` it lists the app's `TEST_` and
+  Algolia-managed providers to pick from.
 - `--dry-run` reads and plans, and writes nothing.
+- `--prefix DEMO_main-demo-NAME-` makes a second pair next to the first, for
+  another provider or model: `DEMO_main-demo-NAME-base` and
+  `DEMO_main-demo-NAME-prefetch`. A run with it reads, writes and syncs only its
+  own pair. The page keys agents by id, so either pair can back it.
+- `--send-usage` has the pair stream token usage, which the race's input-token
+  row reads: `--seed` writes it, and `--converge` adds it to an agent that lacks
+  it.
 - A second run creates nothing. It reports an agent the shipped backend would
   read differently (Algolia MCP off, prefetch keys it ignores), and
   `--converge` rewrites that agent's config, then republishes it.
