@@ -21,7 +21,7 @@ CFG.host = demoHost(mainDemo);
 
 const $ = (id) => document.getElementById(id);
 const el = {
-  run: $("run"), check: $("check"), lanes: $("lanes"), detail: $("detail"),
+  run: $("run"), check: $("check"), lanes: $("lanes"),
   form: $("ask-form"), ask: $("ask"), chips: $("chips"), score: $("score"),
   lane: { a: $("lane-a"), b: $("lane-b") }, err: { a: $("err-a"), b: $("err-b") },
 };
@@ -196,13 +196,6 @@ function renderChips() {
   }
 }
 
-/** timings, tool calls and the raw stream: there for engineers, folded for everyone else */
-function renderDetail(on) {
-  el.lanes.classList.toggle("is-detailed", on);
-  el.detail.setAttribute("aria-pressed", String(on));
-  el.detail.textContent = on ? "Hide timings and tool calls" : "Show timings and tool calls";
-}
-
 /* ── The lanes ─────────────────────────────────────────────────── */
 
 function mount(variants) {
@@ -241,8 +234,6 @@ async function run(text) {
 
 async function main() {
   renderChips();
-  renderDetail(false);
-  el.detail.addEventListener("click", () => renderDetail(!el.lanes.classList.contains("is-detailed")));
   el.form.addEventListener("submit", (e) => { e.preventDefault(); run(el.ask.value); });
   scheduleScore();
   // variants.json is main-demo's local map: it only stands in for mainDemo
@@ -252,7 +243,6 @@ async function main() {
     state.check = { phase: "unavailable", text: state.ready.why };
     renderCheck();
     el.lanes.hidden = true;
-    el.detail.hidden = true;
     return;
   }
   mount(state.ready.variants);

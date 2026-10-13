@@ -90,13 +90,11 @@
 .pf-score .is-lead .pf-d { font-size: 15px; color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .pf-bar i { transition: none; } }
 
-/* ── Lanes: the two answers; engineering detail on request ── */
+/* ── Lanes: the two answers, timings and tool calls in view ── */
 .pf-lanes-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; }
 .pf-lanes-h h2 { margin: 0; font: 600 17px var(--body); color: var(--ink); }
-.pf-lanes-h .btn-quiet { font-size: 13px; }
 .lanes[hidden] { display: none; }
 .pf-lane { display: grid; gap: 8px; align-content: start; min-width: 0; }
-.lanes:not(.is-detailed) :is(.searches, .tl, .hits, .wire, .pf-pill, .lane-chat .ais-ChatHeader) { display: none; }
 #lanes[data-mode="race"] .lane-chat .ais-Chat-container { min-height: 96px; }
 .pf-err {
   margin: 0; padding: 8px 12px; font-size: 14px; color: var(--ink);
@@ -148,7 +146,6 @@
 
   <div class="pf-lanes-h">
     <h2>The two answers</h2>
-    <button type="button" class="btn-quiet" id="detail" aria-pressed="false">Show timings and tool calls</button>
   </div>
   <div class="lanes" id="lanes" data-mode="race">
     <div class="pf-lane">
