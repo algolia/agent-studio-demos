@@ -344,3 +344,18 @@ test("every page points at the setup guide from its header, in a new tab", () =>
     assert.ok(html.indexOf("pf-cta") < html.indexOf('id="ask-form"'), `${page}: above the question`);
   }
 });
+
+test("on a phone: each lane's numbers above the timeline, one answer at a time, a long one folded", () => {
+  const app = fs.readFileSync(path.join(PUBLIC, "prefetch", "app.js"), "utf8");
+  const css = fs.readFileSync(path.join(PUBLIC, "prefetch", "style.css"), "utf8");
+  assert.match(app, /el\.race\.before\(el\.sum\)/, "the numbers come before the timeline");
+  assert.match(app, /el\.lanes\.before\(el\.tabs\)/, "the tabs sit above the lanes");
+  for (const id of ["modelCalls", "ttft", "total"]) assert.match(app, new RegExp(`id: "${id}"`), id);
+  assert.match(app, /showLane\("b"\)/, "the phone opens on the prefetch lane");
+  assert.match(css, /^\.pf-sum, \.pf-tabs, \.pf-more \{ display: none; \}/m, "a wider screen never shows the phone's pieces");
+  const phone = css.slice(css.indexOf("@media (max-width: 560px)"));
+  assert.match(phone, /\.pf-score \{ display: none; \}/, "on a phone the boxes stand in for the table");
+  assert.match(phone, /\.pf-group \.chip \{[^}]*min-height: 44px/, "starters are a thumb's size");
+  assert.match(phone, /\.pf-cta \{[^}]*min-height: 44px/, "and so is the way to the docs");
+  assert.match(phone, /\.pf-tab \{[^}]*min-height: 48px/);
+});
