@@ -363,6 +363,18 @@ test("answer texts: each runs from its first token to its text-end, inside the t
   assert.equal(turn.view().ttft, 450);
 });
 
+test("a card with no image names the product's type from its title, one tint per type", async () => {
+  const f = await load("fields.mjs");
+  const boot = f.tileOf("Columbia Women's Newton Ridge Plus Waterproof Hiking Boot");
+  const boots = f.tileOf("KEEN Targhee Waterproof Hiking Boots");
+  assert.equal(boot.word, "Boots");
+  assert.deepEqual(boots, boot, "alike products look alike, singular or plural");
+  assert.equal(f.tileOf("JBL FLIP 5, Waterproof Portable Bluetooth Speaker").word, "Speaker");
+  assert.equal(f.tileOf("Bose QuietComfort 25 Acoustic Noise Cancelling").word, "Bose", "no known type: the first word");
+  assert.equal(f.tileOf("  "), null);
+  for (const t of ["a", "Zzz", "Headphones"]) assert.ok(f.tileOf(t).hue >= 0 && f.tileOf(t).hue < 360);
+});
+
 test("race: medians, paired deltas and a tally across repeated runs", async () => {
   const r = await load("race.mjs");
   const run = (a, b) => ({ a: { ok: true, ...a }, b: { ok: true, ...b } });

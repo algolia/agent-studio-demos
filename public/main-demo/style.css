@@ -233,6 +233,12 @@
 }
 .pcard-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .pcard-blur { width: 100%; height: 100%; display: block; }
+.pcard-tile {
+  width: 100%; height: 100%; display: grid; place-items: center; padding: 8px; text-align: center;
+  font: 700 17px/1.15 var(--display); overflow-wrap: anywhere;
+  background: light-dark(oklch(93% 0.045 var(--h)), oklch(30% 0.05 var(--h)));
+  color: light-dark(oklch(40% 0.11 var(--h)), oklch(86% 0.07 var(--h)));
+}
 .pcard-body { padding: 8px 10px 10px; display: grid; gap: 2px; }
 .pcard-body p { margin: 0; }
 .pcard-title {

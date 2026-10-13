@@ -24,7 +24,7 @@ import {
 import { apiClient, ensureCustomAgent, loadLocal, saveLocal } from "./agents.mjs";
 import { createSseParser, createTurn, decisionLabel, ms, searchCounts } from "./stream.mjs";
 import { createFixtureFetch } from "./fixture.mjs";
-import { pick, imageCandidates, fieldsFrom, priceText, lineText } from "./fields.mjs";
+import { pick, imageCandidates, fieldsFrom, priceText, lineText, tileOf } from "./fields.mjs";
 import { decode as decodeBlurhash } from "blurhash";
 
 const html = htm.bind(React.createElement);
@@ -44,9 +44,16 @@ function Blur({ hash }) {
       const img = ctx.createImageData(32, 24);
       img.data.set(px);
       ctx.putImageData(img, 0, 0);
-    } catch (_) { /* not a valid hash: the letter underneath shows */ }
+    } catch (_) { /* not a valid hash: the canvas stays blank */ }
   }, [hash]);
   return html`<canvas ref=${ref} width="32" height="24" class="pcard-blur" aria-hidden="true"></canvas>`;
+}
+
+/** no image and no blur: the product's type on a tile tinted by it */
+function Tile({ title }) {
+  const tile = tileOf(title);
+  if (!tile) return null;
+  return html`<span class="pcard-tile" style=${{ "--h": tile.hue }} aria-hidden="true">${tile.word}</span>`;
 }
 
 let imageFailureLogged = false;
@@ -72,7 +79,7 @@ function makeCard(fields) {
         ? html`<img key=${src} src=${String(src)} alt="" loading="lazy" onError=${failed} />`
         : blur
           ? html`<${Blur} hash=${String(blur)} />`
-          : html`<span aria-hidden="true">${String(title).slice(0, 1)}</span>`}</div>
+          : html`<${Tile} title=${String(title)} />`}</div>
       <div class="pcard-body">
         <p class="pcard-title">${String(title)}</p>
         <p class="pcard-price">${priceText(pick(item, fields.price), pick(item, fields.currency))}</p>
