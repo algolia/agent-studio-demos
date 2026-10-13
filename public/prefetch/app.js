@@ -28,6 +28,7 @@ const el = {
   run: $("run"), check: $("check"), lanes: $("lanes"),
   form: $("ask-form"), ask: $("ask"), chips: $("chips"), score: $("score"), race: $("race"),
   lane: { a: $("lane-a"), b: $("lane-b") }, err: { a: $("err-a"), b: $("err-b") },
+  sum: null, tabs: null, more: { a: null, b: null },
 };
 
 const state = { running: false, ready: null, check: null };
@@ -76,10 +77,10 @@ function valueCell(r, k) {
 
 function renderScore() {
   frame = 0;
-  const table = cell("table");
+  const grid = cell("table");
   const cols = cell("colgroup");
   for (const c of ["pf-c-m", "pf-c-v", "pf-c-v", "pf-c-d"]) cols.append(cell("col", undefined, c));
-  table.append(cols);
+  grid.append(cols);
   const head = cell("tr");
   head.append(cell("td", "", "pf-m"));
   for (const l of LANES) {
@@ -93,19 +94,22 @@ function renderScore() {
   head.append(d);
   const thead = cell("thead");
   thead.append(head);
-  table.append(thead);
+  grid.append(thead);
   const body = cell("tbody");
-  for (const r of rows(seen)) {
+  const table = rows(seen);
+  for (const r of table) {
     const tr = cell("tr", undefined, r.lead ? "is-lead" : "");
     const th = cell("th", r.label, "pf-m");
     th.scope = "row";
     tr.append(th, valueCell(r, "a"), valueCell(r, "b"), cell("td", r.diff, "pf-d"));
     body.append(tr);
   }
-  table.append(body);
-  el.score.replaceChildren(table);
+  grid.append(body);
+  el.score.replaceChildren(grid);
+  renderSum(table);
   renderRace();
   renderErrors();
+  for (const l of LANES) fitMore(l.key);
 }
 
 /* ── The timeline: both lanes on one time axis ─────────────────── */
@@ -152,12 +156,94 @@ function renderRace() {
     tick.style.left = `${(t / scale) * 100}%`;
     ax.append(tick);
   }
+  ax.dataset.n = String(ticks.length);
   scaleRow.append(cell("span", "", "pf-tl-name"), ax, cell("span", "", "pf-tl-end"));
   if (ticks.length) box.append(scaleRow);
   else box.append(cell("p", "Both agents get the question at the same moment. Their time shows here, on one scale.", "pf-tl-empty"));
   const key = cell("ul", undefined, "pf-tl-key");
-  for (const p of PHASES) key.append(cell("li", p.label, "is-" + p.id));
+  const had = new Set(LANES.flatMap((l) => phases(seen[l.key] && seen[l.key].view).map((p) => p.kind)));
+  for (const p of PHASES) key.append(cell("li", p.label, "is-" + p.id + (had.has(p.id) ? "" : " is-absent")));
   el.race.replaceChildren(box, key);
+}
+
+/* ── On a phone: the numbers first, then one answer at a time ──── */
+
+const SUM = [
+  { id: "modelCalls", unit: (one) => (one ? "model call" : "model calls"), lead: true },
+  { id: "ttft", unit: () => "first words" },
+  { id: "total", unit: () => "full answer" },
+];
+
+/** each lane's headline numbers, side by side: what the table says, read at a glance */
+function renderSum(table) {
+  const started = LANES.some((l) => seen[l.key] && seen[l.key].view);
+  el.sum.hidden = !started;
+  const by = Object.fromEntries(table.map((r) => [r.id, r]));
+  el.sum.replaceChildren(...LANES.map((l) => {
+    const box = cell("div", undefined, "pf-sum-lane" + (l.key === "b" ? " is-on" : ""));
+    box.append(cell("p", l.label, "pf-sum-h"));
+    for (const m of SUM) {
+      const r = by[m.id];
+      const line = cell("p", undefined, "pf-sum-v" + (m.lead ? " is-lead" : "") + (r.known[l.key] ? "" : " is-blank"));
+      line.append(cell("b", r[l.key]), " ", cell("span", m.unit(r[l.key] === "1")));
+      box.append(line);
+    }
+    return box;
+  }));
+  for (const b of el.tabs.children) {
+    const t = by.total[b.dataset.lane];
+    b.querySelector("i").textContent = by.total.known[b.dataset.lane] ? t : "";
+  }
+}
+
+/** a phone shows one lane at a time; both keep running */
+function showLane(key) {
+  el.lanes.dataset.show = key;
+  for (const b of el.tabs.children) b.setAttribute("aria-selected", String(b.dataset.lane === key));
+  fitMore(key);
+}
+
+/** the long answer folds on a phone, with one tap to open it */
+function fitMore(key) {
+  const wrap = el.lane[key].parentElement;
+  const chat = el.lane[key].querySelector(".lane-chat");
+  const over = !wrap.classList.contains("is-full") && Boolean(chat) && chat.scrollHeight > chat.clientHeight + 2;
+  wrap.classList.toggle("is-clamped", over);
+  el.more[key].hidden = !over;
+}
+
+/** the phone's pieces: the numbers above the timeline, the tabs above the lanes, a fold under each */
+function mountPhone() {
+  el.sum = cell("section", undefined, "pf-sum");
+  el.sum.id = "sum";
+  el.sum.setAttribute("aria-label", "The numbers");
+  el.sum.hidden = true;
+  el.race.before(el.sum);
+  el.tabs = cell("div", undefined, "pf-tabs");
+  el.tabs.setAttribute("role", "tablist");
+  el.tabs.setAttribute("aria-label", "Answers");
+  for (const l of LANES) {
+    const b = cell("button", undefined, "pf-tab");
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-controls", el.lane[l.key].id);
+    b.dataset.lane = l.key;
+    b.append(cell("span", l.label), cell("i"));
+    b.addEventListener("click", () => showLane(l.key));
+    el.tabs.append(b);
+  }
+  el.lanes.before(el.tabs);
+  for (const l of LANES) {
+    const b = cell("button", "Show the whole answer", "pf-more");
+    b.type = "button";
+    b.hidden = true;
+    b.addEventListener("click", () => { el.lane[l.key].parentElement.classList.add("is-full"); fitMore(l.key); });
+    el.lane[l.key].parentElement.append(b);
+    el.more[l.key] = b;
+  }
+  showLane("b");
+  // a rotated phone, or a window dragged narrow, folds or unfolds the answers
+  window.matchMedia("(max-width: 560px)").addEventListener("change", () => { for (const l of LANES) fitMore(l.key); });
 }
 
 function scheduleScore() {
@@ -224,6 +310,7 @@ async function run(text) {
   if (!q || !canRun()) return;
   state.running = true;
   renderButton();
+  for (const l of LANES) el.lane[l.key].parentElement.classList.remove("is-full");
   // a click before the lanes are up waits for them, rather than being dropped
   const off = () => Boolean(state.check && state.check.phase === "unavailable");
   const up = await until(() => off() || LANES.every((l) => lanes[l.key] && lanes[l.key].ready()), 15000);
@@ -245,6 +332,7 @@ async function run(text) {
 
 async function main() {
   el.ask.placeholder = DEMO.placeholder;
+  mountPhone();
   renderChips();
   el.form.addEventListener("submit", (e) => { e.preventDefault(); run(el.ask.value); });
   renderCheck();
@@ -256,6 +344,7 @@ async function main() {
     state.check = { phase: "unavailable", text: state.ready.why };
     renderCheck();
     el.lanes.hidden = true;
+    el.tabs.hidden = true;
     return;
   }
   mount(state.ready.variants);
