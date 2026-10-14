@@ -52,14 +52,16 @@ test("a combo's agent comes from the tune map; the race combo falls back to the 
 
 test("on topic: every test holds; a conversation the visitor typed has no topic", async () => {
   const t = await load("public/prefetch/tune.mjs");
-  const [psych, jazz] = t.PAIRS;
+  const [soul, psych] = t.PAIRS;
   const hits = [
     { title: "A", genres: ["Psychedelic Rock"], country: "UK", year: 1967 },
     { title: "B", genres: ["Psychedelic Rock"], country: "US", year: 1967 },
     { title: "C", genres: ["Rock"], country: "UK", year: 1971 },
   ];
   assert.equal(t.onTopic(hits, psych.topic), 1);
-  assert.equal(t.onTopic([{ genres: "Jazz", year: "1959" }, { genres: "Jazz", year: 1961 }], jazz.topic), 1);
+  assert.equal(t.onTopic([{ genres: ["Soul", "Funk / Soul"] }, { genres: ["Soul"] }], soul.topic), 1);
+  const hiphop = t.PAIRS.find((p) => /90s/.test(p.turns[1]));
+  assert.equal(t.onTopic([{ genres: "Hip Hop", year: "1993" }, { genres: "Hip Hop", year: 1988 }], hiphop.topic), 1);
   assert.equal(t.onTopic(hits, null), null);
   assert.equal(t.pairOf([" psychedelic rock from the 60s", "Something from  Britain"]), psych);
   assert.equal(t.pairOf(["Psychedelic rock from the 60s", "something else"]), null);

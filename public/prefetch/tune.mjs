@@ -79,19 +79,22 @@ export function windowQuery(userTurns, window) {
 
 /* check-copy: off */
 /**
- * Scripted two-turn conversations, each checked on thousand_albums with the
- * joined query. `topic` is what the follow-up means in context: a hit is on
- * topic when every test holds. Window 1 searches the follow-up alone and
- * loses the first turn; window 2 keeps it.
+ * Scripted two-turn conversations, each run on every tune agent against
+ * thousand_albums. `topic` is what the follow-up means in context: a hit is
+ * on topic when every test holds. Window 1 searches the follow-up alone and
+ * loses the first turn; window 2 keeps it. With two turns, window 3 searches
+ * what window 2 does. Measured 2026-10-14, 3 hits: soul then funk fits 0 of 3
+ * at window 1 and 3 of 3 at window 2; Britain fits 0 against 1; the 90s
+ * follow-up is too short to prefetch alone, so window 1 skips it.
  */
 export const PAIRS = [
   {
-    turns: ["Psychedelic rock from the 60s", "Something from Britain"],
-    topic: [{ attr: "genres", match: /psych/i }, { attr: "country", match: /^(GB|UK|United Kingdom|England|Britain)/i }],
+    turns: ["Soul records for a Sunday morning", "Something with funk"],
+    topic: [{ attr: "genres", match: /soul/i }, { attr: "genres", match: /funk/i }],
   },
   {
-    turns: ["Jazz records for a rainy evening", "Anything from the 50s?"],
-    topic: [{ attr: "genres", match: /jazz/i }, { attr: "year", from: 1950, to: 1959 }],
+    turns: ["Psychedelic rock from the 60s", "Something from Britain"],
+    topic: [{ attr: "genres", match: /psych/i }, { attr: "country", match: /^(GB|UK|United Kingdom|England|Britain)/i }],
   },
   {
     turns: ["Hip hop albums from New York", "What about the 90s?"],
