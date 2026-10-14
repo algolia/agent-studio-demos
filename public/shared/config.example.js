@@ -271,4 +271,27 @@ window.DEMO_CONFIG = {
   //     "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_PREFETCH_AGENT_ID", name: "DEMO_assist-prefetch" },
   //   },
   // },
+
+  // Optional: /prefetch/, the record-shop race on the thousand_albums index.
+  // The race reads `variants` (the base agent, and the race partner: window
+  // 1, 5 hits); "Tune it" reads `tune`, one agent per window and hit count.
+  // tools/prefetch-albums-provision.mjs --write-config writes this block.
+  // prefetchAlbums: {
+  //   region: "eu",
+  //   appId: "YOUR_APP_ID",
+  //   agentStudioApiKey: "YOUR_SEARCH_ONLY_API_KEY",
+  //   indexName: "thousand_albums",
+  //   variants: {
+  //     "prefetch=0,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_BASE_AGENT_ID", name: "DEMO_albums-base" },
+  //     "prefetch=1,memory=0,guardrails=0,suggestions=0": { agentId: "YOUR_RACE_AGENT_ID", name: "DEMO_albums-prefetch-w1-h5" },
+  //   },
+  //   tune: {
+  //     "w1-h3": { agentId: "YOUR_AGENT_ID", name: "DEMO_albums-prefetch-w1-h3" },
+  //     "w2-h3": { agentId: "YOUR_AGENT_ID", name: "DEMO_albums-prefetch-w2-h3" },
+  //     "w3-h3": { agentId: "YOUR_AGENT_ID", name: "DEMO_albums-prefetch-w3-h3" },
+  //     "w1-h10": { agentId: "YOUR_AGENT_ID", name: "DEMO_albums-prefetch-w1-h10" },
+  //     "w2-h10": { agentId: "YOUR_AGENT_ID", name: "DEMO_albums-prefetch-w2-h10" },
+  //     "w3-h10": { agentId: "YOUR_AGENT_ID", name: "DEMO_albums-prefetch-w3-h10" },
+  //   },
+  // },
 };

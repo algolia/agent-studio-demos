@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-demo="catalog">
+<html lang="en" data-demo="albums">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Search prefetch, before and after</title>
-<meta name="description" content="Ask one question to the same Agent Studio agent with and without search prefetch, and compare model calls and timings from one live run.">
+<title>Search prefetch, the record shop race</title>
+<meta name="description" content="A record-shop agent on 1001 albums, with and without search prefetch: one typical run, a live race, and the settings that change what prefetch searches.">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,20 +44,29 @@
 <body>
 <a class="skip" href="#score">Skip to the numbers</a>
 
-<header class="hero wrap">
+<header class="hero wrap pf-title" id="intro">
   <div class="pf-hero-text">
     <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
-    <h1>Search prefetch, before and after</h1>
-    <p class="lede">Searches your index before the first model call, so the answer often starts sooner.</p>
+    <h1>Search prefetch</h1>
+    <p class="lede">Agent Studio searches your index before the first model call, so the answer often starts sooner.</p>
   </div>
   <a class="pf-cta" href="https://www.algolia.com/doc/guides/algolia-ai/agent-studio/how-to/search-prefetch" target="_blank" rel="noopener">Add it to your agent <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+  <figure class="pf-morph" id="morph" hidden>
+    <figcaption><span class="pf-morph-state" id="morph-state">Without prefetch</span> <span class="pf-morph-note">a typical run</span></figcaption>
+    <div class="pf-morph-bar" id="morph-bar" role="img"></div>
+    <div class="pf-morph-ends"><span class="pf-morph-was" id="morph-was" aria-hidden="true"></span><span class="pf-morph-end" id="morph-end"></span></div>
+    <ul class="pf-tl-key" id="morph-key"></ul>
+  </figure>
+  <a class="pf-scroll" href="#act-race">Race it live <span aria-hidden="true">↓</span></a>
 </header>
 
 <main class="wrap">
+<section class="pf-act" id="act-race" aria-labelledby="race-h">
+  <h2 class="pf-act-h" id="race-h">Race it</h2>
   <form class="pf-ask" id="ask-form" autocomplete="off" onsubmit="event.preventDefault(); this.dataset.early = '1'">
     <div class="race-row">
       <label class="sr-only" for="ask">Ask both agents</label>
-      <input id="ask" type="text" maxlength="300" placeholder="Ask anything about the product catalog">
+      <input id="ask" type="text" maxlength="300" placeholder="Ask the record shop">
       <button type="submit" class="btn" id="run">Run</button>
     </div>
     <div class="pf-starters" id="chips">
@@ -82,12 +91,34 @@
       <section class="lane" id="lane-b" aria-label="With prefetch"></section>
     </div>
   </div>
+</section>
+
+<section class="pf-act pf-tune" id="act-tune" aria-labelledby="tune-h">
+  <h2 class="pf-act-h" id="tune-h">Tune it</h2>
+  <p class="pf-act-lede">Two turns, two prefetch agents. The window sets how many turns prefetch searches.</p>
+  <form class="pf-convo" id="tune-form" autocomplete="off">
+    <div class="pf-pairs chips" id="tune-pairs"></div>
+    <div class="pf-turns">
+      <label class="pf-turn"><span>1</span><input id="turn-1" type="text" maxlength="200" placeholder="First message"></label>
+      <label class="pf-turn"><span>2</span><input id="turn-2" type="text" maxlength="200" placeholder="Follow-up"></label>
+      <button type="submit" class="btn" id="tune-run">Run</button>
+    </div>
+    <p class="pf-check" id="tune-check" role="status"></p>
+  </form>
+  <div class="pf-tune-lanes" id="tune-lanes">
+    <section class="pf-tlane" id="tune-a" aria-label="Prefetch A"></section>
+    <section class="pf-tlane" id="tune-b" aria-label="Prefetch B"></section>
+  </div>
+</section>
 </main>
 
 <footer class="wrap pf-foot">
-  <p>Live agents, one run per question. Timings vary from run to run. Also on <a href="askai/">Ask AI on docs</a> and <a href="assist/">AI Assist</a>.</p>
+  <p>Live agents on <a href="https://fr.wikipedia.org/wiki/Les_1001_albums_qu%27il_faut_avoir_%C3%A9cout%C3%A9s_dans_sa_vie" target="_blank" rel="noopener">1001 albums</a>, one run per question. Timings vary from run to run. Also on <a href="askai/">Ask AI on docs</a> and <a href="assist/">AI Assist</a>.</p>
 </footer>
 
+<script src="../shared/md.js"></script>
 <script type="module" src="app.js"></script>
+<script type="module" src="intro.js"></script>
+<script type="module" src="tune.js"></script>
 </body>
 </html>
