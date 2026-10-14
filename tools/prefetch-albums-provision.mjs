@@ -7,6 +7,8 @@
        --provider NAME --model ID [--converge] [--dry-run]
        [--keys-from public/shared/config.js] [--write-config FILE]
        [--measure N] [--measure-out FILE]
+     APP_ID=… ADMIN_KEY=… node tools/prefetch-albums-provision.mjs --region eu \
+       --prefetch-timeout MS [--dry-run]
      node tools/prefetch-albums-provision.mjs --measure N \
        --keys-from public/shared/config.js --measure-out FILE
 
@@ -19,6 +21,11 @@
    record-shop instructions, the same search tool on thousand_albums; only
    the search prefetch block differs. --converge rewrites an adopted agent
    whose model, instructions, tools or config differ, then republishes it.
+
+   --prefetch-timeout MS sets searchPrefetch.timeoutMs on the Act 3 agents
+   only (the combos, not the base nor the race partner, whose 1 s budget is
+   the latency story), changes no other field, and republishes. --dry-run
+   prints names, ids and the one changed field.
 
    The fence: off this machine, only agents named DEMO_albums-… are ever
    written, and the provider must be TEST_… or Algolia-managed.
@@ -147,6 +154,22 @@ export function albumDrift(stored, body) {
   if (!same(pick(have), pick(want))) out.push("another prefetch block");
   if (!stored.config || stored.config.sendUsage !== true) out.push("no usage streamed");
   return out;
+}
+
+/** the Act 3 agents: every tune combo except the race partner */
+export const TUNE_AGENT_NAMES = ALBUM_AGENTS.slice(2).map((a) => a.name);
+
+/**
+ * A stored agent's config with only searchPrefetch.timeoutMs changed, or null
+ * when it has no prefetch block or already holds that value. The stored
+ * snake_case spelling is dropped in favour of the camelCase one, as converge does.
+ */
+export function timeoutConfig(stored, ms) {
+  const cfg = (stored && stored.config) || {};
+  const block = camelBlock(storedPrefetch(cfg));
+  if (!block || typeof block !== "object" || block.enabled === false) return null;
+  if (block.timeoutMs === ms) return null;
+  return { ...cfg, searchPrefetch: { ...block, timeoutMs: ms }, search_prefetch: undefined };
 }
 
 /** off this machine: a new agent must be DEMO_albums-…, an existing one is written only if listed as such */
@@ -344,12 +367,35 @@ function parseArgs(argv) {
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--keys-from") out.keysFrom = path.resolve(argv[++i]);
     else if (a === "--write-config") out.writeConfig = path.resolve(argv[++i]);
+    else if (a === "--prefetch-timeout") out.prefetchTimeout = Number(argv[++i]);
     else if (a === "--measure") out.measure = Number(argv[++i]);
     else if (a === "--measure-out") out.measureOut = path.resolve(argv[++i]);
     else throw new Error(`unknown argument: ${a}`);
   }
   if (!out.region && !(out.measure > 0 && !out.provider)) throw new Error("pass --region eu or us");
   return out;
+}
+
+/** one field, six agents: read each, change searchPrefetch.timeoutMs, publish */
+async function setPrefetchTimeout({ call, ms, dryRun, log }) {
+  if (!(Number.isInteger(ms) && ms >= 0 && ms <= 5000)) throw new Error("--prefetch-timeout is a whole number of ms, 0 to 5000");
+  const listed = await listAgents(call);
+  for (const a of listed) call.own(a);
+  const byName = new Map(listed.map((a) => [a.name, a]));
+  for (const name of TUNE_AGENT_NAMES) {
+    const row = byName.get(name);
+    if (!row) { log(`missing ${name}`); continue; }
+    const stored = await call("GET", `/1/agents/${row.id}`);
+    const was = camelBlock(storedPrefetch(stored.config)) || {};
+    const config = timeoutConfig(stored, ms);
+    if (!config) { log(`keep   ${name}  ${row.id}  (timeoutMs already ${was.timeoutMs}, or no prefetch block)`); continue; }
+    log(`${dryRun ? "would " : ""}set    ${name}  ${row.id}  searchPrefetch.timeoutMs ${was.timeoutMs === undefined ? "default" : was.timeoutMs} -> ${ms}`);
+    if (dryRun) continue;
+    await call("PATCH", `/1/agents/${row.id}`, { config });
+    await call("POST", `/1/agents/${row.id}/publish`).catch((e) => { if (e.status !== 409) log(`  publish: ${e.message}`); });
+    const after = camelBlock(storedPrefetch((await call("GET", `/1/agents/${row.id}`)).config)) || {};
+    log(`       read back timeoutMs ${after.timeoutMs}, window ${after.conversationWindow}, hits ${after.hitsPerPage}`);
+  }
 }
 
 async function main() {
@@ -362,6 +408,8 @@ async function main() {
   const { host } = await hostForRegion(args.region, (h) => client({ host: h, appId, key }));
   const call = albumFence(client({ host, appId, key }));
   log(`host ${host} · app ${appId.slice(0, 3)}… · writes only ${AGENT_PREFIX}…`);
+
+  if (args.prefetchTimeout !== undefined) return setPrefetchTimeout({ call, ms: args.prefetchTimeout, dryRun: args.dryRun, log });
 
   const providers = await listProviders(call);
   if (args.providers || !args.provider) {
