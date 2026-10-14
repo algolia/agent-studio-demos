@@ -237,13 +237,12 @@
 }
 .pf-morph[data-state="after"] .pf-morph-bar::after { opacity: 1; transition-delay: 500ms; }
 .pf-morph.is-still .pf-morph-bar::after { display: none; }
-.pf-morph-ends { position: relative; height: 34px; margin-top: 6px; }
+.pf-morph-ends { position: relative; height: 52px; margin-top: 6px; }
 .pf-morph-was {
   position: absolute; top: 4px; transform: translateX(-100%); padding-right: 4px; white-space: nowrap;
   font: 500 15px var(--display); font-variant-numeric: tabular-nums; color: var(--ink-3); text-decoration: line-through;
 }
 .pf-morph-was:empty { display: none; }
-.pf-morph[data-state="after"] .pf-morph-ends { height: 52px; }
 .pf-morph[data-state="after"] .pf-morph-was { top: 28px; }
 .pf-morph-end {
   position: absolute; top: 0; width: max-content; transform: translateX(-100%); white-space: nowrap;
@@ -361,9 +360,9 @@
   [data-demo="albums"] .lane-chat .pcard-img { display: block; }
   .pf-turns { grid-template-columns: minmax(0, 1fr); }
   .pf-turns .btn, .pf-turn input { min-height: 44px; }
-  .pf-pairs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
-  .pf-pairs::-webkit-scrollbar { display: none; }
-  .pf-pair { flex: 0 0 auto; min-height: 44px; }
+  /* a pair is longer than a phone is wide: stacked, each one wraps */
+  .pf-pairs { display: grid; gap: 8px; }
+  .pf-pair { display: block; min-height: 44px; border-radius: 12px; padding: 10px 12px; }
   .pf-tlane { padding: 12px; }
   .pf-knobs { flex-wrap: nowrap; gap: 6px; }
   .pf-knob-h { padding: 0 4px; font-size: 11px; }
