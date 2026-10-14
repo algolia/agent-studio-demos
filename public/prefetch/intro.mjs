@@ -11,18 +11,25 @@
 
 /* check-copy: off */
 /**
- * A typical run of the albums race: durations in ms per phase, read off one
- * live run of each lane (tools/prefetch-albums-provision.mjs measures them).
- * `before` is the base agent: wait, model, its search, model, answer.
- * `after` is the race partner: wait, prefetch, model, answer.
+ * A typical run of the albums race: durations in ms per phase, read off live
+ * runs of each lane (tools/prefetch-albums-provision.mjs --measure 3).
+ * Measured 2026-10-14, gpt-6-luna: 3 good-fit starters, 3 runs each, so
+ * n = 9 per lane. Each lane's run is its median run: 18.0 s without
+ * prefetch, 10.8 s with it. Paired, prefetch was faster in 9 of 9; the
+ * median saving was 5.7 s (95% bootstrap CI 4.7 to 12.0 s).
+ * `before` is the base agent, `after` the race partner. Both searched twice:
+ * the model still ran a search of its own after the prefetch.
  */
 export const TYPICAL = {
-  measured: null,
+  measured: "2026-10-14",
   before: [
-    { kind: "wait", ms: 0 }, { kind: "model", ms: 0 }, { kind: "search", ms: 0 },
-    { kind: "model", ms: 0 }, { kind: "answer", ms: 0 },
+    { kind: "wait", ms: 395 }, { kind: "model", ms: 3594 }, { kind: "search", ms: 2255 },
+    { kind: "model", ms: 5035 }, { kind: "search", ms: 1804 }, { kind: "model", ms: 4358 }, { kind: "answer", ms: 563 },
   ],
-  after: [{ kind: "wait", ms: 0 }, { kind: "prefetch", ms: 0 }, { kind: "model", ms: 0 }, { kind: "answer", ms: 0 }],
+  after: [
+    { kind: "wait", ms: 296 }, { kind: "prefetch", ms: 88 }, { kind: "model", ms: 3937 },
+    { kind: "search", ms: 1478 }, { kind: "model", ms: 4313 }, { kind: "answer", ms: 703 },
+  ],
 };
 
 export const LABELS = {
