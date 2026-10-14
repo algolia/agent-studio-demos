@@ -80,13 +80,17 @@ function cover(hit, fit) {
   const src = imageCandidates(hit, FIELDS.image)[0];
   const title = String(pick(hit, FIELDS.title) || "");
   const by = bylineText(hit, FIELDS.byline);
+  // a record with no cover, or one that fails to load, keeps its square
+  const slot = () => cell("span", undefined, "pf-cover-slot");
   if (src) {
     const img = cell("img");
     img.src = String(src);
     img.alt = "";
     img.loading = "lazy";
-    img.addEventListener("error", () => img.remove(), { once: true });
+    img.addEventListener("error", () => img.replaceWith(slot()), { once: true });
     fig.append(img);
+  } else {
+    fig.append(slot());
   }
   fig.title = by ? `${title}, ${by}` : title;
   fig.append(cell("figcaption", title));
