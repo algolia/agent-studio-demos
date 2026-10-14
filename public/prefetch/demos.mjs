@@ -17,6 +17,18 @@ import { STARTERS } from "./compare.mjs";
  * prefetched search is wasted and the model has to search on its own.
  */
 export const DEMOS = {
+  // the race page: a record-store clerk on 1001 albums, with cover art on every card
+  albums: {
+    blocks: ["prefetchAlbums"],
+    placeholder: "Ask the record shop",
+    starters: [
+      { text: "Psychedelic rock albums from the 60s", fit: "good" },
+      { text: "Punk records from 1977", fit: "good" },
+      { text: "Brazilian bossa nova classics", fit: "good" },
+      { text: "Surprise me, what should I play tonight?", fit: "poor" },
+    ],
+    fields: { title: ["title"], byline: ["artist", "year"], line: ["genres"], image: ["image"] },
+  },
   // the product catalog, on main-demo's agents unless the deploy gives this page its own
   catalog: {
     blocks: ["prefetchDemo", "mainDemo"],
