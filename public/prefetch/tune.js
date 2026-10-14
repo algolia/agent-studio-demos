@@ -18,7 +18,7 @@ import { demoOf } from "./demos.mjs";
 import { HITS, PAIRS, TUNE_DEFAULTS, WINDOWS, messagesFor, onTopic, pairOf, tuneAgent, windowQuery } from "./tune.mjs";
 
 /* the prefetch budget of the six Act 3 agents (their `timeoutMs`) */
-const TUNE_BUDGET_MS = 1000;
+const TUNE_BUDGET_MS = 2000;
 
 const DEMO = demoOf(document.documentElement.dataset.demo);
 const { block } = pageConfig(window.DEMO_CONFIG, DEMO.blocks);

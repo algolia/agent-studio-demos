@@ -172,6 +172,20 @@ test("the script writes only DEMO_albums- agents, on the shape the page reads", 
   assert.equal(base.config.searchPrefetch, false);
 });
 
+test("the Act 3 timeout: six agents, one field, nothing else", async () => {
+  const p = await load("tools/prefetch-albums-provision.mjs");
+  assert.deepEqual(p.TUNE_AGENT_NAMES.map((n) => n.replace("DEMO_albums-prefetch-", "")).sort(), ["w1-h10", "w1-h3", "w2-h10", "w2-h3", "w3-h10", "w3-h3"],
+    "not the base, not the race partner w1-h5");
+  const stored = { config: { sendUsage: true, enable_algolia_mcp: true, search_prefetch: { enabled: true, conversation_window: 2, hits_per_page: 10 } } };
+  const next = p.timeoutConfig(stored, 2000);
+  assert.deepEqual(next.searchPrefetch, { enabled: true, conversationWindow: 2, hitsPerPage: 10, timeoutMs: 2000 });
+  assert.equal(next.search_prefetch, undefined);
+  assert.equal(next.sendUsage, true);
+  assert.equal(next.enable_algolia_mcp, true, "every other field is kept");
+  assert.equal(p.timeoutConfig({ config: { searchPrefetch: { enabled: true, timeoutMs: 2000 } } }, 2000), null, "already set");
+  assert.equal(p.timeoutConfig({ config: { searchPrefetch: false } }, 2000), null, "no prefetch block");
+});
+
 test("the config block: replaced in place, other blocks untouched, never doubled", async () => {
   const p = await load("tools/prefetch-albums-provision.mjs");
   const t = await load("public/prefetch/tune.mjs");
