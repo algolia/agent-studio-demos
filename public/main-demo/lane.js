@@ -24,7 +24,7 @@ import {
 import { apiClient, ensureCustomAgent, loadLocal, saveLocal } from "./agents.mjs";
 import { createSseParser, createTurn, decisionLabel, ms, searchCounts } from "./stream.mjs";
 import { createFixtureFetch } from "./fixture.mjs";
-import { pick, imageCandidates, fieldsFrom, priceText, lineText, tileOf } from "./fields.mjs";
+import { pick, imageCandidates, fieldsFrom, priceText, lineText, bylineText, tileOf } from "./fields.mjs";
 import { decode as decodeBlurhash } from "blurhash";
 
 const html = htm.bind(React.createElement);
@@ -83,7 +83,7 @@ function makeCard(fields) {
       <div class="pcard-body">
         <p class="pcard-title">${String(title)}</p>
         <p class="pcard-price">${priceText(pick(item, fields.price), pick(item, fields.currency))}</p>
-        <p class="pcard-line">${why ? why : lineText(pick(item, fields.line))}</p>
+        <p class="pcard-line">${why || bylineText(item, fields.byline) || lineText(pick(item, fields.line))}</p>
       </div>
     </article>`;
   };

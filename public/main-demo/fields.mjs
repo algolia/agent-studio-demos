@@ -16,6 +16,8 @@ export const FIELD_DEFAULTS = {
   currency: ["price.currency", "currency", "currency_code"],
   // a BlurHash string: the record's own preview, drawn when no image loads
   blurhash: ["image_blurred", "blurhash"],
+  // a short line made of several attributes ("artist · year"); none by default
+  byline: [],
 };
 
 const empty = (v) => v === undefined || v === null || v === "" || (Array.isArray(v) && !v.some((x) => !empty(x)));
@@ -78,6 +80,11 @@ export function priceText(p, currency) {
   } catch (_) {
     return `${p} ${currency || ""}`.trim();
   }
+}
+
+/** every byline attribute the record has, joined: "The Beatles · 1967"; "" when none is set */
+export function bylineText(item, paths) {
+  return (paths || []).map((p) => resolve(item, p)[0]).filter((v) => v !== undefined && typeof v !== "object").join(" · ");
 }
 
 export function lineText(v) {
