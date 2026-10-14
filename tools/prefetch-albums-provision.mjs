@@ -78,9 +78,41 @@ export function albumTools() {
   }];
 }
 
-/** one agent's config: Algolia MCP on (prefetch runs only through it), usage streamed, its prefetch block */
+/**
+ * One agent's config: usage streamed, and its prefetch block. No MCP flag:
+ * the backend refuses enableAlgoliaMcp on create (it sets it from the app's
+ * feature flags), so the page asks for the MCP search path per request,
+ * with the block's `query` (MCP_QUERY), on both arms alike. Prefetch runs
+ * only on that path.
+ */
 export function albumConfig(prefetch) {
-  return { ...agentConfigPatch(BASE_TOGGLES), enableAlgoliaMcp: true, sendUsage: true, searchPrefetch: prefetchBlock(prefetch) };
+  return { ...agentConfigPatch(BASE_TOGGLES), sendUsage: true, searchPrefetch: prefetchBlock(prefetch) };
+}
+
+/** the completions query parameter that puts the search tool on Algolia MCP for one call */
+export const MCP_QUERY = Object.freeze({ enableAlgoliaMcp: "true" });
+
+/**
+ * What the create endpoint would refuse, checked before any write:
+ * an MCP flag in config, more than one search tool, a prefetch block out
+ * of the backend's bounds, a name outside the fence. Empty when it is fine.
+ */
+export function validateAlbumBody(body) {
+  const out = [];
+  const c = body.config || {};
+  if ("enableAlgoliaMcp" in c || "enable_algolia_mcp" in c) out.push("config holds enableAlgoliaMcp, which create refuses");
+  if (!String(body.name || "").startsWith(AGENT_PREFIX)) out.push(`name is not ${AGENT_PREFIX}…`);
+  if (!body.providerId || !body.model) out.push("no provider or model");
+  const search = (body.tools || []).filter((t) => t.type === "algolia_search_index");
+  if (search.length !== 1) out.push(`${search.length} search tools, not 1`);
+  const sp = c.searchPrefetch;
+  if (sp && typeof sp === "object") {
+    if (!(Number.isInteger(sp.conversationWindow) && sp.conversationWindow >= 1 && sp.conversationWindow <= 5)) out.push("conversationWindow not 1 to 5");
+    if (!(Number.isInteger(sp.hitsPerPage) && sp.hitsPerPage >= 1 && sp.hitsPerPage <= 100)) out.push("hitsPerPage not 1 to 100");
+  } else if (sp !== false) {
+    out.push("searchPrefetch is neither false nor a block");
+  }
+  return out;
 }
 
 /** the create body of one ALBUM_AGENTS entry */
@@ -109,7 +141,6 @@ export function albumDrift(stored, body) {
   const have = camelBlock(storedPrefetch(stored.config));
   const pick = (b) => (b && typeof b === "object" ? { enabled: b.enabled !== false, conversationWindow: b.conversationWindow, hitsPerPage: b.hitsPerPage } : Boolean(b));
   if (!same(pick(have), pick(want))) out.push("another prefetch block");
-  if (!stored.config || stored.config.enableAlgoliaMcp !== true) out.push("Algolia MCP off");
   if (!stored.config || stored.config.sendUsage !== true) out.push("no usage streamed");
   return out;
 }
@@ -155,7 +186,7 @@ export function albumsBlock({ appId, region, agentStudioApiKey, searchApiKey, ag
   }
   return {
     region, appId, agentStudioApiKey, ...(searchApiKey ? { searchApiKey } : {}), indexName: INDEX,
-    fields: DEMOS.albums.fields, variants, tune,
+    fields: DEMOS.albums.fields, query: { ...MCP_QUERY }, variants, tune,
   };
 }
 
@@ -193,7 +224,7 @@ export function browserKeys(config, appId) {
 /* ── Measuring: the same calls the page makes ──────────────────── */
 
 async function oneTurn({ host, appId, key, agentId, turns, answers }) {
-  const q = new URLSearchParams(completionQuery()).toString();
+  const q = new URLSearchParams({ ...completionQuery(), ...MCP_QUERY }).toString();
   const t0 = performance.now();
   const now = () => performance.now() - t0;
   const tr = createTurn({ text: turns[turns.length - 1] });
@@ -317,17 +348,23 @@ async function main() {
   const served = await call("GET", `/1/providers/${found[0]}/models`).catch(() => []);
   if (!args.model || !(served || []).includes(args.model)) throw new Error(`--model must be one ${args.provider} serves`);
 
+  const bodies = ALBUM_AGENTS.map((a) => albumBody(a, { providerId: found[0], model: args.model }));
+  const invalid = bodies.map((b) => [b.name, validateAlbumBody(b)]).filter(([, why]) => why.length);
+  if (invalid.length) throw new Error(`refused before any write: ${invalid.map(([n, why]) => `${n}: ${why.join(", ")}`).join("; ")}`);
+  log(`checked ${bodies.length} create bodies: no MCP flag, one search tool on ${INDEX}, prefetch blocks in bounds`);
+
   const listed = await listAgents(call);
   for (const a of listed) call.own(a);
   const byName = new Map(listed.map((a) => [a.name, a]));
   const agents = [];
   for (const agent of ALBUM_AGENTS) {
-    const body = albumBody(agent, { providerId: found[0], model: args.model });
+    const body = bodies[ALBUM_AGENTS.indexOf(agent)];
     const row = byName.get(agent.name);
     if (row) {
       const stored = await call("GET", `/1/agents/${row.id}`);
       const drift = albumDrift(stored, body);
       if (drift.length && args.converge && !args.dryRun) {
+        // the stored config keeps whatever MCP flag the backend gave it; only the blocks this demo owns change
         await call("PATCH", `/1/agents/${row.id}`, { model: body.model, providerId: body.providerId, instructions: body.instructions, tools: body.tools, config: { ...(stored.config || {}), ...body.config, search_prefetch: undefined } });
         await call("POST", `/1/agents/${row.id}/publish`).catch((e) => { if (e.status !== 409) log(`  publish: ${e.message}`); });
         log(`fix    ${agent.name}  (${drift.join("; ")})`);
@@ -341,7 +378,8 @@ async function main() {
     const made = await call("POST", "/1/agents", body);
     await call("POST", `/1/agents/${made.id}/publish`).catch((e) => { if (e.status !== 409) log(`  publish: ${e.message}`); });
     agents.push({ name: agent.name, agentId: made.id, model: args.model });
-    log(`create ${agent.name}  ${made.id}`);
+    const mcp = made.config && (made.config.enableAlgoliaMcp ?? made.config.enable_algolia_mcp);
+    log(`create ${agent.name}  ${made.id}  (stored MCP flag ${mcp === true ? "on" : "off"}; the page asks for MCP per call)`);
   }
   for (const a of agents) console.log(`${a.name}\t${a.agentId}`);
 

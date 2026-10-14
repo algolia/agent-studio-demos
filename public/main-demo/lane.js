@@ -373,7 +373,8 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
 
   const transport = useMemo(() => {
     if (resolution.status === "missing" || resolution.status === "custom") return null;
-    const q = new URLSearchParams(completionQuery()).toString();
+    // a demo block may add query parameters, such as the albums page's Algolia MCP switch
+    const q = new URLSearchParams({ ...completionQuery(), ...(cfg.query || {}) }).toString();
     const api = `${cfg.host}/1/agents/${resolution.agentId}/completions?${q}`;
     const upstream = fixture ? createFixtureFetch({ prefetch: prefetchOn }) : window.fetch.bind(window);
     const observed = async (url, init) => {

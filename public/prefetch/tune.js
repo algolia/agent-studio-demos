@@ -203,7 +203,7 @@ function pickCombo(key, combo) {
 /* ── Running: turn 1, then turn 2 with turn 1's answer ─────────── */
 
 async function stream(agentId, turns, answers, onView) {
-  const q = new URLSearchParams(completionQuery()).toString();
+  const q = new URLSearchParams({ ...completionQuery(), ...(block.query || {}) }).toString();
   const t0 = performance.now();
   const now = () => performance.now() - t0;
   const tr = createTurn({ text: turns[turns.length - 1] });

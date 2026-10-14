@@ -151,7 +151,12 @@ test("the script writes only DEMO_albums- agents, on the shape the page reads", 
 
   const t = await load("public/prefetch/tune.mjs");
   const body = p.albumBody(t.ALBUM_AGENTS[3], { providerId: "prov", model: "m" });
-  assert.equal(body.config.enableAlgoliaMcp, true);
+  assert.equal("enableAlgoliaMcp" in body.config, false, "create refuses the MCP flag in config");
+  assert.deepEqual(p.validateAlbumBody(body), []);
+  for (const a of t.ALBUM_AGENTS) assert.deepEqual(p.validateAlbumBody(p.albumBody(a, { providerId: "prov", model: "m" })), [], a.name);
+  assert.match(p.validateAlbumBody({ ...body, config: { ...body.config, enableAlgoliaMcp: true } }).join(), /enableAlgoliaMcp/);
+  assert.match(p.validateAlbumBody({ ...body, config: { ...body.config, searchPrefetch: { enabled: true, conversationWindow: 6, hitsPerPage: 3 } } }).join(), /conversationWindow/);
+  assert.match(p.validateAlbumBody({ ...body, name: "Prod" }).join(), /name/);
   assert.equal(body.config.sendUsage, true);
   assert.deepEqual(body.config.searchPrefetch, t.prefetchBlock(t.ALBUM_AGENTS[3].prefetch));
   assert.equal(body.tools[0].indices[0].index, "thousand_albums");
@@ -172,6 +177,7 @@ test("the config block: replaced in place, other blocks untouched, never doubled
   assert.equal(block.variants["prefetch=1,memory=0,guardrails=0,suggestions=0"].agentId, "id1");
   assert.deepEqual(Object.keys(block.tune).sort(), ["w1-h10", "w1-h3", "w1-h5", "w2-h10", "w2-h3", "w3-h10", "w3-h3"]);
   assert.equal(block.indexName, "thousand_albums");
+  assert.deepEqual(block.query, { enableAlgoliaMcp: "true" }, "every call asks for the MCP search path prefetch runs on");
   const src = 'window.DEMO_CONFIG = { mainDemo: { appId: "W8" } };\n';
   const once = p.withAlbumsBlock(src, block);
   const twice = p.withAlbumsBlock(once, { ...block, region: "us" });
@@ -204,4 +210,6 @@ test("Tune it calls the agents with the page's browser key only, and picks agent
   assert.match(src, /block\.agentStudioApiKey/);
   assert.doesNotMatch(src, /ADMIN|adminKey|PATCH|"\/1\/agents"/);
   assert.match(src, /tuneAgent\(block, lane\.combo\)/);
+  assert.match(src, /block\.query/, "Tune it asks for the same MCP path as the race");
+  assert.match(fs.readFileSync(path.join(PUBLIC, "main-demo", "lane.js"), "utf8"), /\.\.\.\(cfg\.query \|\| \{\}\)/, "the race lanes add the block's query");
 });
