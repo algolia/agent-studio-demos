@@ -127,6 +127,8 @@ test("phases to the stored shape: neighbours merged, other tools count as model 
     { kind: "model", start: 950, end: 1000 }, { kind: "answer", start: 1000, end: 2000.4 },
   ];
   assert.deepEqual(i.fromPhases(parts), [{ kind: "wait", ms: 200 }, { kind: "model", ms: 800 }, { kind: "answer", ms: 1000 }]);
+  const sliver = [{ kind: "wait", start: 0, end: 300 }, { kind: "model", start: 300, end: 302 }, { kind: "prefetch", start: 302, end: 390 }];
+  assert.deepEqual(i.fromPhases(sliver), [{ kind: "wait", ms: 302 }, { kind: "prefetch", ms: 88 }], "a 2 ms gap between events is not a model call");
 });
 
 test("album cards: a byline of artist and year, nothing for a record without them", async () => {

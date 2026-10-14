@@ -32,9 +32,13 @@ export const LABELS = {
 
 const sum = (xs) => xs.reduce((a, x) => a + x.ms, 0);
 
+/** a phase this short is the gap between two stream events, not a step: it joins the one before */
+export const SLIVER_MS = 20;
+
 /**
  * Phases (compare.mjs `phases()`) to the stored shape: same-kind neighbours
- * merged, every phase a duration. Other tool calls count as model time.
+ * merged, slivers folded into the phase before, every phase a duration.
+ * Other tool calls count as model time.
  */
 export function fromPhases(parts) {
   const out = [];
@@ -42,7 +46,7 @@ export function fromPhases(parts) {
     const kind = p.kind === "tool" ? "model" : p.kind;
     const d = Math.max(0, p.end - p.start);
     const prev = out[out.length - 1];
-    if (prev && prev.kind === kind) prev.ms += d;
+    if (prev && (prev.kind === kind || d < SLIVER_MS)) prev.ms += d;
     else out.push({ kind, ms: d });
   }
   return out.map((x) => ({ kind: x.kind, ms: Math.round(x.ms) }));
