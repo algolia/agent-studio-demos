@@ -191,7 +191,7 @@ export function createTurn({ text = "", sentAt = 0 } = {}) {
           const rec = tool(evt.toolCallId, null, t);
           rec.end = t;
           const hits = hitsOf(evt.output);
-          if (hits) { s.hits = hits; s.hitsTool = rec.name; }
+          if (hits) { s.hits = hits; s.hitsTool = rec.name; rec.hits = hits; }
           break;
         }
         case "tool-output-error":
@@ -262,8 +262,23 @@ export function viewOf(s) {
     prefetchPart: s.prefetchPart, prefetchParts: s.prefetchParts, cache: s.cache, errors: s.errors,
     modelCalls: s.modelCalls, toolCalls: s.started.filter((id) => id !== passiveId).length, toolErrors: s.toolErrors, usage: s.usage,
     hits: s.hits, hitsTool: s.hitsTool, grouped: s.grouped, texts,
-    httpStatus: s.httpStatus, answered: Boolean(s.answer.trim()),
+    httpStatus: s.httpStatus, answered: Boolean(s.answer.trim()), answer: s.answer,
+    ...prefetchSearch(s, passiveId),
   };
+}
+
+/**
+ * What the prefetch searched, read off its visible tool pair: the query
+ * the backend built from the latest user turns, and the hits it returned.
+ * The MCP tool takes `queries: [{ query }]`; a native one takes `query`.
+ *   { prefetchQuery, prefetchHits }: null and [] when nothing was injected
+ */
+function prefetchSearch(s, passiveId) {
+  const rec = passiveId ? s.tools.get(passiveId) : null;
+  const input = (rec && rec.input) || {};
+  const first = Array.isArray(input.queries) && input.queries[0] ? input.queries[0].query : undefined;
+  const q = [first, input.originalQuery, input.query].find((x) => typeof x === "string" && x.trim());
+  return { prefetchQuery: q === undefined ? null : q, prefetchHits: (rec && rec.hits) || [] };
 }
 
 /**
