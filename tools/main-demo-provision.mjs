@@ -308,7 +308,7 @@ export function convergedConfig(config, toggles) {
   return { ...c, enableAlgoliaMcp: true, ...agentConfigPatch(toggles) };
 }
 
-function client({ host, appId, key }) {
+export function client({ host, appId, key }) {
   const headers = {
     "content-type": "application/json",
     "x-algolia-application-id": appId,
@@ -338,7 +338,7 @@ function client({ host, appId, key }) {
   };
 }
 
-async function listAgents(call) {
+export async function listAgents(call) {
   const all = [];
   for (let page = 1; page < 100; page++) {
     const j = await call("GET", `/1/agents?page=${page}&limit=100`);
@@ -351,7 +351,7 @@ async function listAgents(call) {
 }
 
 /** id → { name, label }: the name the app gave it, and its vendor as the page shows it */
-async function listProviders(call) {
+export async function listProviders(call) {
   try {
     const items = itemsOf(await call("GET", "/1/providers?limit=100"));
     return new Map(items.map((p) => [p.id, { name: p.name || null, label: p.providerName || p.name || null, providerName: p.providerName || null }]));
