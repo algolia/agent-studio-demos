@@ -58,8 +58,22 @@ const DECISIONS = {
 };
 /* check-copy: on */
 
-/** a decision as the lane prints it; an unknown one prints as itself */
-export function decisionLabel(decision) {
+/** the backend's default prefetch budget, in ms (the `timeoutMs` field of the prefetch block) */
+export const PREFETCH_BUDGET_MS = 1000;
+/** an abort lands a little off the budget, so a run this close to it counts as hitting it */
+const BUDGET_SLACK_MS = 50;
+
+/**
+ * A decision as the lane prints it; an unknown one prints as itself. The
+ * backend reports a search it cut off at the budget as a bare "error", so an
+ * error that ran the whole budget reads as a time-out. Pass the part's
+ * latency, and the agent's budget if it is not the default.
+ */
+export function decisionLabel(decision, latencyMs, budgetMs = PREFETCH_BUDGET_MS) {
+  const budget = Number.isFinite(budgetMs) && budgetMs > 0 ? budgetMs : PREFETCH_BUDGET_MS;
+  if (decision === "error" && Number.isFinite(latencyMs) && latencyMs >= budget - BUDGET_SLACK_MS) {
+    return `timed out (${Number((budget / 1000).toFixed(2))}\u00a0s budget)`;
+  }
   return DECISIONS[decision] || String(decision || "reported");
 }
 

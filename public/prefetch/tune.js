@@ -11,10 +11,14 @@
 
 import { demoHost, completionQuery } from "../main-demo/configs.mjs";
 import { createSseParser, createTurn, decisionLabel, ms } from "../main-demo/stream.mjs";
+
 import { fieldsFrom, imageCandidates, pick, bylineText } from "../main-demo/fields.mjs";
 import { pageConfig } from "./compare.mjs";
 import { demoOf } from "./demos.mjs";
 import { HITS, PAIRS, TUNE_DEFAULTS, WINDOWS, messagesFor, onTopic, pairOf, tuneAgent, windowQuery } from "./tune.mjs";
+
+/* the prefetch budget of the six Act 3 agents (their `timeoutMs`) */
+const TUNE_BUDGET_MS = 1000;
 
 const DEMO = demoOf(document.documentElement.dataset.demo);
 const { block } = pageConfig(window.DEMO_CONFIG, DEMO.blocks);
@@ -119,7 +123,7 @@ function turnCard(lane, i, turns) {
     return card;
   }
   if (part) {
-    const bits = [decisionLabel(part.decision), Number.isFinite(part.nbHits) && part.toolCallId ? `${v.prefetchHits.length}\u00a0hits` : null,
+    const bits = [decisionLabel(part.decision, part.latencyMs, TUNE_BUDGET_MS), Number.isFinite(part.nbHits) && part.toolCallId ? `${v.prefetchHits.length}\u00a0hits` : null,
       Number.isFinite(part.latencyMs) ? ms(part.latencyMs) : null].filter(Boolean);
     card.append(cell("p", bits.join(" · "), "pf-dec" + (part.toolCallId ? " is-in" : " is-skip")));
   } else if (v.status === "done") {
