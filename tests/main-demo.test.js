@@ -314,6 +314,15 @@ test("search counts: passive from the part, active for the model's own calls, sk
   assert.equal(decisionLabel("injected_candidate"), "injected");
   assert.equal(decisionLabel("a_new_reason"), "a_new_reason", "an unknown decision prints as itself");
 
+  // an error that ran the whole budget is the backend's time-out, which it reports without a reason
+  assert.equal(decisionLabel("error", 1080), "timed out (1\u00a0s budget)");
+  assert.equal(decisionLabel("error", 960), "timed out (1\u00a0s budget)", "an abort lands a little early");
+  assert.equal(decisionLabel("error", 400), "error", "a quick error stays an error");
+  assert.equal(decisionLabel("error"), "error", "no latency, no claim");
+  assert.equal(decisionLabel("error", 1080, 2000), "error", "inside a longer budget it is a plain error");
+  assert.equal(decisionLabel("error", 2080, 2000), "timed out (2\u00a0s budget)");
+  assert.equal(decisionLabel("skipped_no_hits", 1500), "skipped: no hits", "only an error can be a time-out");
+
   // a prefetch agent on a backend that streams no part
   const silent = searchCounts(true, (await replay(false)));
   assert.deepEqual([silent.passive, silent.reported, silent.expected], [0, false, true]);

@@ -134,7 +134,7 @@ const ANYWAY_TIP = "Read off the stream: did the model run its own search after 
 /* check-copy: on */
 
 /** who searched this turn: the platform before the model (passive), or the model itself (active) */
-function Searches({ counts, view, prefetchOn }) {
+function Searches({ counts, view, prefetchOn, budgetMs }) {
   if (!view) {
     return html`<p class="searches is-idle">${prefetchOn
       ? "Searches once before the model's first call, then lets the model search more"
@@ -144,7 +144,7 @@ function Searches({ counts, view, prefetchOn }) {
   const done = view.status === "done" || view.status === "error";
   return html`<p class="searches">
     <span class="sc-g"><span class=${"sc is-passive" + (passive ? " is-on" : "")}>Passive search <b>×${passive}</b></span>
-    ${part && html`<${PrefetchPart} part=${part} />`}
+    ${part && html`<${PrefetchPart} part=${part} budgetMs=${budgetMs} />`}
     ${prefetchOn && !reported && done && html`<span class="sc-src is-missing" title=${NO_PART_TIP}>no part</span>`}</span>
     <span class="sc-g"><span class="sc is-active">Active searches <b>×${active}</b></span>
     ${searchedAnyway !== null && html`<span class=${"sc-src" + (searchedAnyway ? " is-anyway" : " is-confirmed")}
@@ -153,10 +153,10 @@ function Searches({ counts, view, prefetchOn }) {
 }
 
 /** the backend's own account of the prefetch, from its `data-search_prefetch` part */
-function PrefetchPart({ part }) {
+function PrefetchPart({ part, budgetMs }) {
   const injected = Boolean(part.toolCallId);
   const bits = [
-    decisionLabel(part.decision),
+    decisionLabel(part.decision, part.latencyMs, budgetMs),
     injected && Number.isFinite(part.nbHits) && `${part.nbHits}\u00a0hits`,
     Number.isFinite(part.latencyMs) && ms(part.latencyMs),
   ].filter(Boolean);
@@ -363,6 +363,7 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
     return resolveCustom(blocks, variants, local, { host: cfg.host });
   }, [custom, toggles, variants, blocks, local, fixture, cfg.host]);
   const prefetchOn = Boolean(blocks.searchPrefetch && blocks.searchPrefetch.enabled);
+  const budgetMs = blocks.searchPrefetch && blocks.searchPrefetch.timeoutMs;
 
   // one redraw per frame, however fast the events come
   const frame = useRef(0);
@@ -494,14 +495,14 @@ function LaneApp({ controller, label, cfg, variants, searchClient, initialToggle
         <p class="lane-label">${label}</p>
         ${locked
           ? html`<span class=${"pf-pill is-locked" + (prefetchOn ? " is-on" : "")}
-              title=${counts.part ? decisionLabel(counts.part.decision) : ""}>${prefetchOn ? "Prefetch on" : "Prefetch off"}</span>`
+              title=${counts.part ? decisionLabel(counts.part.decision, counts.part.latencyMs, budgetMs) : ""}>${prefetchOn ? "Prefetch on" : "Prefetch off"}</span>`
           : html`<button type="button" class=${"pf-pill" + (prefetchOn ? " is-on" : "")} aria-haspopup="true"
-          title=${counts.part ? decisionLabel(counts.part.decision) : "Edit the prefetch block"}
+          title=${counts.part ? decisionLabel(counts.part.decision, counts.part.latencyMs, budgetMs) : "Edit the prefetch block"}
           onClick=${() => openEditor("searchPrefetch")}>
           ${prefetchOn ? "Prefetch on" : "Prefetch off"}
           ${edits && edits.searchPrefetch && html`<span class="pf-edited">edited</span>`}</button>`}
       </div>
-      <${Searches} counts=${counts} view=${view} prefetchOn=${prefetchOn} />
+      <${Searches} counts=${counts} view=${view} prefetchOn=${prefetchOn} budgetMs=${budgetMs} />
     </header>
     ${!locked && html`<${ConfigPanel} toggles=${toggles} edits=${edits} onToggles=${onToggles} onEdits=${onEdits}
       resolution=${resolution} disabled=${busy} open=${cfgOpen} setOpen=${setCfgOpen}
