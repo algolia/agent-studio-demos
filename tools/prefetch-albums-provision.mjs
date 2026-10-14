@@ -7,6 +7,8 @@
        --provider NAME --model ID [--converge] [--dry-run]
        [--keys-from public/shared/config.js] [--write-config FILE]
        [--measure N] [--measure-out FILE]
+     node tools/prefetch-albums-provision.mjs --measure N \
+       --keys-from public/shared/config.js --measure-out FILE
 
    --providers lists the providers the fence allows (TEST_… or the
    Algolia-managed one) and, for each, the candidate models it serves, in
@@ -31,6 +33,8 @@
    completions API with the browser key, and writes timings, prefetch
    decisions, queries and hit counts to --measure-out (JSON). Its `typical`
    is the run whose totals sit at the medians, in the shape intro.mjs reads.
+   With no ADMIN_KEY and no --provider, it reads the agents and the browser
+   key off the prefetchAlbums block of --keys-from and writes nothing.
 
    Environment, never printed: APP_ID, ADMIN_KEY. Node 20+, no dependencies.
    ─────────────────────────────────────────────────────────────── */
@@ -211,9 +215,11 @@ export function readConfig(src) {
   return ctx.window.DEMO_CONFIG || null;
 }
 
-/** the browser keys for this app: the first block of the config that names it */
+/** the browser keys for this app: the prefetchAlbums block's own when it has them, else the first block that names the app */
 export function browserKeys(config, appId) {
-  for (const b of Object.values(config || {})) {
+  const own = config && config.prefetchAlbums;
+  const blocks = [...(own ? [own] : []), ...Object.values(config || {})];
+  for (const b of blocks) {
     if (b && typeof b === "object" && b.appId === appId && b.agentStudioApiKey) {
       return { agentStudioApiKey: b.agentStudioApiKey, searchApiKey: b.searchApiKey || null };
     }
@@ -300,6 +306,30 @@ async function measure({ host, appId, key, agents, n, log }) {
   return out;
 }
 
+/** the agents of a prefetchAlbums block, by name: the base, the race partner, every tune combo */
+export function blockAgents(block) {
+  const seen = new Map();
+  for (const e of [...Object.values((block && block.variants) || {}), ...Object.values((block && block.tune) || {})]) {
+    if (e && e.agentId && String(e.name || "").startsWith(AGENT_PREFIX)) seen.set(e.name, { name: e.name, agentId: e.agentId, model: e.model || null });
+  }
+  return [...seen.values()];
+}
+
+/** --measure with no admin key: the agents and the browser key come off the config's prefetchAlbums block */
+async function measureFromConfig(args, log) {
+  if (!args.keysFrom) throw new Error("--measure without ADMIN_KEY needs --keys-from, the config.js holding the prefetchAlbums block");
+  const block = (readConfig(await readFile(args.keysFrom, "utf8")) || {}).prefetchAlbums;
+  if (!block || !block.agentStudioApiKey) throw new Error(`${path.basename(args.keysFrom)} has no prefetchAlbums block with a browser key`);
+  const agents = blockAgents(block);
+  const missing = ALBUM_AGENTS.filter((a) => !agents.some((x) => x.name === a.name)).map((a) => a.name);
+  if (missing.length) throw new Error(`the prefetchAlbums block lacks ${missing.join(", ")}`);
+  const { host } = await hostForRegion(block.region, () => null);
+  log(`host ${host} · app ${block.appId.slice(0, 3)}… · measuring ${agents.length} agents, no writes`);
+  const out = await measure({ host, appId: block.appId, key: block.agentStudioApiKey, agents, n: args.measure, log });
+  if (args.measureOut) await writeFile(args.measureOut, JSON.stringify(out, null, 2) + "\n");
+  log(`measured ${out.race.length} race runs, ${out.tune.length} tune runs${args.measureOut ? ` → ${path.basename(args.measureOut)}` : ""}`);
+}
+
 /* ── The run ───────────────────────────────────────────────────── */
 
 function parseArgs(argv) {
@@ -318,7 +348,7 @@ function parseArgs(argv) {
     else if (a === "--measure-out") out.measureOut = path.resolve(argv[++i]);
     else throw new Error(`unknown argument: ${a}`);
   }
-  if (!out.region) throw new Error("pass --region eu or us");
+  if (!out.region && !(out.measure > 0 && !out.provider)) throw new Error("pass --region eu or us");
   return out;
 }
 
@@ -327,6 +357,7 @@ async function main() {
   const log = (...a) => console.error(...a);
   const appId = process.env.APP_ID || "";
   const key = process.env.ADMIN_KEY || "";
+  if (args.measure > 0 && !args.provider && !key) return measureFromConfig(args, log);
   if (!appId || !key) throw new Error("set APP_ID and ADMIN_KEY in the environment");
   const { host } = await hostForRegion(args.region, (h) => client({ host: h, appId, key }));
   const call = albumFence(client({ host, appId, key }));

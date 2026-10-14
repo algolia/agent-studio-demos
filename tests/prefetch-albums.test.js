@@ -188,6 +188,9 @@ test("the config block: replaced in place, other blocks untouched, never doubled
   assert.ok(twice.startsWith(src.trim()));
   assert.deepEqual(p.browserKeys({ mainDemo: { appId: "APP", agentStudioApiKey: "K", searchApiKey: "S" } }, "APP"), { agentStudioApiKey: "K", searchApiKey: "S" });
   assert.equal(p.browserKeys({ mainDemo: { appId: "OTHER", agentStudioApiKey: "K" } }, "APP"), null);
+  assert.deepEqual(p.browserKeys({ other: { appId: "APP", agentStudioApiKey: "X" }, prefetchAlbums: { appId: "APP", agentStudioApiKey: "K" } }, "APP"),
+    { agentStudioApiKey: "K", searchApiKey: null }, "the block's own key wins over another block of the same app");
+  assert.deepEqual(p.blockAgents(block).map((a) => a.agentId).sort(), agents.map((a) => a.agentId).sort(), "every agent once, race partner included");
 });
 
 test("the page tells it in three acts: a title screen, the race, then Tune it", () => {
