@@ -212,3 +212,161 @@
 
   .pf-foot p { margin: 20px 0 24px; }
 }
+
+/* ── Act 1, the title screen: one line, the way to the docs, one bar that changes ── */
+.pf-title { min-height: 100svh; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 16px; padding-bottom: 28px; }
+.pf-title .pf-hero-text { flex: 0 0 auto; }
+.pf-title .pf-morph { align-self: stretch; }
+.pf-title h1 { font-size: clamp(40px, 8vw, 76px); line-height: 1; letter-spacing: -0.02em; margin-bottom: 12px; }
+.pf-title .lede { font-size: clamp(17px, 2.2vw, 21px); max-width: 34ch; }
+.pf-morph { margin: 12px 0 0; min-width: 0; max-width: 1080px; width: 100%; }
+.pf-morph figcaption { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.pf-morph-state { font: 600 18px var(--display); color: var(--ink); transition: color 300ms; }
+.pf-morph[data-state="after"] .pf-morph-state { color: var(--accent); }
+.pf-morph-note { font-size: 13px; color: var(--ink-3); }
+.pf-morph-bar { position: relative; height: 56px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.pf-morph-bar + .pf-morph-bar { margin-top: 8px; }
+.pf-morph .pf-seg {
+  font-size: 13px; transition: left 900ms cubic-bezier(0.6, 0, 0.2, 1), width 900ms cubic-bezier(0.6, 0, 0.2, 1),
+    background-color 600ms, color 600ms;
+}
+.pf-morph .pf-seg.is-gone b { opacity: 0; }
+.pf-morph-bar::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: var(--was, 0); pointer-events: none;
+  border-right: 2px dashed var(--ink-3); opacity: 0; transition: opacity 400ms;
+}
+.pf-morph[data-state="after"] .pf-morph-bar::after { opacity: 1; transition-delay: 500ms; }
+.pf-morph.is-still .pf-morph-bar::after { display: none; }
+.pf-morph-ends { position: relative; height: 52px; margin-top: 6px; }
+.pf-morph-was {
+  position: absolute; top: 4px; transform: translateX(-100%); padding-right: 4px; white-space: nowrap;
+  font: 500 15px var(--display); font-variant-numeric: tabular-nums; color: var(--ink-3); text-decoration: line-through;
+}
+.pf-morph-was:empty { display: none; }
+.pf-morph[data-state="after"] .pf-morph-was { top: 28px; }
+.pf-morph-end {
+  position: absolute; top: 0; width: max-content; transform: translateX(-100%); white-space: nowrap;
+  font: 600 22px var(--display); font-variant-numeric: tabular-nums; color: var(--ink);
+  transition: left 900ms cubic-bezier(0.6, 0, 0.2, 1);
+}
+.pf-morph[data-state="after"] .pf-morph-end { color: var(--accent); }
+.pf-morph.is-still .pf-morph-end { position: static; transform: none; font-size: 16px; }
+.pf-morph .pf-tl-key { margin-top: 4px; }
+.pf-scroll {
+  margin-top: 8px; font: 600 15px var(--body); color: var(--ink-2);
+  text-decoration: none; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; width: max-content;
+}
+.pf-scroll span { display: inline-block; animation: pf-nudge 1.8s ease-in-out infinite; }
+.pf-scroll:hover { color: var(--accent); }
+@keyframes pf-nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) {
+  .pf-morph .pf-seg, .pf-morph-end, .pf-morph-state { transition: none; }
+  .pf-scroll span { animation: none; }
+}
+
+/* ── Acts 2 and 3: a heading each ── */
+.pf-act { padding-top: 28px; scroll-margin-top: 8px; }
+.pf-act-h { font: 800 clamp(28px, 4vw, 40px) var(--display); letter-spacing: -0.01em; margin: 0 0 6px; }
+.pf-act-lede { margin: 0 0 14px; color: var(--ink-2); font-size: 16px; max-width: 60ch; }
+.pf-tune { padding-bottom: 8px; }
+
+/* album covers on every card, a square sleeve */
+[data-demo="albums"] .pcard-img { aspect-ratio: 1; }
+[data-demo="albums"] .pcard-img img { object-fit: cover; }
+
+/* ── Act 3: the conversation, then two prefetch lanes ── */
+.pf-convo { display: grid; gap: 10px; margin: 0 0 18px; max-width: 980px; }
+.pf-pairs { margin: 0; }
+.pf-pair { display: inline-flex; align-items: baseline; gap: 0; text-align: left; }
+.pf-pair .pf-then { font-style: normal; color: var(--ink-3); white-space: pre; }
+.pf-pair:disabled { opacity: 0.45; cursor: not-allowed; }
+.pf-turns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; }
+.pf-turn { display: flex; align-items: center; gap: 8px; min-width: 0; padding-left: 10px;
+  border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); }
+.pf-turn span { font: 600 13px var(--mono); color: var(--ink-3); }
+.pf-turn input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); font: 16px var(--body); padding: 11px 12px 11px 0; }
+.pf-turn:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pf-turn input:focus { outline: none; }
+.pf-tune .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.pf-tune-lanes { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.pf-tlane { min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 14px; display: grid; gap: 12px; align-content: start; }
+.pf-tlane-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.pf-tlane-name { margin: 0; font: 700 18px var(--display); color: var(--accent); }
+.pf-knobs { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.pf-knob { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); }
+.pf-knob-h { font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 0 6px; }
+.pf-knob-b {
+  min-width: 40px; min-height: 36px; border: 0; border-radius: 6px; background: none; cursor: pointer;
+  font: 600 15px var(--body); font-variant-numeric: tabular-nums; color: var(--ink-2);
+}
+.pf-knob-b[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.pf-knob-b:disabled { cursor: not-allowed; opacity: 0.4; }
+.pf-knob-b[aria-pressed="true"]:disabled { opacity: 0.75; }
+.pf-knob-b:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pf-tlane-body { display: grid; gap: 10px; }
+.pf-tlane-empty { margin: 0; color: var(--ink-3); font-size: 14px; }
+.pf-tcard { display: grid; gap: 8px; min-width: 0; }
+.pf-tcard.is-first { padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+.pf-tcard.is-first .pf-covers { grid-template-columns: repeat(auto-fill, 40px); }
+.pf-tcard.is-first .pf-cover figcaption { display: none; }
+.pf-tcard-h { margin: 0; font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.pf-tcard-h b { color: var(--ink-2); }
+.pf-q { margin: 0; font: 500 17px/1.35 var(--body); color: var(--ink); overflow-wrap: anywhere; }
+.pf-q::before { content: "\201C"; color: var(--ink-3); }
+.pf-q::after { content: "\201D"; color: var(--ink-3); }
+.pf-tcard.is-first .pf-q { font-size: 14px; color: var(--ink-2); }
+.pf-q mark.is-ctx { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ink); border-radius: 3px; padding: 0 2px; }
+.pf-dec { margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.pf-dec.is-in { color: var(--ok); }
+.pf-dec.is-skip { color: var(--warn); }
+.pf-covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
+.pf-cover { margin: 0; display: grid; gap: 4px; min-width: 0; transition: opacity 300ms; }
+.pf-cover img, .pf-cover-slot {
+  width: 100%; aspect-ratio: 1; object-fit: cover; display: block; border-radius: 4px;
+  background: var(--surface-2); box-shadow: 0 0 0 1px var(--line);
+}
+.pf-cover figcaption { font-size: 11px; line-height: 1.25; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pf-cover.is-off { opacity: 0.35; }
+.pf-covers.is-empty { grid-template-columns: repeat(auto-fill, minmax(36px, 48px)); }
+.pf-fit { margin: 0; font-size: 14px; color: var(--ink-2); }
+.pf-fit b { font-size: 22px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pf-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.pf-nums div { display: grid; gap: 0; }
+.pf-nums dt { font-size: 12px; color: var(--ink-3); }
+.pf-nums dd { margin: 0; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.pf-answer { font-size: 14px; line-height: 1.5; color: var(--ink); max-height: 9.5em; overflow: hidden; mask-image: linear-gradient(to bottom, #000 70%, transparent); }
+.pf-answer.is-full { max-height: none; mask-image: none; }
+.pf-answer > :first-child { margin-top: 0; }
+.pf-answer p, .pf-answer ul, .pf-answer ol { margin: 0 0 0.6em; }
+.pf-more-t {
+  justify-self: start; min-height: 44px; padding: 0 12px; font: 600 14px var(--body); color: var(--accent); cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px;
+}
+
+@media (max-width: 860px) {
+  .pf-tune-lanes { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .pf-title { min-height: 100svh; padding-top: 20px; }
+  .pf-title h1 { font-size: 44px; }
+  .pf-morph { margin-top: 18px; }
+  .pf-morph-bar { height: 48px; }
+  .pf-morph .pf-seg { font-size: 11px; }
+  .pf-morph-end { font-size: 20px; }
+  .pf-act { padding-top: 20px; }
+  .pf-act-h { font-size: 28px; }
+  /* covers stay on a phone: the record is the point */
+  [data-demo="albums"] .lane-chat .pcard-img { display: block; }
+  .pf-turns { grid-template-columns: minmax(0, 1fr); }
+  .pf-turns .btn, .pf-turn input { min-height: 44px; }
+  /* a pair is longer than a phone is wide: stacked, each one wraps */
+  .pf-pairs { display: grid; gap: 8px; }
+  .pf-pair { display: block; min-height: 44px; border-radius: 12px; padding: 10px 12px; }
+  .pf-tlane { padding: 12px; }
+  .pf-knobs { flex-wrap: nowrap; gap: 6px; }
+  .pf-knob-h { padding: 0 4px; font-size: 11px; }
+  .pf-knob-b { min-width: 40px; min-height: 40px; }
+  .pf-answer { max-height: 7.5em; }
+  .pf-covers { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); }
+}

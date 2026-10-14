@@ -55,7 +55,7 @@ test("a demo's card fields sit under the block's own, and the block's index wins
 
 test("the page names its demo, and its styles live in prefetch/style.css", () => {
   const html = page("index.html");
-  assert.match(html, /<html lang="en" data-demo="catalog">/);
+  assert.match(html, /<html lang="en" data-demo="albums">/);
   assert.match(html, /<link rel="stylesheet" href="style\.css">/);
   assert.doesNotMatch(html, /<style>/);
 });
@@ -65,8 +65,8 @@ test("the page names its demo, and its styles live in prefetch/style.css", () =>
 test("every demo names its blocks, a placeholder, and starters that fit one line", async () => {
   const d = await load("prefetch/demos.mjs");
   const p = await load("prefetch/compare.mjs");
-  assert.deepEqual(Object.keys(d.DEMOS), ["catalog", ...SUB.map((s) => s.demo)]);
-  for (const s of SUB) {
+  assert.deepEqual(Object.keys(d.DEMOS), ["albums", "catalog", ...SUB.map((s) => s.demo)]);
+  for (const s of [{ demo: "albums", block: "prefetchAlbums" }, ...SUB]) {
     const demo = d.DEMOS[s.demo];
     assert.deepEqual(demo.blocks, [s.block], `${s.demo} never falls back to another app's agents`);
     assert.ok(demo.placeholder.length > 0);
@@ -89,9 +89,11 @@ test("each sub-page names its demo, runs the one app.js, and links back to the r
   }
 });
 
-test("the pages carry the same race markup as the catalog page", () => {
+test("the sub-pages carry the same race markup as the race page's act 2", () => {
   const ids = (html) => [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
-  const base = ids(page("index.html"));
+  const html = page("index.html");
+  const act = html.slice(html.indexOf('<section class="pf-act" id="act-race"'), html.indexOf('id="act-tune"'));
+  const base = ids(act).filter((id) => id !== "act-race" && id !== "race-h");
   for (const s of SUB) assert.deepEqual(ids(page(s.file)), base, s.file);
 });
 

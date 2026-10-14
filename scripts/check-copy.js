@@ -77,6 +77,7 @@ const JS_FILES = [
   "main-demo/app.js", "main-demo/lane.js", "main-demo/configs.mjs", "main-demo/stream.mjs",
   "main-demo/fixture.mjs", "main-demo/fields.mjs", "main-demo/race.mjs", "main-demo/agents.mjs",
   "prefetch/app.js", "prefetch/compare.mjs", "prefetch/outcome.mjs", "prefetch/demos.mjs",
+  "prefetch/intro.js", "prefetch/intro.mjs", "prefetch/tune.js", "prefetch/tune.mjs",
 ];
 
 /* ── Text extraction ──────────────────────────────────────────── */
