@@ -46,7 +46,7 @@
     <div class="grid-2">
       <form class="panel" id="traffic-form" autocomplete="off">
         <h2>Your traffic</h2>
-        <p class="small muted">Don't know your numbers? Start from a template:</p>
+        <p class="small muted">New to this? Start from a template:</p>
         <div class="chips" id="templates" role="group" aria-label="Traffic templates"></div>
         <label class="field">
           <span class="field-name">Site sessions per day</span>
@@ -120,8 +120,8 @@
           <span class="field-name">Days per month</span>
           <input type="number" id="in-days" min="1" max="31" value="30" inputmode="numeric">
         </label>
-        <p class="small muted">A typical active account runs a few thousand completions a day at
-        roughly 3k input / 1k output tokens each. Far off that? Re-sweep adoption.</p>
+        <p class="small muted">A typical active account runs a few thousand completions a day
+        at roughly 3k input / 1k output tokens each. Far off? Re-sweep adoption.</p>
       </form>
 
       <div class="stack">
@@ -134,9 +134,9 @@
             <span class="sum-unit">/ month ±50%</span>
           </p>
           <p class="sum-sub" id="sum-annual">—</p>
-          <p class="sum-sub muted">Prices LLM tokens only; indexing, embeddings, storage and discounts are
-          extra (Methodology below).</p>
-          <p class="sum-sub muted" id="sum-note">±50% band. Click a table row to change models.</p>
+          <p class="sum-sub muted">Prices LLM tokens only; indexing, embeddings, storage and
+          discounts are extra (Methodology below).</p>
+          <p class="sum-sub muted" id="sum-note">±50% band. Click a row to change models.</p>
         </div>
 
         <div class="panel">
@@ -267,6 +267,12 @@
   </section>
 
   <!-- ── The model table ──────────────────────────────────────────── -->
+  <section class="panel managed" id="managed-callout" aria-labelledby="managed-h">
+    <h2 id="managed-h">Algolia Managed LLM <span class="tag scope-beta">private beta</span></h2>
+    <p class="managed-figure" id="managed-figure">—</p>
+    <p class="small muted" id="managed-terms"></p>
+    <!-- terms text set by app.js -->
+  </section>
   <section class="panel table-panel" id="models" aria-labelledby="models-h">
     <h2 id="models-h">Monthly cost by model <span class="panel-tag" id="table-tag">at the traffic above</span></h2>
     <p class="small muted">Platform-table rows are what Agent Studio bills; others are context,

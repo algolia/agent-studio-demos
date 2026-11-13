@@ -78,11 +78,27 @@ test("cost band: gpt-4o-mini on the production defaults", () => {
   assert.ok(Math.abs(cost.high - 90.72) < 1e-9);
 });
 
-test("an unpriced model yields no cost, and says why in its source", () => {
-  const m = model("algolia-medium");
-  assert.equal(m.priceScope, null);
+test("an unpriced model yields no cost — null in, null out", () => {
+  const m = { inPerMTok: null, outPerMTok: null };
   assert.equal(Calc.costBand(m, 1_000_000, 1_000_000, 0.5), null);
-  assert.match(m.source, /no (price curated|curated price|public registry)/);
+  assert.equal(Calc.costBandCached(m, 1_000_000, 1_000_000, 50, 0.1, 0.5), null);
+  assert.equal(Calc.costBand(null, 1_000_000, 1_000_000, 0.5), null);
+});
+
+test("managed beta: 500M free tokens, then $0.62 per 1M output only", () => {
+  const m = model("algolia-medium");
+  assert.equal(m.priceScope, "beta");
+  // 200M output tokens: inside the free allowance → $0
+  assert.equal(Calc.costBand(m, 900_000_000, 200_000_000, 0.5).point, 0);
+  // 800M output tokens: 300M over the allowance → 300 × $0.62 = $186
+  const over = Calc.costBand(m, 100_000_000, 800_000_000, 0.5);
+  assert.ok(Math.abs(over.point - 186) < 1e-9);
+  // input tokens never trigger the overage
+  assert.equal(Calc.costBand(m, 2_000_000_000, 100_000_000, 0.5).point, 0);
+  // the provider-cache discount does not apply to managed pricing
+  const cached = Calc.costBandCached(m, 100_000_000, 800_000_000, 90, 0.1, 0.5);
+  assert.ok(Math.abs(cached.point - 186) < 1e-9);
+  assert.match(m.source, /\$0\.62 per 1M output/);
 });
 
 test("auto-synced prices fill gaps and never override curated rows", () => {
@@ -145,7 +161,7 @@ test("eval view: guardrails add one classification per case", () => {
 test("eval view: unpriced agent model yields no agent cost", () => {
   const v = Calc.evalView({
     numCases: 10, iterations: 1, metricCount: 1, roundsMultiplier: 2,
-    modelId: "algolia-medium", judgeModelId: "medium", concurrency: 2, guardrails: false,
+    modelId: "no-such-model", judgeModelId: "medium", concurrency: 2, guardrails: false,
   }, C);
   assert.equal(v.agentCost, null);
   assert.ok(v.assumptions.some((a) => a.includes("No agent cost")));
@@ -231,14 +247,16 @@ test("every model row is well-formed", () => {
     assert.ok(!ids.has(m.id), `duplicate id ${m.id}`);
     ids.add(m.id);
     assert.ok(["available", "deprecated", "legacy"].includes(m.state), `${m.id}: unknown state`);
-    assert.equal(
-      (m.inPerMTok == null) === (m.outPerMTok == null),
-      true, `${m.id}: both prices or neither`
-    );
     if (m.priceScope != null) {
-      assert.ok(["platform", "list", "placeholder", "auto"].includes(m.priceScope), `${m.id}: scope`);
+      assert.ok(["platform", "list", "placeholder", "auto", "beta"].includes(m.priceScope), `${m.id}: scope`);
       assert.ok(m.source && m.source.length > 20, `${m.id}: priced rows name their source`);
+      if (m.priceScope === "beta") {
+        assert.ok(m.managedBeta && m.managedBeta.overagePerMTok > 0, `${m.id}: beta rows carry beta terms`);
+      } else {
+        assert.ok(m.inPerMTok != null && m.outPerMTok != null, `${m.id}: scoped rows are priced`);
+      }
     } else {
+      assert.ok(m.inPerMTok == null && m.outPerMTok == null, `${m.id}: unpriced rows carry no price`);
       assert.match(m.source, /no (price curated|curated price|public registry)/, `${m.id}: unpriced rows say why`);
     }
   }
