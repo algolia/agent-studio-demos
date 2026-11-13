@@ -23,10 +23,10 @@
   </button>
   <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
   <h1>The Shopping Assistant cost calculator</h1>
-  <p class="lede">What does running an AI shopping assistant cost per month?
-  <strong>Bands, not quotes</strong>: every figure is a ±50% range, and every constant
-  behind it is printed on this page — the same ones the platform's estimation API uses.
-  Pick a traffic profile, compare the priced models, then refine with your real prompts.</p>
+  <p class="lede">What does an AI shopping assistant cost per month?
+  <strong>Bands, not quotes</strong>: every figure is a ±50% range built from constants
+  printed on this page. Pick a traffic profile, compare the priced models, refine
+  with your real prompts.</p>
 </header>
 
 <main class="wrap">
@@ -41,7 +41,7 @@
     <div class="grid-2">
       <form class="panel" id="traffic-form" autocomplete="off">
         <h2>Your traffic</h2>
-        <p class="small muted">Don't know your numbers? Start from a template and sweep:</p>
+        <p class="small muted">Don't know your numbers? Start from a template:</p>
         <div class="chips" id="templates" role="group" aria-label="Traffic templates"></div>
         <label class="field">
           <span class="field-name">Site sessions per day</span>
@@ -51,7 +51,7 @@
         <label class="field">
           <span class="field-name">Share who use the assistant <output id="out-adoption">12</output>%</span>
           <input type="range" id="in-adoption" min="1" max="100" value="12">
-          <span class="field-note">adoption is the biggest lever and the least known — sweep it</span>
+          <span class="field-note">adoption is the biggest lever and the least known&nbsp;— sweep it</span>
         </label>
         <label class="field">
           <span class="field-name">Turns per conversation</span>
@@ -76,7 +76,7 @@
         </label>
 
         <fieldset class="sub">
-          <legend>Caching — the two discounts everyone forgets</legend>
+          <legend>Caching&nbsp;— the two discounts everyone forgets</legend>
           <label class="field">
             <span class="field-name">Answers served from Agent Studio's response cache <output id="out-respcache">50</output>%</span>
             <input type="range" id="in-respcache" min="0" max="90" value="50">
@@ -92,27 +92,25 @@
         <fieldset class="sub">
           <legend>Beyond the conversation</legend>
           <label class="check">
-            <input type="checkbox" id="in-pdp"> PDP suggestions — one-shot calls on product pages
+            <input type="checkbox" id="in-pdp"> PDP suggestions&nbsp;— one-shot calls on product pages
           </label>
           <label class="field" id="pdp-count-field">
             <span class="field-name">Suggestion calls per day</span>
             <input type="number" id="in-pdpcalls" min="0" max="10000000" value="3000" inputmode="numeric">
-            <span class="field-note">≈600 tok in / 150 out each; prefixes cache well, so billed cost sits below this ceiling</span>
+            <span class="field-note">≈600&nbsp;tok in / 150 out each; prefixes cache well, so billed cost sits below this ceiling</span>
           </label>
           <label class="check">
             <input type="checkbox" id="in-followups"> Follow-up suggestion chips after each answer
           </label>
-          <span class="field-note">≈250 tok in / 80 out each, once per billed turn</span>
+          <span class="field-note">≈250&nbsp;tok in / 80 out each, once per billed turn</span>
         </fieldset>
 
         <label class="field">
           <span class="field-name">Days per month</span>
           <input type="number" id="in-days" min="1" max="31" value="30" inputmode="numeric">
         </label>
-        <p class="small muted">Sanity line: a typical active Agent Studio account runs a few
-        thousand completions a day at roughly 3k input / 1k output tokens per completion. If
-        your scenario sits an order of magnitude away from the scale you expect, the slider
-        to re-sweep is adoption.</p>
+        <p class="small muted">A typical active account runs a few thousand completions a day at
+        roughly 3k input / 1k output tokens each. Far off that? Re-sweep adoption.</p>
       </form>
 
       <div class="stack">
@@ -125,10 +123,9 @@
             <span class="sum-unit">/ month ±50%</span>
           </p>
           <p class="sum-sub" id="sum-annual">—</p>
-          <p class="sum-sub muted">Prices LLM tokens only — indexing, embeddings, conversation
-          storage, dashboard calls and negotiated discounts are not included (details in
-          Methodology below).</p>
-          <p class="sum-sub muted" id="sum-note">±50% band — click a row of the table to change models.</p>
+          <p class="sum-sub muted">Prices LLM tokens only; indexing, embeddings, storage and discounts are
+          extra (Methodology below).</p>
+          <p class="sum-sub muted" id="sum-note">±50% band. Click a table row to change models.</p>
         </div>
 
         <div class="panel">
@@ -142,10 +139,10 @@
         </div>
 
         <div class="panel">
-          <h2>Anatomy of one agent call <span class="panel-tag" id="anatomy-total">4,000 tok in</span></h2>
+          <h2>Anatomy of one agent call <span class="panel-tag" id="anatomy-total">4,000&nbsp;tok in</span></h2>
           <div class="anatomy" id="anatomy" role="img" aria-label="What one agent call's input tokens are made of"></div>
-          <p class="muted small" id="anatomy-note">The split between frame, records, history and user turn is a
-          fixed assumption, scaled to whatever input total you set.</p>
+          <p class="muted small" id="anatomy-note">The frame/records/history/user split is a fixed assumption, scaled to
+          your input total.</p>
         </div>
       </div>
     </div>
@@ -156,11 +153,10 @@
     <div class="grid-2">
       <form class="panel" id="measure-form" autocomplete="off">
         <h2>Measure your real prompts</h2>
-        <p class="small">The platform counts tokens with its own estimator at
-        <code>POST /1/estimate/tokens</code>. Paste a real system prompt and one real turn;
-        the measured numbers replace the envelope defaults. Your key stays in this tab's
-        fields and in <code>sessionStorage</code> — it is visible in devtools, so use a
-        key scoped to a throwaway app.</p>
+        <p class="small">The platform counts tokens with its own estimator. Paste a real system
+        prompt and one turn; the result replaces the envelope defaults. Your key
+        stays in this tab and <code>sessionStorage</code>&nbsp;— use a throwaway
+        app's key.</p>
         <label class="field">
           <span class="field-name">API host</span>
           <input type="url" id="m-host" value="https://agent-studio.eu.algolia.com" spellcheck="false">
@@ -183,17 +179,16 @@
         </label>
         <label class="field">
           <span class="field-name">A typical answer (counts as output)</span>
-          <textarea id="m-answer" rows="3" placeholder="Great idea — here are three picks…"></textarea>
+          <textarea id="m-answer" rows="3" placeholder="Great idea&nbsp;— here are three picks…"></textarea>
         </label>
         <button type="submit" class="btn">Count with the platform tokenizer</button>
-        <p class="check-row"><button type="button" class="btn btn-ghost" id="m-approx">No key? Use the ≈4 chars/token approximation</button></p>
+        <p class="check-row"><button type="button" class="btn btn-ghost" id="m-approx">No key? Use the ≈4&nbsp;chars/token approximation</button></p>
         <p class="notice" id="m-status" role="status"></p>
       </form>
 
       <div class="panel" id="measure-result">
         <h2>What came back</h2>
-        <p class="muted" id="measure-empty">Nothing measured yet. Results land here and feed the
-        envelope tab's token fields — those fields then show <em>measured</em> next to them.</p>
+        <p class="muted" id="measure-empty">Nothing measured yet; results feed the envelope tab.</p>
         <dl class="tiles" id="measure-tiles" hidden>
           <div class="tile"><dt>Input / turn</dt><dd class="mono" id="mr-in">—</dd></div>
           <div class="tile"><dt>Output / turn</dt><dd class="mono" id="mr-out">—</dd></div>
@@ -209,8 +204,8 @@
     <div class="grid-2">
       <form class="panel" id="eval-form" autocomplete="off">
         <h2>What one External Evaluations run consumes</h2>
-        <p class="small">The PoC-before-production story: measure quality and spend on a dataset
-        before any customer traffic. Same shape as <code>POST /1/estimate/eval-run</code>.</p>
+        <p class="small">Measure quality and spend before any customer traffic. Same shape as
+        <code>POST /1/estimate/eval-run</code>.</p>
         <label class="field">
           <span class="field-name">Cases in the run</span>
           <input type="number" id="e-cases" min="1" max="10000" value="500" inputmode="numeric">
@@ -234,7 +229,7 @@
         <label class="field">
           <span class="field-name">Judge model</span>
           <input type="text" id="e-judge" value="medium" class="mono" spellcheck="false">
-          <span class="field-note">"medium" is the platform default judge alias — unpriced by design</span>
+          <span class="field-note">"medium" is the platform default judge alias&nbsp;— unpriced by design</span>
         </label>
         <label class="field">
           <span class="field-name">Concurrent completions</span>
@@ -258,8 +253,8 @@
   <!-- ── The model table ──────────────────────────────────────────── -->
   <section class="panel table-panel" id="models" aria-labelledby="models-h">
     <h2 id="models-h">Monthly cost by model <span class="panel-tag" id="table-tag">at the traffic above</span></h2>
-    <p class="small muted">Platform-table rows are what Agent Studio actually bills. Other
-    providers are listed for context, priced only where a defensible number exists.</p>
+    <p class="small muted">Platform-table rows are what Agent Studio bills; others are context,
+    priced where a defensible number exists.</p>
     <div class="filters">
       <label>Provider
         <select id="f-provider"><option value="">All</option></select>
@@ -293,39 +288,35 @@
       </table>
     </div>
     <p class="small muted" id="table-price-note"></p>
+    <!-- static fallback replaced by app.js; the static text keeps the gate honest -->
   </section>
 
   <!-- ── Methodology ──────────────────────────────────────────────── -->
   <details class="panel methodology">
-    <summary><h2>Methodology — read this before quoting any number</h2></summary>
+    <summary><h2>Methodology&nbsp;— read this before quoting any number</h2></summary>
     <div class="method-body">
-      <p>These are <strong>order-of-magnitude planning aids, not quotes</strong>. Three rules,
-      inherited from the platform's estimation service:</p>
+      <p>These are <strong>order-of-magnitude planning aids, not quotes</strong>. Three rules:</p>
       <ol>
-        <li>Every constant the arithmetic uses is on this page (see below), so a reader can
-        audit the number instead of trusting it.</li>
-        <li>Every figure is a ±50% band, never a point value. Real deployments land inside
-        the band when the assumptions hold — and the assumptions are the fragile part,
-        adoption above all.</li>
+        <li>Every constant the arithmetic uses is on this page, so a reader audits
+        the number instead of trusting it.</li>
+        <li>Every figure is a ±50% band; deployments land inside it when the
+        assumptions hold.</li>
         <li>A model with no defensible price shows no cost at all. Rows marked
         “no curated price” still estimate tokens; they refuse to invent dollars.</li>
       </ol>
-      <p><strong>Price scopes.</strong> <em>Platform table</em> rows use the exact per-1M-token
-      table your bill is computed from, so an estimate cannot drift from the invoice.
-      <em>List</em> rows are the provider's published price, named and dated. <em>Placeholder</em>
-      rows say so on the row; read the ratio, not the absolute figure.</p>
-      <p><strong>What the model does not price:</strong> embedding and indexing costs, A2A or
-      MCP traffic, conversation storage, the dashboard's own calls, negotiated provider
-      discounts. The right workflow is still the one we recommend: run a PoC, measure actual
-      consumption, extrapolate — this calculator is how you size the PoC and sanity-check the
-      extrapolation.</p>
+      <p><strong>Price scopes.</strong> <em>Platform table</em> rows use the exact
+      per-1M-token table your bill is computed from, so an estimate cannot drift from the
+      invoice. <em>List</em> rows are the provider's published price, named and dated.
+      <em>Placeholder</em> rows say so; read the ratio, not the figure.</p>
+      <p><strong>Not priced:</strong> embeddings, indexing, A2A or MCP traffic, storage,
+      dashboard calls, discounts. The workflow stays: run a PoC, measure,
+      extrapolate; this sizes the PoC and checks the extrapolation.</p>
       <div class="constants" id="constants-list"></div>
     </div>
   </details>
 
-  <p class="footnote">Arithmetic mirrors the platform's estimation service; the model table is
-  curated by hand and says where every price came from. Corrections welcome in
-  <code>agent-studio-demos/public/calculator/data.js</code>.</p>
+  <p class="footnote">Arithmetic mirrors the platform's estimation service; every price names
+  its source. Corrections welcome in <code>data.js</code>.</p>
 </main>
 
 <script src="data.js"></script>
