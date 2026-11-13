@@ -31,17 +31,9 @@
 <link rel="stylesheet" href="../shared/tokens.css">
 <link rel="stylesheet" href="../shared/meter.css">
 <link rel="stylesheet" href="style.css">
+<script src="../shared/theme.js"></script>
 <script>
-  /* Resolve the theme before first paint, or the page flashes the wrong one.
-     Stored choice wins; otherwise the OS preference decides. */
-  (function () {
-    var saved = null;
-    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
-    var dark = saved ? saved === "dark"
-      : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-  })();
-  /* And the language, on the same terms and for the same reason. Only the
+  /* The language, on the same terms as the theme in shared/theme.js. Only the
      document's own language attributes are set here — the copy is swapped in
      app.js, which runs before first paint at the end of body. What this buys is
      that `lang` is right from the first byte a screen reader or a :lang() rule

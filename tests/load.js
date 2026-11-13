@@ -57,4 +57,24 @@ function loadExampleConfig() {
   return globalThis.DEMO_CONFIG;
 }
 
-module.exports = { loadRenderMarkdown, loadExampleConfig, loadMeter, loadBooks };
+/** the cost calculator's constants and curated model table */
+function loadCalcData() {
+  require(path.join(__dirname, "..", "public", "calculator", "data.js"));
+  if (!globalThis.CALC_DATA) {
+    throw new Error("data.js did not publish window.CALC_DATA");
+  }
+  return globalThis.CALC_DATA;
+}
+
+/** the cost calculator's pure arithmetic */
+function loadCalc() {
+  if (!globalThis.window) globalThis.window = globalThis;
+  loadCalcData();
+  require(path.join(__dirname, "..", "public", "calculator", "calc.js"));
+  if (!globalThis.Calc) {
+    throw new Error("calc.js did not publish window.Calc");
+  }
+  return globalThis.Calc;
+}
+
+module.exports = { loadRenderMarkdown, loadExampleConfig, loadMeter, loadBooks, loadCalcData, loadCalc };

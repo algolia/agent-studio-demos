@@ -81,6 +81,21 @@ that overflows in front of a visitor is not demonstrating anything.
 
 One declaration per token, both themes inside it via `light-dark()`. Violet is
 action; pink (`--crease`) is the fold and everything the fold makes possible.
+Also ships the `.theme-toggle` button skin for `theme.js` — positioning it is
+the demo's business.
+
+### `theme.js` → `window.DemoTheme`
+
+The kit's single owner of light / auto / dark. Load it as a blocking head
+script (`<script src="../shared/theme.js"></script>`) and never paste the old
+inline boot again: it sets `data-theme` before first paint, auto is the
+default (stored `ic-theme` choice wins, else the OS preference, live), and any
+`<button data-theme-toggle>` — with optional `[data-theme-glyph]` /
+`[data-theme-label]` children — cycles auto → light → dark for free. The API:
+`mode()`, `resolved()`, `set(m)`, `toggle()`, `onChange(fn)`. Two exceptions
+know their reasons: the landing page predates the module (its toggle now uses
+it), and jev-attributes must keep its boot inline because its CSP whitelists
+that script's hash.
 
 ### `md.js` → `window.renderMarkdown(src)`
 

@@ -96,7 +96,7 @@ const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm,
 test("the Game loads no live code and calls nothing but its static exam", () => {
   const html = fs.readFileSync(path.join(GAME, "index.html"), "utf8");
   const srcs = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(srcs, ["../guardrails-arena/csv.js", "../guardrails-arena/stats.js", "../guardrails-arena/label-game.js", "game-ui.js"]);
+  assert.deepEqual(srcs, ["../shared/theme.js", "../guardrails-arena/csv.js", "../guardrails-arena/stats.js", "../guardrails-arena/label-game.js", "game-ui.js"]);
   const fetched = [];
   for (const src of srcs) {
     const js = strip(fs.readFileSync(path.join(GAME, src), "utf8"));

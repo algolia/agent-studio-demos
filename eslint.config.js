@@ -62,6 +62,8 @@ const browserGlobals = {
   DemoMeter: "readonly",
   DemoCompactor: "readonly",
   renderMarkdown: "readonly",
+  CALC_DATA: "readonly",
+  Calc: "readonly",
 };
 
 /* Node, for the conversation generator under tools/. It is not a browser

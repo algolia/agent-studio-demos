@@ -9,6 +9,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 
 | Demo | Path | Status |
 | --- | --- | --- |
+| The cost calculator | `/calculator/` | Live |
 | What is Agent Studio? | `/main-demo/` | Production, once its two agents are provisioned |
 | Jev trims the record | `/jev-attributes/` | Local; public with your own key once this site forwards it |
 | Chat with a book | `/chat-with-book/` | Live |
@@ -24,6 +25,7 @@ public/                     the deployable root — this is what Cloudflare Page
   index.html                landing page, one card per demo
   shared/                   the demo kit — see CONTRIBUTING.md § The demo kit
     tokens.css              the design language: colors, fonts, spacing, base primitives
+    theme.js                the one owner of light/auto/dark (window.DemoTheme)
     md.js                   vendored sanitizing markdown renderer (window.renderMarkdown)
     meter.js                the cost strip: cost model, mode switch, rendering (window.DemoMeter)
     meter.css               the cost strip's styling, linked after tokens.css
@@ -37,6 +39,8 @@ public/                     the deployable root — this is what Cloudflare Page
   infinite-conversation/    index.html + app.js + style.css
   main-demo/                index.html + app.js + lane.js + style.css, and six .mjs modules
   guardrails-arena/         index.html + app.js + style.css, and data/ with frozen results
+  calculator/               index.html + app.js + calc.js + data.js + style.css — cost arithmetic,
+                            curated model table, node-tested against the platform's constants
   guardrails-game/          index.html + game-ui.js, on the Arena's csv.js, stats.js and label-game.js
   memoires/                 index.html + shared.js, three memory configurations side by side
 scripts/                    node, zero dependencies — see § The shelf and § The search index

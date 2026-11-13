@@ -14,15 +14,7 @@
 <link rel="stylesheet" href="../main-demo/style.css">
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:,">
-<script>
-  (function () {
-    var saved = null;
-    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
-    var dark = saved ? saved === "dark"
-      : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-  })();
-</script>
+<script src="../shared/theme.js"></script>
 
 <!-- The lanes are main-demo's: the same pinned packages, one shared React. -->
 <script type="importmap">
