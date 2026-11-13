@@ -38,6 +38,12 @@
     return `${n < -1e-12 ? "−" : ""}$${a < 1 ? a.toFixed(4) : a.toFixed(2)}`;
   }
 
+  /* A zero band is a fact (the managed beta's free tier), not a number to
+     display: "$0.0000" reads as a bug, "free" reads as the good news it is. */
+  function usdOrFree(cost) {
+    return !cost ? "unpriced" : cost.point === 0 ? "free" : usd(cost.point);
+  }
+
   function band(point, ratio) {
     const p = Math.max(0, Number(point) || 0);
     const r = Number.isFinite(ratio) ? ratio : 0.5;
@@ -50,17 +56,11 @@
   }
 
   /* A model's blended monthly cost from billed tokens. Null when the model
-     carries no price — mirroring find_pricing's "unpriced, not zero".
-     Managed-beta models price differently: a free token allowance first,
-     then a flat per-1M overage — output tokens only, per the beta's terms. */
+     carries no price — mirroring find_pricing's "unpriced, not zero". The
+     managed model is deliberately unpriced here: it is included in plans
+     and this page estimates BYOK costs only. */
   function costBand(model, inputTokens, outputTokens, ratio) {
     if (!model) return null;
-    if (model.managedBeta) {
-      const billable =
-        model.managedBeta.overageOn === "output" ? outputTokens : inputTokens + outputTokens;
-      const overage = Math.max(0, billable - model.managedBeta.freeTokensPerMonth);
-      return band((overage / 1000000) * model.managedBeta.overagePerMTok, ratio);
-    }
     if (model.inPerMTok == null || model.outPerMTok == null) return null;
     const point =
       (inputTokens / 1000000) * model.inPerMTok + (outputTokens / 1000000) * model.outPerMTok;
@@ -75,7 +75,6 @@
      tokens outright. */
   function costBandCached(model, inputTokens, outputTokens, providerCachePct, discount, ratio) {
     if (!model) return null;
-    if (model.managedBeta) return costBand(model, inputTokens, outputTokens, ratio);
     if (model.inPerMTok == null || model.outPerMTok == null) return null;
     const share = Math.min(Math.max(providerCachePct || 0, 0), 95) / 100;
     const inMultiplier = 1 - share + share * discount;
@@ -273,10 +272,36 @@
     return Math.ceil((text || "").length / 4);
   }
 
+  /* ── Shareable state ───────────────────────────────────────────────
+     The calculator's whole input state travels in the URL as one
+     base64url-encoded JSON blob (?s=…), so "copy/paste" copies values,
+     not just a link someone has to re-derive. Both directions are pure
+     and tested; a corrupted blob decodes to null and the page boots on
+     its defaults rather than half-state. */
+
+  function encodeState(state) {
+    const json = JSON.stringify(state);
+    const b64 = btoa(unescape(encodeURIComponent(json)));
+    return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function decodeState(str) {
+    if (!str) return null;
+    try {
+      const b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+      const json = decodeURIComponent(escape(atob(b64)));
+      const state = JSON.parse(json);
+      return state && typeof state === "object" ? state : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   global.Calc = {
     fmtInt,
     shortTokens,
     usd,
+    usdOrFree,
     band,
     usdRange,
     costBand,
@@ -285,5 +310,7 @@
     evalView,
     anatomy,
     approximateTokens,
+    encodeState,
+    decodeState,
   };
 })(window);

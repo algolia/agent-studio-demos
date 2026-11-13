@@ -67,6 +67,24 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .sub { border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: 12px 14px 4px; margin: 0 0 14px; }
 .sub legend { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); padding: 0 6px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 16px; }
+.chips.mini { margin: 2px 0 6px; }
+.chips.mini button {
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--ink-2); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+}
+.chips.mini button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Tooltips: opt-in depth on hover or keyboard focus. */
+[data-tip] { position: relative; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 6;
+  width: min(320px, 72vw); box-sizing: border-box;
+  background: var(--ink); color: var(--paper);
+  font-size: 12px; font-weight: 400; line-height: 1.45; text-align: left;
+  padding: 8px 10px; border-radius: var(--radius); white-space: normal;
+}
 .chip {
   font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
   color: var(--accent); background: var(--accent-soft);
@@ -89,7 +107,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 
 /* ── Conversation skeleton ────────────────────────────────────────── */
 .conv { display: grid; gap: 5px; }
-.conv-row { display: grid; grid-template-columns: minmax(60px, var(--w, 1fr)) 150px 1fr; gap: 10px; align-items: center; min-height: 20px; }
+.conv-row { display: grid; grid-template-columns: minmax(50px, var(--w, 1fr)) 170px 150px 1fr; gap: 10px; align-items: center; min-height: 20px; }
+.conv-subtotal { border-top: 1px dashed var(--line-strong); padding-top: 4px; }
+.conv-subtotal .conv-label { color: var(--ink); }
+.conv-tok { font-size: 11.5px; color: var(--accent); white-space: nowrap; }
 .conv-bar {
   height: 16px; border-radius: 8px; background: var(--accent-soft);
   border: 1px solid var(--line); width: 100%;
@@ -105,6 +126,22 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   background-image: repeating-linear-gradient(135deg, var(--crease), var(--crease) 6px, transparent 6px, transparent 10px);
 }
 .conv-more { opacity: 0.6; }
+.conv-guard .conv-bar {
+  height: 8px;
+  background-image: repeating-linear-gradient(135deg, var(--warn), var(--warn) 4px, transparent 4px, transparent 8px);
+}
+.conv-follow .conv-bar { height: 10px; }
+.conv-follow .conv-bar {
+  background-image: repeating-linear-gradient(135deg, var(--crease), var(--crease) 4px, transparent 4px, transparent 8px);
+}
+.conv-cached .conv-bar {
+  background: transparent; border-style: dashed; border-color: var(--ok);
+}
+.conv-cached .conv-label { color: var(--ok); }
+.conv-pdp .conv-bar {
+  background-image: repeating-linear-gradient(135deg, var(--accent), var(--accent) 3px, transparent 3px, transparent 7px);
+  height: 10px;
+}
 .conv-label { font-size: 12px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
 .conv-note { font-size: 11.5px; color: var(--ink-3); }
 .check input { accent-color: var(--accent); }
@@ -198,6 +235,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .cost-table tbody tr:hover { background: var(--accent-soft); }
 .cost-table tbody tr.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
 .cost-table tr[data-unpriced="1"] { color: var(--ink-3); }
+.cost-table td.cost-cell { white-space: nowrap; }
+.cost-cell .cost-bar { display: inline-block; vertical-align: middle; width: 62%; margin-right: 10px; }
 .model-name { font-family: var(--mono); font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .model-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); flex: none; }
 .tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--line-strong); border-radius: 3px; padding: 1px 5px; color: var(--ink-3); }
