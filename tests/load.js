@@ -57,8 +57,11 @@ function loadExampleConfig() {
   return globalThis.DEMO_CONFIG;
 }
 
-/** the cost calculator's constants and curated model table */
+/** the cost calculator's constants and curated model table, merged with
+    the generated auto prices when prices.auto.js exists (it does in CI) */
 function loadCalcData() {
+  const autoPath = path.join(__dirname, "..", "public", "calculator", "prices.auto.js");
+  try { require(autoPath); } catch (e) { /* not generated yet — curated rows only */ }
   require(path.join(__dirname, "..", "public", "calculator", "data.js"));
   if (!globalThis.CALC_DATA) {
     throw new Error("data.js did not publish window.CALC_DATA");
