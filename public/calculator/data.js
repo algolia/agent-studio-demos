@@ -289,19 +289,34 @@
         source: "In the registry as the fast tier; no price curated yet.",
       },
 
-      /* ── Algolia managed LLM ───────────────────────────────────────── */
+      /* ── Algolia managed LLM (Private Beta) ──────────────────────────
+         Beta terms, per Eeshat's answer in #proj-agent-studio (Nov 13):
+         $0 for the first 500M tokens a month, then $0.62 per 1M OUTPUT
+         tokens, invoiced monthly; 4-month beta. GA pricing is not set
+         and will differ. */
       {
-        id: "algolia-small", label: "Algolia managed · small", provider: "algolia",
-        state: "available", contextWindow: null, inPerMTok: 0.1, outPerMTok: 0.1,
-        priceScope: "placeholder",
-        source: "Internal model — illustrative pricing. There is no public list price for it, " +
-          "so $0.10 / $0.10 per million tokens is a placeholder chosen to keep the arithmetic " +
-          "readable, not a quote. Read the ratio, not the absolute figure.",
+        id: "algolia-medium", label: "Algolia Managed LLM", provider: "algolia",
+        state: "available", contextWindow: null, inPerMTok: null, outPerMTok: null,
+        priceScope: "beta", featured: true,
+        managedBeta: { freeTokensPerMonth: 500000000, overagePerMTok: 0.62, overageOn: "output" },
+        source: "Private Beta pricing (Eeshat, #proj-agent-studio, Nov 13): $0 for the first " +
+          "500M tokens a month, then $0.62 per 1M output tokens. 4-month beta; GA pricing " +
+          "will differ — talk to your AE or CSM.",
       },
       {
-        id: "algolia-medium", label: "Algolia managed · medium", provider: "algolia",
-        state: "available", contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
-        source: "The managed flagship alias; no public registry prices it and no curated price exists.",
+        id: "algolia-small", label: "Algolia Managed LLM · fast tier", provider: "algolia",
+        state: "available", contextWindow: null, inPerMTok: null, outPerMTok: null,
+        priceScope: "beta",
+        managedBeta: { freeTokensPerMonth: 500000000, overagePerMTok: 0.62, overageOn: "output" },
+        source: "Same Private Beta pricing as the managed LLM (Eeshat, Nov 13): $0 to 500M tokens/month, then $0.62 per 1M output.",
+      },
+      {
+        id: "gemma-4-31b", label: "gemma-4-31b (OSS)", provider: "google",
+        state: "available", contextWindow: 262144, inPerMTok: 0.2, outPerMTok: 0.4,
+        priceScope: "list",
+        source: "OpenRouter list price for google/gemma-4-31b-it ($0.20 in / $0.40 out per million " +
+          "tokens, Nov 2026). Per Eeshat: gemma on Algolia bare metal is not live, so the OSS " +
+          "list price is the honest number; bring your own provider key.",
       },
     ],
 

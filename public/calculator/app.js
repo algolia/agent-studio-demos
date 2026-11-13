@@ -19,7 +19,7 @@
   const Calc = window.Calc;
 
   const state = {
-    selectedModel: "gpt-5.6-luna",
+    selectedModel: "algolia-medium",
     measured: null, // { inputTokens, outputTokens, method, approximate }
   };
 
@@ -214,6 +214,26 @@
       (p.followups ? " + follow-up chips" : "");
   }
 
+  /* The managed-LLM callout: our own model, beta terms, the first number
+     a visitor sees — and the honest caveat that GA pricing will differ. */
+  function renderManaged(v) {
+    const model = C.models.find((m) => m.id === "algolia-medium");
+    const cost = cachedCost(v);
+    const fig = $("managed-figure");
+    if (!cost) {
+      fig.textContent = "—";
+    } else if (cost.point === 0) {
+      const pct = Math.min(100, Math.round((v.tokensMonth / model.managedBeta.freeTokensPerMonth) * 100));
+      fig.textContent = `Free at this traffic — ${pct}% of the 500M free tokens/month`;
+    } else {
+      fig.textContent =
+        `from ${Calc.usd(cost.low)} · est ${Calc.usd(cost.point)} · up to ${Calc.usd(cost.high)} / month`;
+    }
+    $("managed-terms").textContent =
+      "First 500M tokens/month free, then $0.62 per 1M output tokens, invoiced monthly. " +
+      "4-month beta; GA pricing will differ — talk to your AE or CSM to join.";
+  }
+
   function renderSummary(v, p) {
     const model = C.models.find((m) => m.id === state.selectedModel);
     const cost = cachedCost(v);
@@ -377,7 +397,8 @@
       tag.className = `tag scope-${m.priceScope}`;
       tag.textContent = m.priceScope === "platform" ? "platform table"
         : m.priceScope === "list" ? "list price"
-        : m.priceScope === "auto" ? "auto-synced" : "illustrative";
+        : m.priceScope === "auto" ? "auto-synced"
+        : m.priceScope === "beta" ? "private beta" : "illustrative";
       tags.push(tag);
     }
     if (m.state !== "available") {
@@ -446,6 +467,7 @@
     renderConversation(p);
     renderAnatomy(p);
     renderSummary(v, p);
+    renderManaged(v);
     renderTable(v);
     renderEval();
   }

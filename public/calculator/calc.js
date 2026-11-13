@@ -50,9 +50,18 @@
   }
 
   /* A model's blended monthly cost from billed tokens. Null when the model
-     carries no price — mirroring find_pricing's "unpriced, not zero". */
+     carries no price — mirroring find_pricing's "unpriced, not zero".
+     Managed-beta models price differently: a free token allowance first,
+     then a flat per-1M overage — output tokens only, per the beta's terms. */
   function costBand(model, inputTokens, outputTokens, ratio) {
-    if (!model || model.inPerMTok == null || model.outPerMTok == null) return null;
+    if (!model) return null;
+    if (model.managedBeta) {
+      const billable =
+        model.managedBeta.overageOn === "output" ? outputTokens : inputTokens + outputTokens;
+      const overage = Math.max(0, billable - model.managedBeta.freeTokensPerMonth);
+      return band((overage / 1000000) * model.managedBeta.overagePerMTok, ratio);
+    }
+    if (model.inPerMTok == null || model.outPerMTok == null) return null;
     const point =
       (inputTokens / 1000000) * model.inPerMTok + (outputTokens / 1000000) * model.outPerMTok;
     return band(point, ratio);
@@ -60,9 +69,14 @@
 
   /* Same, after provider prompt caching: the cached share of input tokens
      bills at the provider's cache-read rate (≈10% of input price on OpenAI
-     and Anthropic). Output never caches. */
+     and Anthropic). Output never caches. Managed-beta models bill by total
+     tokens against their free allowance, so a provider-cache discount does
+     not apply to them — the response cache still helps, because it removes
+     tokens outright. */
   function costBandCached(model, inputTokens, outputTokens, providerCachePct, discount, ratio) {
-    if (!model || model.inPerMTok == null || model.outPerMTok == null) return null;
+    if (!model) return null;
+    if (model.managedBeta) return costBand(model, inputTokens, outputTokens, ratio);
+    if (model.inPerMTok == null || model.outPerMTok == null) return null;
     const share = Math.min(Math.max(providerCachePct || 0, 0), 95) / 100;
     const inMultiplier = 1 - share + share * discount;
     const point =
