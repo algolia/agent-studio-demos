@@ -593,15 +593,6 @@
         return;
       }
     } catch (e) { /* no stored credentials */ }
-    // shared/config.js (gitignored, like every demo) prefills the form so a
-    // configured machine goes zero-click; the fields stay editable and any
-    // edit takes over via saveCredentials.
-    const cfg = window.DEMO_CONFIG;
-    if (cfg && cfg.appId && cfg.apiKey) {
-      if (cfg.host) $("m-host").value = cfg.host;
-      $("m-appid").value = cfg.appId;
-      $("m-key").value = cfg.apiKey;
-    }
   }
 
   function setStatus(text, cls) {
