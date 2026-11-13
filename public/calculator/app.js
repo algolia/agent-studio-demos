@@ -19,8 +19,10 @@
   const Calc = window.Calc;
 
   const state = {
-    selectedModel: "gpt-5.6-luna",
+    selectedModel: "claude-haiku-5-5",
     measured: null, // { inputTokens, outputTokens, method, approximate }
+    measuredStats: null, // Calc.conversationStats result
+    measuredConvDay: null,
   };
 
   /* ── Tabs ─────────────────────────────────────────────────────────── */
@@ -56,7 +58,7 @@
       pdp: $("in-pdp").checked,
       pdpCallsPerDay: num("in-pdpcalls", 3000),
       followups: $("in-followups").checked,
-      daysPerMonth: num("in-days", 30),
+      daysPerMonth: 365 / 12,
     };
   }
 
@@ -88,7 +90,9 @@
     const cost = cachedCost(v);
     const rows = [
       { label: "Sessions / day", value: Calc.fmtInt(p.sessionsPerDay), frac: 1 },
-      { label: "Conversations / day", value: Calc.fmtInt(v.conversationsPerDay), frac: v.conversationsPerDay / p.sessionsPerDay },
+      { label: v.measuredPerDay ? "Conversations / day · measured" : "Conversations / day",
+        value: Calc.fmtInt(v.conversationsPerDay),
+        frac: Math.min(1, v.conversationsPerDay / Math.max(1, p.sessionsPerDay)) },
       { label: "Turns / day", value: Calc.fmtInt(v.turnsPerDay), frac: v.turnsPerDay / p.sessionsPerDay },
       { label: "Turns billed / day", value: Calc.fmtInt(v.turnsBilledPerDay), frac: v.turnsBilledPerDay / p.sessionsPerDay },
       { label: "LLM calls / day", value: Calc.fmtInt(v.callsBilledPerDay), frac: v.callsBilledPerDay / p.sessionsPerDay },
@@ -502,7 +506,7 @@
   }
 
   for (const id of ["in-sessions", "in-adoption", "in-turns", "in-rounds", "in-tokin", "in-tokout",
-    "in-guardrails", "in-days", "in-respcache", "in-provcache", "in-pdp", "in-pdpcalls", "in-followups"]) {
+    "in-guardrails", "in-respcache", "in-provcache", "in-pdp", "in-pdpcalls", "in-followups"]) {
     $(id).addEventListener("input", renderAll);
   }
   $("in-adoption").addEventListener("input", () => { $("out-adoption").value = $("in-adoption").value; });
@@ -525,13 +529,13 @@
     opt.textContent = p.label;
     $("f-provider").append(opt);
   }
-  for (const m of C.models.filter((m) => m.priceScope === "platform")) {
+  for (const m of C.models.filter((m) => m.priceScope != null && !m.included)) {
     const opt = document.createElement("option");
     opt.value = m.id;
     opt.textContent = m.label;
     $("e-model").append(opt);
   }
-  $("e-model").value = "gpt-5.6-luna";
+  $("e-model").value = "claude-haiku-5-5";
 
   /* ── Methodology constants ────────────────────────────────────────── */
 
@@ -710,6 +714,61 @@
     setStatus("Approximated locally — nothing left this page.", "ok");
   });
 
+  /* Real traffic means real conversations: the app's own history carries
+     message counts and token totals per conversation, so one page of it
+     replaces the envelope's guesses with measurements. Needs a key with
+     the `logs` ACL. */
+  function renderMeasuredTiles(stats) {
+    $("conv-tiles").hidden = !stats;
+    $("conv-apply-row").hidden = !stats;
+    if (!stats) return;
+    $("mc-sample").textContent = `${stats.sample} conv · ${stats.sampleDays}d`;
+    $("mc-turns").textContent = String(stats.medianTurns);
+    $("mc-tokens").textContent = `${Calc.shortTokens(stats.medianTokensIn)} in / ${Calc.shortTokens(stats.medianTokensOut)} out`;
+    $("mc-cpd").textContent = stats.conversationsPerDay.toFixed(1);
+  }
+
+  $("m-conv-btn").addEventListener("click", async () => {
+    saveCredentials();
+    const creds = { host: $("m-host").value.trim(), appId: $("m-appid").value.trim(), key: $("m-key").value };
+    if (!creds.host || !creds.appId || !creds.key) {
+      setStatus("Fill in host, application ID and API key first — conversations need real credentials.", "err");
+      return;
+    }
+    setStatus("Pulling conversations…");
+    try {
+      const agentId = $("m-agents").value ? `&agent_id=${$("m-agents").value}` : "";
+      const data = await fetchJson(`/1/conversations?page=1&limit=100${agentId}`, creds);
+      const items = data.data || [];
+      const stats = Calc.conversationStats(items);
+      state.measuredStats = stats;
+      renderMeasuredTiles(stats);
+      if (!stats) {
+        setStatus("No conversations found on this app yet.", "err");
+      } else {
+        setStatus(`Measured ${stats.sample} conversations over ${stats.sampleDays} days. Apply them below.`, "ok");
+      }
+    } catch (err) {
+      setStatus(`Pull failed (${err.message}). The key needs the logs ACL for conversations.`, "err");
+    }
+  });
+
+  $("m-apply-conv").addEventListener("click", () => {
+    const stats = state.measuredStats;
+    if (!stats) return;
+    state.measuredConvDay = stats.conversationsPerDay;
+    $("in-turns").value = Math.max(1, Math.min(50, stats.medianTurns));
+    renderAll();
+    setStatus("Envelope now runs on measured conversations/day and the median turn count.", "ok");
+  });
+
+  $("m-clear-conv").addEventListener("click", () => {
+    state.measuredConvDay = null;
+    renderMeasuredTiles(null);
+    renderAll();
+    setStatus("Measured override cleared — back to sessions × adoption.", "ok");
+  });
+
   /* Real traffic means real prompts: the app's own agents, listed and
      pulled with the credentials above, supply their actual system prompt.
      That is a template nobody had to invent. */
@@ -793,11 +852,11 @@
     ["sessions", "in-sessions"], ["adoption", "in-adoption"], ["turns", "in-turns"],
     ["rounds", "in-rounds"], ["tokin", "in-tokin"], ["tokout", "in-tokout"],
     ["guard", "in-guardrails"], ["resp", "in-respcache"], ["prov", "in-provcache"],
-    ["pdp", "in-pdp"], ["pdpcalls", "in-pdpcalls"], ["follow", "in-followups"], ["days", "in-days"],
+    ["pdp", "in-pdp"], ["pdpcalls", "in-pdpcalls"], ["follow", "in-followups"],
   ];
 
   function currentState() {
-    const s = { model: state.selectedModel };
+    const s = { model: state.selectedModel, measured: state.measuredConvDay || undefined };
     for (const [key, id] of STATE_FIELDS) {
       const el = $(id);
       s[key] = el.type === "checkbox" ? el.checked : el.value;

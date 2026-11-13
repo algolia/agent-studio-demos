@@ -125,11 +125,8 @@
           <span class="field-note">≈250&nbsp;tok in / 80 out each, once per billed turn</span>
         </fieldset>
 
-        <label class="field">
-          <span class="field-name">Days per month</span>
-          <input type="number" id="in-days" min="1" max="31" value="30" inputmode="numeric">
-        </label>
-        <p class="small muted">A typical active account runs a few thousand completions a
+
+        <p class="small muted">A typical account runs a few thousand completions a
         day; a median conversation carries ≈15–20k&nbsp;tokens. Far off? Re-sweep adoption.</p>
       </form>
 
@@ -174,8 +171,8 @@
     <div class="grid-2">
       <form class="panel" id="measure-form" autocomplete="off">
         <h2>Measure your real prompts</h2>
-        <p class="small">The platform counts tokens with its own estimator. Paste a real
-        system prompt and one turn; the result replaces the defaults. Your key stays in
+        <p class="small">The platform counts tokens with its own estimator. Paste a system
+        prompt and a turn; the result replaces the defaults. Key stays in
         <code>sessionStorage</code>&nbsp;— use a throwaway app's key.</p>
         <label class="field">
           <span class="field-name">API host</span>
@@ -207,13 +204,24 @@
           <span class="field-name">Pick an agent&nbsp;— its real system prompt fills the field above</span>
           <select id="m-agents" class="mono"></select>
         </label>
+        <p class="check-row"><button type="button" class="btn btn-ghost" id="m-conv-btn">Pull real conversations from this app</button></p>
+        <dl class="tiles" id="conv-tiles" hidden>
+          <div class="tile"><dt>Sample</dt><dd class="mono" id="mc-sample">—</dd></div>
+          <div class="tile"><dt>Median turns</dt><dd class="mono" id="mc-turns">—</dd></div>
+          <div class="tile"><dt>Median tokens / conversation</dt><dd class="mono" id="mc-tokens">—</dd></div>
+          <div class="tile"><dt>Conversations / day</dt><dd class="mono" id="mc-cpd">—</dd></div>
+        </dl>
+        <p class="check-row" id="conv-apply-row" hidden>
+          <button type="button" class="btn" id="m-apply-conv">Use these numbers in the envelope</button>
+          <button type="button" class="btn btn-ghost" id="m-clear-conv">Clear measured</button>
+        </p>
         <p class="check-row"><button type="button" class="btn btn-ghost" id="m-approx">No key? Use the ≈4&nbsp;chars/token approximation</button></p>
         <p class="notice" id="m-status" role="status"></p>
       </form>
 
       <div class="panel" id="measure-result">
         <h2>What came back</h2>
-        <p class="muted" id="measure-empty">Nothing measured yet; results feed the envelope.</p>
+        <p class="muted" id="measure-empty">Nothing measured yet.</p>
         <dl class="tiles" id="measure-tiles" hidden>
           <div class="tile"><dt>Input / turn</dt><dd class="mono" id="mr-in">—</dd></div>
           <div class="tile"><dt>Output / turn</dt><dd class="mono" id="mr-out">—</dd></div>
@@ -328,21 +336,19 @@
     <div class="method-body">
       <p><strong>Order-of-magnitude planning aids, not quotes.</strong> Three rules:</p>
       <ol>
-        <li>Every constant is on this page, so a reader audits numbers instead of
-        trusting them.</li>
+        <li>Every constant is on this page; readers audit numbers instead of trusting them.</li>
         <li>Every figure is a ±50% band; deployments land inside it when the
         assumptions hold.</li>
         <li>A model without a defensible price shows no cost. “No curated price” rows
         count tokens; they refuse to invent dollars.</li>
       </ol>
       <p><strong>Price scopes.</strong> <em>Platform</em> rows use the exact per-1M table
-      your bill comes from&nbsp;— estimate and invoice cannot drift. <em>List</em> rows are
-      published prices, named and dated. <em>Placeholders</em> say so.</p>
+      your bill comes from&nbsp;— estimate and invoice cannot drift. <em>List</em> rows are published, dated prices.
+      <em>Placeholders</em> say so.</p>
       <p><strong>How this maps to packaging.</strong> At GA, tokens leave the invoice: plans
       carry a platform fee plus an interaction envelope&nbsp;— one interaction per turn; cache
-      hits, guardrail blocks and bots excluded; alerts at 80% and 100%. The managed model is
-      included, never priced in tokens. These bands are the stand-in until approved pricing
-      ships. Not priced: embeddings, indexing, storage.</p>
+      hits, guardrail blocks and bots excluded; alerts at 80% and 100%. The managed model is included, never priced in tokens&nbsp;— these
+      bands are the BYOK stand-in. Not priced: embeddings, indexing, storage.</p>
       <div class="constants" id="constants-list"></div>
     </div>
   </details>

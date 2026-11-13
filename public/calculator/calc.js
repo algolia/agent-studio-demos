@@ -101,7 +101,8 @@
   function productionView(p, data) {
     const c = data.constants;
     const days = p.daysPerMonth;
-    const conversationsPerDay = p.sessionsPerDay * (p.adoptionPct / 100);
+    const measuredPerDay = Number(p.measuredConversationsPerDay) || null;
+    const conversationsPerDay = measuredPerDay ?? p.sessionsPerDay * (p.adoptionPct / 100);
     const turnsPerDay = conversationsPerDay * p.turnsPerConversation;
     const agentCallsPerDay = turnsPerDay * p.roundsPerTurn;
 
@@ -134,7 +135,9 @@
       callsBilledPerDay * days * p.outputTokensPerTurnCall + extraOutMonth + guardrailOut;
 
     const assumptions = [
-      `${fmtInt(conversationsPerDay)} conversations/day = ${fmtInt(p.sessionsPerDay)} site sessions × ${p.adoptionPct}% adoption.`,
+      measuredPerDay
+        ? `${fmtInt(conversationsPerDay)} conversations/day — measured on real traffic, overriding the sessions × adoption sliders.`
+        : `${fmtInt(conversationsPerDay)} conversations/day = ${fmtInt(p.sessionsPerDay)} site sessions × ${p.adoptionPct}% adoption.`,
       `${fmtInt(turnsPerDay)} turns/day = conversations × ${p.turnsPerConversation} turns.`,
       `${fmtInt(agentCallsPerDay)} agent LLM calls/day before caching = turns × ${p.roundsPerTurn} rounds (the tool-call loop).`,
       `One round: ${fmtInt(p.inputTokensPerRound)} input + ${fmtInt(p.outputTokensPerTurnCall)} output tokens.`,
@@ -174,6 +177,7 @@
 
     return {
       conversationsPerDay,
+      measuredPerDay,
       turnsPerDay,
       agentCallsPerDay,
       callsBilledPerDay,
@@ -272,6 +276,40 @@
     return Math.ceil((text || "").length / 4);
   }
 
+  /* ── Measured traffic ───────────────────────────────────────────────
+     The conversations API already stores message_count and the token
+     totals per conversation, so a page of real conversations measures
+     what the envelope tab otherwise guesses: turns per conversation,
+     tokens per conversation, and a conversations-per-day rate from the
+     sample's date span. Pure and tested; null on an empty sample. */
+
+  function median(arr) {
+    const s = [...arr].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+
+  function conversationStats(conversations) {
+    if (!Array.isArray(conversations) || !conversations.length) return null;
+    const pick = (c, camel, snake) => c[camel] ?? c[snake] ?? 0;
+    const times = conversations
+      .map((c) => Date.parse(c.createdAt || c.created_at))
+      .filter(Number.isFinite);
+    const turns = conversations.map((c) => Math.max(1, Math.round(pick(c, "messageCount", "message_count") / 2)));
+    const spanDays = times.length
+      ? Math.max(1, (Math.max(...times) - Math.min(...times)) / 86400000)
+      : 1;
+    return {
+      sample: conversations.length,
+      sampleDays: Math.round(spanDays * 10) / 10,
+      conversationsPerDay: Math.max(0.1, conversations.length / spanDays),
+      medianTurns: median(turns),
+      medianTokens: median(conversations.map((c) => pick(c, "totalTokens", "total_tokens"))),
+      medianTokensIn: median(conversations.map((c) => pick(c, "totalInputTokens", "total_input_tokens"))),
+      medianTokensOut: median(conversations.map((c) => pick(c, "totalOutputTokens", "total_output_tokens"))),
+    };
+  }
+
   /* ── Shareable state ───────────────────────────────────────────────
      The calculator's whole input state travels in the URL as one
      base64url-encoded JSON blob (?s=…), so "copy/paste" copies values,
@@ -312,5 +350,6 @@
     approximateTokens,
     encodeState,
     decodeState,
+    conversationStats,
   };
 })(window);
