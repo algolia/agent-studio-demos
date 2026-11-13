@@ -75,6 +75,18 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .chip:hover { border-color: var(--accent); }
 .chip.active { color: var(--paper); background: var(--accent); border-color: var(--accent); }
 
+/* The typical-rate band under a caching lever: where live traffic sits,
+   so the reader aims the slider at evidence instead of at a guess. */
+.range-wrap { position: relative; display: block; padding-bottom: 16px; }
+.lever-band {
+  position: absolute; left: var(--lo); width: calc(var(--hi) - var(--lo)); bottom: 6px;
+  height: 6px; border-radius: 3px; background: var(--ok); opacity: 0.4; pointer-events: none;
+}
+.lever-tag {
+  position: absolute; left: var(--lo); bottom: -4px;
+  font-family: var(--mono); font-size: 10px; color: var(--ok); white-space: nowrap;
+}
+
 /* ── Conversation skeleton ────────────────────────────────────────── */
 .conv { display: grid; gap: 5px; }
 .conv-row { display: grid; grid-template-columns: minmax(60px, var(--w, 1fr)) 150px 1fr; gap: 10px; align-items: center; min-height: 20px; }
@@ -191,6 +203,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--line-strong); border-radius: 3px; padding: 1px 5px; color: var(--ink-3); }
 .tag.scope-platform { color: var(--ok); border-color: var(--ok); }
 .tag.scope-list { color: var(--accent); border-color: var(--accent); }
+.tag.scope-auto { color: var(--ok); border-color: var(--ok); }
 .tag.scope-placeholder { color: var(--warn); border-color: var(--warn); }
 .tag.state-deprecated, .tag.state-legacy { color: var(--warn); border-color: var(--warn); }
 .axis-note { font-weight: 400; text-transform: none; letter-spacing: 0; }

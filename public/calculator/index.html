@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Shopping Assistant cost calculator</title>
 <meta name="description" content="What does running an AI shopping assistant cost per month? Bands, not quotes: arithmetic over the platform's own pricing table, with every assumption on the page.">
+<meta property="og:title" content="The Shopping Assistant cost calculator">
+<meta property="og:description" content="What does an AI shopping assistant cost per month? Traffic in, ±50% cost bands per model out&nbsp;— every assumption on the page.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://agent-studio-demos.pages.dev/calculator/">
+<meta name="twitter:card" content="summary">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,6 +18,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:,">
 <script src="../shared/theme.js"></script>
+<script src="../shared/config.js" onerror="window.DEMO_CONFIG = window.DEMO_CONFIG || null"></script>
 </head>
 <body>
 <a class="skip" href="#summary">Skip to the numbers</a>
@@ -24,9 +30,8 @@
   <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
   <h1>The Shopping Assistant cost calculator</h1>
   <p class="lede">What does an AI shopping assistant cost per month?
-  <strong>Bands, not quotes</strong>: every figure is a ±50% range built from constants
-  printed on this page. Pick a traffic profile, compare the priced models, refine
-  with your real prompts.</p>
+  Tell what you know about your use-case or pick industry-standard starting
+  points. Compare the priced models, refine with your real prompts.</p>
 </header>
 
 <main class="wrap">
@@ -79,13 +84,19 @@
           <legend>Caching&nbsp;— the two discounts everyone forgets</legend>
           <label class="field">
             <span class="field-name">Answers served from Agent Studio's response cache <output id="out-respcache">50</output>%</span>
-            <input type="range" id="in-respcache" min="0" max="90" value="50">
-            <span class="field-note">a cached turn makes no LLM call at all; live hit rates run 70–85% on steady traffic</span>
+            <span class="range-wrap">
+              <input type="range" id="in-respcache" min="0" max="90" value="50">
+              <i class="lever-band" style="--lo: 77.8%; --hi: 94.4%" aria-hidden="true"></i>
+              <span class="lever-tag">typical platform-wide rate: 70–85%</span>
+            </span>
+            <span class="field-note">a cached turn makes no LLM call at all; sweep into the green band for steady traffic</span>
           </label>
           <label class="field">
             <span class="field-name">Prompt prefix served from the provider's cache <output id="out-provcache">40</output>%</span>
             <input type="range" id="in-provcache" min="0" max="90" value="40">
-            <span class="field-note">cached input bills at ≈10% of the input price (OpenAI and Anthropic both)</span>
+            <span class="field-note">cached input bills at ≈10% of the input price&nbsp;—
+            <a href="https://platform.openai.com/docs/guides/prompt-caching" target="_blank" rel="noopener">OpenAI's docs</a>,
+            <a href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching" target="_blank" rel="noopener">Anthropic's docs</a></span>
           </label>
         </fieldset>
 
@@ -182,6 +193,11 @@
           <textarea id="m-answer" rows="3" placeholder="Great idea&nbsp;— here are three picks…"></textarea>
         </label>
         <button type="submit" class="btn">Count with the platform tokenizer</button>
+        <p class="check-row"><button type="button" class="btn btn-ghost" id="m-agents-btn">Start from a real agent on this app</button></p>
+        <label class="field" id="m-agents-field" hidden>
+          <span class="field-name">Pick an agent&nbsp;— its real system prompt fills the field above</span>
+          <select id="m-agents" class="mono"></select>
+        </label>
         <p class="check-row"><button type="button" class="btn btn-ghost" id="m-approx">No key? Use the ≈4&nbsp;chars/token approximation</button></p>
         <p class="notice" id="m-status" role="status"></p>
       </form>
@@ -319,6 +335,7 @@
   its source. Corrections welcome in <code>data.js</code>.</p>
 </main>
 
+<script src="prices.auto.js"></script>
 <script src="data.js"></script>
 <script src="calc.js"></script>
 <script src="app.js"></script>

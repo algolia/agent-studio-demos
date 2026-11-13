@@ -166,16 +166,23 @@
 
   function renderConversation(p) {
     const el = $("conversation");
+    const QUOTES = [
+      "“I need a gift for a 10-year-old”",
+      "“something under $50”",
+      "“how do those two compare?”",
+    ];
     const rows = [];
     const turns = Math.min(p.turnsPerConversation, 3);
     for (let t = 1; t <= turns; t++) {
-      rows.push({ cls: "user", label: `User turn ${t}`, note: "“…a gift for a 10-year-old…”" });
+      rows.push({ cls: "user", label: `User turn ${t}`, note: QUOTES[(t - 1) % QUOTES.length] });
       for (let r = 1; r <= p.roundsPerTurn; r++) {
         const last = r === p.roundsPerTurn;
         rows.push({
           cls: last ? "answer" : "round",
           label: last ? `LLM call · answer` : `LLM call · round ${r}`,
-          note: last ? "streams to the shopper (+ follow-up chips)" : "searches, reads records, plans",
+          note: last
+            ? (t === 1 ? "streams the first answer (+ follow-up chips)" : "streams the next answer")
+            : "searches, reads records, plans",
         });
       }
     }
@@ -343,7 +350,8 @@
     $("table-price-note").textContent =
       "Bars show the ±50% band after your caching settings; the tick is its midpoint. Hover a row " +
       "for the price's source. “Platform” prices come from Agent Studio's billing table; “list” " +
-      "from the provider's published prices; “illustrative” is a placeholder — read the ratio, not the figure.";
+      "from the provider's published prices; “auto-synced” from public registries (LiteLLM, then " +
+      "OpenRouter), refreshed weekly; “illustrative” is a placeholder — read the ratio, not the figure.";
   }
 
   function td(className, text) {
@@ -368,7 +376,8 @@
       const tag = document.createElement("span");
       tag.className = `tag scope-${m.priceScope}`;
       tag.textContent = m.priceScope === "platform" ? "platform table"
-        : m.priceScope === "list" ? "list price" : "illustrative";
+        : m.priceScope === "list" ? "list price"
+        : m.priceScope === "auto" ? "auto-synced" : "illustrative";
       tags.push(tag);
     }
     if (m.state !== "available") {
@@ -522,11 +531,22 @@
   function loadCredentials() {
     try {
       const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
-      if (!saved) return;
-      $("m-host").value = saved.host || $("m-host").value;
-      $("m-appid").value = saved.appId || "";
-      $("m-key").value = saved.key || "";
+      if (saved) {
+        $("m-host").value = saved.host || $("m-host").value;
+        $("m-appid").value = saved.appId || "";
+        $("m-key").value = saved.key || "";
+        return;
+      }
     } catch (e) { /* no stored credentials */ }
+    // shared/config.js (gitignored, like every demo) prefills the form so a
+    // configured machine goes zero-click; the fields stay editable and any
+    // edit takes over via saveCredentials.
+    const cfg = window.DEMO_CONFIG;
+    if (cfg && cfg.appId && cfg.apiKey) {
+      if (cfg.host) $("m-host").value = cfg.host;
+      $("m-appid").value = cfg.appId;
+      $("m-key").value = cfg.apiKey;
+    }
   }
 
   function setStatus(text, cls) {
@@ -624,8 +644,7 @@
 
   $("measure-form").addEventListener("submit", measure);
 
-  $("m-approx").addEventListener("click", () => {
-    const system = $("m-system").value;
+  $("m-approx").addEventListener("click", () => {    const system = $("m-system").value;
     const user = $("m-user").value;
     const answer = $("m-answer").value;
     if (!system && !user && !answer) {
@@ -638,6 +657,81 @@
       "≈4 chars/token approximation (local)"
     );
     setStatus("Approximated locally — nothing left this page.", "ok");
+  });
+
+  /* Real traffic means real prompts: the app's own agents, listed and
+     pulled with the credentials above, supply their actual system prompt.
+     That is a template nobody had to invent. */
+  async function fetchJson(path, creds) {
+    const res = await fetch(`${creds.host.replace(/\/+$/, "")}${path}`, {
+      headers: {
+        "X-Algolia-Application-Id": creds.appId,
+        "X-Algolia-API-Key": creds.key,
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  $("m-agents-btn").addEventListener("click", async () => {
+    saveCredentials();
+    const creds = {
+      host: $("m-host").value.trim(),
+      appId: $("m-appid").value.trim(),
+      key: $("m-key").value,
+    };
+    if (!creds.host || !creds.appId || !creds.key) {
+      setStatus("Fill in host, application ID and API key first — real agents need real credentials.", "err");
+      return;
+    }
+    setStatus("Listing agents…");
+    try {
+      const data = await fetchJson("/1/agents?page=1&limit=50", creds);
+      const items = data.items || data.agents || data.data || [];
+      if (!items.length) {
+        setStatus("This app has no agents yet — create one, or paste prompts by hand.", "err");
+        return;
+      }
+      const select = $("m-agents");
+      select.replaceChildren(
+        ...items.map((a) => {
+          const opt = document.createElement("option");
+          opt.value = a.agentId || a.id;
+          opt.textContent = a.name || a.agentId || a.id;
+          return opt;
+        })
+      );
+      $("m-agents-field").hidden = false;
+      setStatus(`${items.length} agent(s) found. Pick one to pull its real system prompt.`, "ok");
+    } catch (err) {
+      setStatus(`Listing failed (${err.message}) — CORS or credentials; the approximation below still works.`, "err");
+    }
+  });
+
+  $("m-agents").addEventListener("change", async () => {
+    saveCredentials();
+    const creds = {
+      host: $("m-host").value.trim(),
+      appId: $("m-appid").value.trim(),
+      key: $("m-key").value,
+    };
+    const id = $("m-agents").value;
+    if (!id) return;
+    setStatus("Pulling the agent's system prompt…");
+    try {
+      const agent = await fetchJson(`/1/agents/${id}`, creds);
+      const prompt = agent?.config?.systemPrompt ?? agent?.config?.system_prompt ?? agent?.systemPrompt;
+      if (!prompt) {
+        setStatus("That agent has no system prompt to pull.", "err");
+        return;
+      }
+      $("m-system").value = prompt;
+      if (!$("m-user").value) $("m-user").value = "I need a gift for a 10-year-old who loves science";
+      if (!$("m-answer").value) $("m-answer").value = "Here are three picks under $50 — each one rated 4.5+ by buyers: …";
+      $("measure-form").requestSubmit();
+    } catch (err) {
+      setStatus(`Pull failed (${err.message}).`, "err");
+    }
   });
 
   /* ── Boot ─────────────────────────────────────────────────────────── */

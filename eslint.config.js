@@ -63,6 +63,7 @@ const browserGlobals = {
   DemoCompactor: "readonly",
   renderMarkdown: "readonly",
   CALC_DATA: "readonly",
+  CALC_AUTO_PRICES: "readonly",
   Calc: "readonly",
 };
 
