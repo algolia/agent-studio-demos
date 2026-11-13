@@ -13,15 +13,7 @@
 <link rel="stylesheet" href="../shared/tokens.css">
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:,">
-<script>
-  (function () {
-    var saved = null;
-    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
-    var dark = saved ? saved === "dark"
-      : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-  })();
-</script>
+<script src="../shared/theme.js"></script>
 
 <!-- No bundler: every package resolves from esm.sh at a pinned version.
      react and react-dom are external to every other package, so the whole

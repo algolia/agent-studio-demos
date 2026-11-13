@@ -29,17 +29,7 @@
 <link rel="stylesheet" href="../shared/tokens.css">
 <link rel="stylesheet" href="../shared/meter.css">
 <link rel="stylesheet" href="style.css">
-<script>
-  /* Resolve the theme before first paint, or the page flashes the wrong one.
-     Same storage key as the other demos, so a choice carries across the site. */
-  (function () {
-    var saved = null;
-    try { saved = localStorage.getItem("ic-theme"); } catch (e) { /* private mode */ }
-    var dark = saved ? saved === "dark"
-      : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-  })();
-</script>
+<script src="../shared/theme.js"></script>
 </head>
 <body>
 <a class="skip" href="#chat">Skip to the conversation</a>
