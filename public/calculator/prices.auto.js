@@ -126,6 +126,12 @@ window.CALC_AUTO_PRICES = {
       "contextWindow": 922000,
       "via": "litellm"
     },
+    "claude-haiku-5-5": {
+      "inPerMTok": 0.1,
+      "outPerMTok": 0.5,
+      "contextWindow": 1000000,
+      "via": "litellm"
+    },
     "claude-haiku-4-5": {
       "inPerMTok": 1,
       "outPerMTok": 5,

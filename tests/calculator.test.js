@@ -85,6 +85,38 @@ test("an unpriced model yields no cost — null in, null out", () => {
   assert.equal(Calc.costBand(null, 1_000_000, 1_000_000, 0.5), null);
 });
 
+test("measured conversations replace the sessions × adoption guess", () => {
+  const now = 1700000000000;
+  const conv = (daysAgo, msgCount, tin, tout) => ({
+    createdAt: new Date(now - daysAgo * 86400000).toISOString(),
+    messageCount: msgCount, totalInputTokens: tin, totalOutputTokens: tout, totalTokens: tin + tout,
+  });
+  const stats = Calc.conversationStats([conv(0, 6, 20000, 3000), conv(1, 4, 10000, 2000), conv(2, 6, 15000, 2500)]);
+  assert.equal(stats.sample, 3);
+  assert.equal(stats.sampleDays, 2);
+  assert.ok(Math.abs(stats.conversationsPerDay - 1.5) < 0.1);
+  assert.equal(stats.medianTurns, 3);
+  assert.equal(stats.medianTokens, 17500);
+  // the envelope honours the measured rate and ignores the sliders then
+  const base = { sessionsPerDay: 1000, adoptionPct: 10, turnsPerConversation: 3, roundsPerTurn: 2,
+    inputTokensPerRound: 4000, outputTokensPerTurnCall: 400, guardrails: false, daysPerMonth: 30,
+    responseCachePct: 0, providerCachePct: 0, pdp: false, followups: false };
+  const measured = Calc.productionView({ ...base, measuredConversationsPerDay: stats.conversationsPerDay }, C);
+  const guessed = Calc.productionView(base, C);
+  assert.ok(Math.abs(measured.conversationsPerDay - 1.5) < 0.1);
+  assert.ok(measured.tokensInMonth < guessed.tokensInMonth, "1.5 real conv/day < the 100/day guess");
+  assert.ok(measured.assumptions.some((a) => a.includes("measured on real traffic")));
+  assert.equal(Calc.conversationStats([]), null);
+  assert.equal(Calc.conversationStats(undefined), null);
+});
+
+test("the default model is a current fast tier, priced by the sync", () => {
+  const haiku = model("claude-haiku-5-5");
+  assert.ok(haiku, "claude-haiku-5-5 exists");
+  assert.ok(haiku.inPerMTok != null, "the sync prices it");
+  // days per month is the year's average, not a selector
+});
+
 test("no traffic setting can silently price a BYOK model to zero", () => {
   // Sweep every template across every priced model, guardrails on and off:
   // billed tokens > 0 must mean cost > 0, strictly. The one legitimate zero

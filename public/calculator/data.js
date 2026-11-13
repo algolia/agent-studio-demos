@@ -189,6 +189,11 @@
 
       /* ── Anthropic ─────────────────────────────────────────────────── */
       {
+        id: "claude-haiku-5-5", label: "claude-haiku-5.5", provider: "anthropic", state: "available",
+        contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
+        source: "In the registry as Anthropic's fast tier; priced by the registry sync when available.",
+      },
+      {
         id: "claude-haiku-4-5", label: "claude-haiku-4.5", provider: "anthropic", state: "available",
         contextWindow: 200000, inPerMTok: 1, outPerMTok: 5, priceScope: "list",
         source: "Anthropic published list price for claude-haiku-4.5 — $1.00 input / $5.00 " +
