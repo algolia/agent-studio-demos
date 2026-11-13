@@ -733,8 +733,16 @@
     }
     setStatus("Pulling conversations…");
     try {
-      const agentId = $("m-agents").value ? `&agent_id=${$("m-agents").value}` : "";
-      const data = await fetchJson(`/1/conversations?page=1&limit=100${agentId}`, creds);
+      // conversations live per agent: /1/agents/{id}/conversations — pick
+      // the selected agent, or the app's first when none is chosen
+      let agentId = $("m-agents").value;
+      if (!agentId) {
+        const agents = await fetchJson("/1/agents?page=1&limit=1", creds);
+        const first = (agents.data || [])[0];
+        if (!first) { setStatus("No agents on this app yet.", "err"); return; }
+        agentId = first.id;
+      }
+      const data = await fetchJson(`/1/agents/${agentId}/conversations?page=1&limit=100`, creds);
       const items = data.data || [];
       const stats = Calc.conversationStats(items);
       state.measuredStats = stats;
