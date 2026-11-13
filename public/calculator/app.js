@@ -214,10 +214,6 @@
     if (turns < p.turnsPerConversation) {
       rows.push({ cls: "more", label: `… ${p.turnsPerConversation - turns} more turn(s)`, note: "", tok: "" });
     }
-    if (p.responseCachePct > 0) {
-      rows.push({ cls: "cached", label: `…and ${p.responseCachePct}% of interactions come from cache`,
-        note: "repeat visitors ask the same things — those are excluded from billing", tok: "0 billed" });
-    }
     if (p.pdp) {
       rows.push({ cls: "pdp", label: `PDP suggestions · ${Calc.fmtInt(p.pdpCallsPerDay)}/day`,
         note: "one-shot calls from product pages — outside the conversation",
@@ -400,10 +396,9 @@
     );
 
     $("table-price-note").textContent =
-      "Bars show the ±50% band after your caching settings; the tick is its midpoint. Hover a row " +
-      "for the price's source. “Platform” prices come from Agent Studio's billing table; “list” " +
-      "from the provider's published prices; “auto-synced” from public registries (LiteLLM, then " +
-      "OpenRouter), refreshed weekly; “illustrative” is a placeholder — read the ratio, not the figure.";
+      "Bars show the ±50% band after your caching settings; the tick is its midpoint. Every price " +
+      "is an estimate; hover a row for its exact source and date. Unpriced rows estimate tokens " +
+      "and refuse to invent dollars.";
   }
 
   function td(className, text) {
@@ -424,12 +419,13 @@
 
   function modelTags(m) {
     const tags = [];
-    if (m.priceScope) {
+    if (m.priceScope && m.priceScope !== "auto") {
+      // auto-synced rows carry no badge: the price is the estimate, the
+      // exact registry source stays on the row's hover tooltip
       const tag = document.createElement("span");
       tag.className = `tag scope-${m.priceScope}`;
       tag.textContent = m.priceScope === "platform" ? "platform table"
         : m.priceScope === "list" ? "list price"
-        : m.priceScope === "auto" ? "auto-synced"
         : "illustrative";
       tags.push(tag);
     }
