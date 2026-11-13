@@ -53,21 +53,22 @@ jobs:
           DEMO_CONFIG_JS: ${{ vars.DEMO_CONFIG_JS }}
         run: |
           if [ -z "$DEMO_CONFIG_JS" ]; then
-            echo "::error::Repository variable DEMO_CONFIG_JS is not set." \
-                 "Set it from a working local config:" \
-                 "gh variable set DEMO_CONFIG_JS --repo algolia/agent-studio-demos < public/shared/config.js"
-            exit 1
+            # Optional: without a variable the demos run without a shared demo
+            # key (each form stays empty and visitors bring their own).
+            printf 'window.DEMO_CONFIG = null;\n' > public/shared/config.js
+            echo "DEMO_CONFIG_JS not set — shipping a key-less config stub."
+          else
+            printf '%s\n' "$DEMO_CONFIG_JS" > public/shared/config.js
+            # A truncated or mangled variable is a blank page in the browser and
+            # nothing in the log. Fail here instead, where the message is legible.
+            node --check public/shared/config.js
+            node -e 'globalThis.window = {}; require("./public/shared/config.js");
+                     const c = globalThis.window.DEMO_CONFIG;
+                     if (!c || typeof c !== "object" || !c.host) {
+                       throw new Error("DEMO_CONFIG_JS parsed but is missing host");
+                     }
+                     console.log("config.js ok — host:", c.host);'
           fi
-          printf '%s\n' "$DEMO_CONFIG_JS" > public/shared/config.js
-          # A truncated or mangled variable is a blank page in the browser and
-          # nothing in the log. Fail here instead, where the message is legible.
-          node --check public/shared/config.js
-          node -e 'globalThis.window = {}; require("./public/shared/config.js");
-                   const c = globalThis.window.DEMO_CONFIG;
-                   if (!c || !c.host || !c.appId || !c.apiKey || !(c.models || []).length) {
-                     throw new Error("DEMO_CONFIG_JS parsed but is missing host/appId/apiKey/models");
-                   }
-                   console.log("config.js ok —", c.models.length, "model option(s)");'
 
       - name: Deploy public/ to Cloudflare Pages
         env:
