@@ -339,7 +339,11 @@
         tr.dataset.id = m.id;
         if (m.priceScope == null) tr.dataset.unpriced = "1";
         if (m.id === state.selectedModel) tr.classList.add("selected");
-        tr.title = m.source;
+        tr.title = m.included ? "Included in Agent Studio plans."
+          : m.priceScope === "platform" ? "Priced from Agent Studio's billing table."
+          : m.priceScope === "list" ? "The provider's published list price."
+          : m.priceScope === "auto" ? "Estimated from public model registries."
+          : "Illustrative estimate — not a quote.";
 
         const name = document.createElement("td");
         const nameWrap = document.createElement("span");

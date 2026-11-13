@@ -48,7 +48,7 @@
         <p class="small muted">New to this? Start from a template:</p>
         <div class="chips" id="templates" role="group" aria-label="Traffic templates"></div>
         <label class="field">
-          <span class="field-name" data-tip="One visit to the site, whatever the visitor does. Your analytics tool knows this number&nbsp;— sessions, not users.">Site sessions per day</span>
+          <span class="field-name" data-tip="One visit, whatever the visitor does. Analytics knows this number.">Site sessions per day</span>
           <input type="number" id="in-sessions" min="1" max="10000000" value="10000" inputmode="numeric">
           <span class="field-note">all visitors, not only AI ones</span>
         </label>
@@ -58,16 +58,16 @@
           <span class="field-note">adoption is the biggest lever and the least known&nbsp;— sweep it</span>
         </label>
         <label class="field">
-          <span class="field-name" data-tip="One user message plus the assistant answer. Shopping chats average 2–4: ask, refine, done. Past 8 it is a story, not a session.">Turns per conversation</span>
+          <span class="field-name" data-tip="One user message plus the answer. Shopping chats: 2–4.">Turns per conversation</span>
           <input type="number" id="in-turns" min="1" max="50" value="3" inputmode="numeric">
         </label>
         <label class="field">
-          <span class="field-name" data-tip="Each turn, the agent may search several times before answering. 2 is typical; a catalog-heavy agent goes higher.">LLM rounds per turn</span>
+          <span class="field-name" data-tip="The agent may search several times before answering. 2 is typical.">LLM rounds per turn</span>
           <input type="number" id="in-rounds" min="1" max="10" value="2" inputmode="numeric">
           <span class="field-note">the tool-call loop: search, refine, answer</span>
         </label>
         <label class="field">
-          <span class="field-name" data-tip="3,000&nbsp;tok ≈ 2,300&nbsp;words: the agent's instructions, the product records the search returned, the chat so far, and the question.">Input tokens per round</span>
+          <span class="field-name" data-tip="3,000&nbsp;tok ≈ 2,300&nbsp;words: instructions, products, history, question.">Input tokens per round</span>
           <div class="chips mini" id="chip-tokin" role="group" aria-label="Input token examples">
             <button type="button" data-tokin="1500">Lean · 1.5k</button>
             <button type="button" data-tokin="3000">Typical · 3k</button>
@@ -77,7 +77,7 @@
           <span class="field-note">live accounts average ≈3k: frame + records + history + user turn; big catalogs push higher</span>
         </label>
         <label class="field">
-          <span class="field-name" data-tip="500&nbsp;tok ≈ a solid answer with three product picks. Answers with tables or long comparisons push this up.">Output tokens per round</span>
+          <span class="field-name" data-tip="500&nbsp;tok ≈ a solid answer with three product picks.">Output tokens per round</span>
           <div class="chips mini" id="chip-tokout" role="group" aria-label="Output token examples">
             <button type="button" data-tokout="200">Terse · 200</button>
             <button type="button" data-tokout="500">Typical · 500</button>
@@ -92,7 +92,7 @@
         <fieldset class="sub">
           <legend>Caching&nbsp;— the two discounts everyone forgets</legend>
           <label class="field">
-            <span class="field-name" data-tip="The same question twice costs once. After a few weeks of steady traffic most answers repeat&nbsp;— that is what the green band reflects.">Answers served from Agent Studio's response cache <output id="out-respcache">50</output>%</span>
+            <span class="field-name" data-tip="Repeated questions cost nothing after the first answer.">Answers served from Agent Studio's response cache <output id="out-respcache">50</output>%</span>
             <span class="range-wrap">
               <input type="range" id="in-respcache" min="0" max="90" value="50">
               <i class="lever-band" style="--lo: 77.8%; --hi: 94.4%" aria-hidden="true"></i>
@@ -101,7 +101,7 @@
             <span class="field-note">a cached turn makes no LLM call at all; sweep into the green band for steady traffic</span>
           </label>
           <label class="field">
-            <span class="field-name" data-tip="Providers bill the repeated prefix&nbsp;— instructions, product records&nbsp;— at about a tenth of the input price. The longer your stable prefix, the higher this goes.">Prompt prefix served from the provider's cache <output id="out-provcache">40</output>%</span>
+            <span class="field-name" data-tip="Repeated prompt prefixes bill at about a tenth of the price.">Prompt prefix served from the provider's cache <output id="out-provcache">40</output>%</span>
             <input type="range" id="in-provcache" min="0" max="90" value="40">
             <span class="field-note">cached input bills at ≈10% of the input price&nbsp;—
             <a href="https://platform.openai.com/docs/guides/prompt-caching" target="_blank" rel="noopener">OpenAI's docs</a>,
@@ -320,7 +320,7 @@
             <th scope="col" class="num">In $/Mtok</th>
             <th scope="col" class="num">Out $/Mtok</th>
             <th scope="col" class="num">Context</th>
-            <th scope="col" class="num grow" data-tip="Each row: the ±50% band for that model at your traffic; the blue tick is the band's midpoint. The scale is logarithmic over every priced model, so filtering changes which rows show&nbsp;— never where the bars sit.">$ / month at this traffic <span class="axis-note" id="bar-note"></span></th>
+            <th scope="col" class="num grow" data-tip="The ±50% band per model; the tick is its midpoint.">$ / month at this traffic <span class="axis-note" id="bar-note"></span></th>
           </tr>
         </thead>
         <tbody id="cost-body"></tbody>
