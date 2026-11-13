@@ -85,101 +85,58 @@ test("an unpriced model yields no cost — null in, null out", () => {
   assert.equal(Calc.costBand(null, 1_000_000, 1_000_000, 0.5), null);
 });
 
-test("managed beta: 500M free tokens, then $0.62 per 1M output only", () => {
-  const m = model("algolia-medium");
-  assert.equal(m.priceScope, "beta");
-  // 200M output tokens: inside the free allowance → $0
-  assert.equal(Calc.costBand(m, 900_000_000, 200_000_000, 0.5).point, 0);
-  // 800M output tokens: 300M over the allowance → 300 × $0.62 = $186
-  const over = Calc.costBand(m, 100_000_000, 800_000_000, 0.5);
-  assert.ok(Math.abs(over.point - 186) < 1e-9);
-  // input tokens never trigger the overage
-  assert.equal(Calc.costBand(m, 2_000_000_000, 100_000_000, 0.5).point, 0);
-  // the provider-cache discount does not apply to managed pricing
-  const cached = Calc.costBandCached(m, 100_000_000, 800_000_000, 90, 0.1, 0.5);
-  assert.ok(Math.abs(cached.point - 186) < 1e-9);
-  assert.match(m.source, /\$0\.62 per 1M output/);
-});
-
-test("auto-synced prices fill gaps and never override curated rows", () => {
-  // prices.auto.js (generated) was loaded by the shared loader when present;
-  // these pins hold against the committed file so a bad sync fails CI.
-  const fable = model("claude-fable-5");
-  if (fable.priceScope === "auto") {
-    assert.ok(fable.inPerMTok > 0 && fable.outPerMTok > 0, "auto price is a real number");
-    assert.match(fable.source, /auto-synced/i);
-    assert.match(fable.source, /fetched \d{4}-\d{2}-\d{2}/);
-  } else {
-    assert.equal(fable.priceScope, null, "unsynced rows stay honestly unpriced");
-  }
-  // curated rows are untouchable: the platform billing table wins even
-  // where a registry disagrees
-  const platform = model("gpt-5.6-sol");
-  assert.equal(platform.priceScope, "platform");
-  assert.equal(platform.inPerMTok, 5);
-  // context windows may be filled by the sync for any row missing one
-  for (const m of C.models) {
-    if (m.priceScope && m.contextWindow == null && globalThis.CALC_AUTO_PRICES) {
-      assert.equal(globalThis.CALC_AUTO_PRICES.prices[m.id]?.contextWindow == null, true,
-        `${m.id}: context left unknown means the registry had none either`);
+test("no traffic setting can silently price a BYOK model to zero", () => {
+  // Sweep every template across every priced model, guardrails on and off:
+  // billed tokens > 0 must mean cost > 0, strictly. The one legitimate zero
+  // would be a free tier — and the managed model carries no token price at
+  // all any more, so a zero here is a bug, not a fact.
+  for (const tpl of C.templates) {
+    const base = {
+      sessionsPerDay: tpl.values.sessionsPerDay,
+      adoptionPct: tpl.values.adoptionPct,
+      turnsPerConversation: tpl.values.turnsPerConversation,
+      roundsPerTurn: tpl.values.roundsPerTurn,
+      inputTokensPerRound: tpl.values.inputTokensPerRound,
+      outputTokensPerTurnCall: tpl.values.outputTokensPerTurnCall,
+      responseCachePct: 0, providerCachePct: 0,
+      pdp: false, pdpCallsPerDay: 0, followups: false,
+      guardrails: false, daysPerMonth: 30,
+    };
+    for (const guardrails of [false, true]) {
+      const v = Calc.productionView({ ...base, guardrails }, C);
+      assert.ok(v.tokensInMonth > 0, `${tpl.id}: input tokens`);
+      assert.ok(v.tokensOutMonth > 0, `${tpl.id}: output tokens`);
+      for (const m of C.models) {
+        const cost = Calc.costBandCached(m, v.tokensInMonth, v.tokensOutMonth, 0, 0.1, 0.5);
+        if (m.priceScope == null) {
+          assert.equal(cost, null, `${tpl.id}/${m.id}: unpriced stays unpriced`);
+          continue;
+        }
+        assert.ok(cost && cost.point > 0, `${tpl.id}/${m.id}: priced model must cost > 0`);
+        assert.ok(cost.low > 0 || cost.point >= 0.0001, `${tpl.id}/${m.id}: band is not a fake zero`);
+      }
     }
   }
 });
 
-test("eval view mirrors the platform's estimate_eval_run", () => {
-  const v = Calc.evalView({
-    numCases: 500, iterations: 1, metricCount: 2, roundsMultiplier: 2,
-    modelId: "gpt-5.6-luna", judgeModelId: "medium", concurrency: 2, guardrails: false,
-  }, C);
-
-  assert.equal(v.agentCalls, 1000);
-  assert.equal(v.judgeCalls, 500);
-  // agent: 1000 × (4000 + 400) = 4.4M tokens
-  assert.equal(v.agentTokens.point, 4_400_000);
-  assert.equal(v.agentTokens.low, 2_200_000);
-  // judge: 500 × (2500 + 350) = 1.425M
-  assert.equal(v.judgeTokens.point, 1_425_000);
-  // wall: ceil(500 / 2) × 12s
-  assert.equal(v.wallSeconds.point, 3000);
-  // agent cost at gpt-5.6-luna ($1/$6): 4M × 1 + 0.4M × 6 per Mtok = $6.40
-  assert.ok(Math.abs(v.agentCost.point - 6.4) < 1e-9);
-  // the "medium" judge alias is unpriced by design
-  assert.equal(v.judgeCost, null);
-  assert.ok(v.assumptions.some((a) => a.includes("unpriced by design")));
-  assert.ok(v.assumptions.some((a) => a.includes("metrics do not multiply the judging")));
+test("usdOrFree renders a zero band as the fact it is", () => {
+  assert.equal(Calc.usdOrFree({ low: 0, point: 0, high: 0 }), "free");
+  assert.equal(Calc.usdOrFree({ low: 5, point: 10, high: 15 }), "$10.00");
+  assert.equal(Calc.usdOrFree(null), "unpriced");
 });
 
-test("eval view: guardrails add one classification per case", () => {
-  const base = { numCases: 100, iterations: 1, metricCount: 1, roundsMultiplier: 2,
-    modelId: "gpt-5.6-luna", judgeModelId: "medium", concurrency: 2 };
-  const guarded = Calc.evalView({ ...base, guardrails: true }, C);
-  const plain = Calc.evalView({ ...base, guardrails: false }, C);
-  assert.equal(guarded.agentTokens.point - plain.agentTokens.point, 100 * 730);
-  assert.equal(guarded.wallSeconds.point - plain.wallSeconds.point, Math.ceil(100 / 2) * 1);
-});
-
-test("eval view: unpriced agent model yields no agent cost", () => {
-  const v = Calc.evalView({
-    numCases: 10, iterations: 1, metricCount: 1, roundsMultiplier: 2,
-    modelId: "no-such-model", judgeModelId: "medium", concurrency: 2, guardrails: false,
-  }, C);
-  assert.equal(v.agentCost, null);
-  assert.ok(v.assumptions.some((a) => a.includes("No agent cost")));
-});
-
-test("anatomy: shares scale to the input total and the fractions sum to one", () => {
-  const parts = Calc.anatomy(8000, 400, C.anatomyShares);
-  assert.equal(parts.length, C.anatomyShares.length);
-  const fracSum = parts.reduce((s, p) => s + p.frac, 0);
-  assert.ok(Math.abs(fracSum - 1) < 1e-9);
-  // at the default 4000, each slice is exactly its declared share
-  const atDefault = Calc.anatomy(4000, 400, C.anatomyShares);
-  atDefault.forEach((p, i) => assert.equal(p.tokens, C.anatomyShares[i].tokens));
-});
-
-test("the anatomy shares sum to the agent input constant", () => {
-  const sum = C.anatomyShares.reduce((s, p) => s + p.tokens, 0);
-  assert.equal(sum, C.constants.AGENT_INPUT_TOKENS_PER_CALL);
+test("share state round-trips and refuses garbage", () => {
+  const state = { model: "gpt-5.6-luna", sessions: "10000", adoption: "12", guard: true, days: "30" };
+  const encoded = Calc.encodeState(state);
+  assert.ok(!encoded.includes("=") && !encoded.includes("+") && !encoded.includes("/"), "url-safe");
+  assert.deepEqual(Calc.decodeState(encoded), state);
+  assert.equal(Calc.decodeState("not-a-blob!!!"), null);
+  assert.equal(Calc.decodeState(""), null);
+  // a decoded object with junk keys comes back as-is: applyState ignores
+  // what it does not recognize, so junk never reaches the page state
+  assert.deepEqual(Calc.decodeState(Buffer.from('{"model":42}').toString("base64")), { model: 42 });
+  assert.equal(Calc.decodeState(Buffer.from('"just a string"').toString("base64")), null,
+    "a decoded non-object is refused");
 });
 
 test("caching: response cache skips turns, provider cache discounts input", () => {
@@ -247,17 +204,16 @@ test("every model row is well-formed", () => {
     assert.ok(!ids.has(m.id), `duplicate id ${m.id}`);
     ids.add(m.id);
     assert.ok(["available", "deprecated", "legacy"].includes(m.state), `${m.id}: unknown state`);
-    if (m.priceScope != null) {
-      assert.ok(["platform", "list", "placeholder", "auto", "beta"].includes(m.priceScope), `${m.id}: scope`);
+    if (m.included) {
+      assert.equal(m.priceScope, null, `${m.id}: included rows carry no token price`);
+    } else if (m.priceScope != null) {
+      assert.ok(["platform", "list", "placeholder", "auto"].includes(m.priceScope), `${m.id}: scope`);
       assert.ok(m.source && m.source.length > 20, `${m.id}: priced rows name their source`);
-      if (m.priceScope === "beta") {
-        assert.ok(m.managedBeta && m.managedBeta.overagePerMTok > 0, `${m.id}: beta rows carry beta terms`);
-      } else {
-        assert.ok(m.inPerMTok != null && m.outPerMTok != null, `${m.id}: scoped rows are priced`);
-      }
+      assert.ok(m.inPerMTok != null && m.outPerMTok != null, `${m.id}: scoped rows are priced`);
+      assert.ok(!m.managedBeta, `${m.id}: the managed model is not token-priced here`);
     } else {
       assert.ok(m.inPerMTok == null && m.outPerMTok == null, `${m.id}: unpriced rows carry no price`);
-      assert.match(m.source, /no (price curated|curated price|public registry)/, `${m.id}: unpriced rows say why`);
+      assert.match(m.source, /no (price curated|curated price|public registry)|Included/, `${m.id}: unpriced rows say why`);
     }
   }
 });

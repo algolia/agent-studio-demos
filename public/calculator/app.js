@@ -19,7 +19,7 @@
   const Calc = window.Calc;
 
   const state = {
-    selectedModel: "algolia-medium",
+    selectedModel: "gpt-5.6-luna",
     measured: null, // { inputTokens, outputTokens, method, approximate }
   };
 
@@ -171,23 +171,53 @@
       "“something under $50”",
       "“how do those two compare?”",
     ];
+    const k = (n) => Calc.shortTokens(n);
+    const Ck = C.constants;
     const rows = [];
     const turns = Math.min(p.turnsPerConversation, 3);
+    let interactionIn = 0, interactionOut = 0;
     for (let t = 1; t <= turns; t++) {
-      rows.push({ cls: "user", label: `User turn ${t}`, note: QUOTES[(t - 1) % QUOTES.length] });
+      rows.push({ cls: "user", label: `User turn ${t}`, note: QUOTES[(t - 1) % QUOTES.length], tok: "" });
+      let turnIn = 0, turnOut = 0;
+      if (p.guardrails) {
+        turnIn += Ck.GUARDRAIL_INPUT_TOKENS_PER_CALL;
+        turnOut += Ck.GUARDRAIL_OUTPUT_TOKENS_PER_CALL;
+        rows.push({ cls: "guard", label: "Guardrail check", note: "policy check on the message — fails open",
+          tok: `~${k(Ck.GUARDRAIL_INPUT_TOKENS_PER_CALL)} in` });
+      }
       for (let r = 1; r <= p.roundsPerTurn; r++) {
+        turnIn += p.inputTokensPerRound;
+        turnOut += p.outputTokensPerTurnCall;
         const last = r === p.roundsPerTurn;
         rows.push({
           cls: last ? "answer" : "round",
-          label: last ? `LLM call · answer` : `LLM call · round ${r}`,
-          note: last
-            ? (t === 1 ? "streams the first answer (+ follow-up chips)" : "streams the next answer")
-            : "searches, reads records, plans",
+          label: last ? "LLM call · answer" : `LLM call · round ${r}`,
+          note: last ? "streams the answer" : "searches, reads records, plans",
+          tok: `~${k(p.inputTokensPerRound)} in / ~${k(p.outputTokensPerTurnCall)} out`,
         });
       }
+      if (p.followups) {
+        turnIn += Ck.EXTRA_FOLLOWUP_INPUT_TOKENS;
+        turnOut += Ck.EXTRA_FOLLOWUP_OUTPUT_TOKENS;
+        rows.push({ cls: "follow", label: "Follow-up chips", note: "“under $50” · “in stock nearby”",
+          tok: `~${k(Ck.EXTRA_FOLLOWUP_INPUT_TOKENS)} in / ~${k(Ck.EXTRA_FOLLOWUP_OUTPUT_TOKENS)} out` });
+      }
+      interactionIn += turnIn;
+      interactionOut += turnOut;
+      rows.push({ cls: "subtotal", label: `→ this interaction`,
+        note: "one turn, whatever it contained", tok: `≈${k(turnIn)} in / ≈${k(turnOut)} out` });
     }
     if (turns < p.turnsPerConversation) {
-      rows.push({ cls: "more", label: `… ${p.turnsPerConversation - turns} more turn(s)`, note: "" });
+      rows.push({ cls: "more", label: `… ${p.turnsPerConversation - turns} more turn(s)`, note: "", tok: "" });
+    }
+    if (p.responseCachePct > 0) {
+      rows.push({ cls: "cached", label: `…and ${p.responseCachePct}% of interactions come from cache`,
+        note: "repeat visitors ask the same things — those are excluded from billing", tok: "0 billed" });
+    }
+    if (p.pdp) {
+      rows.push({ cls: "pdp", label: `PDP suggestions · ${Calc.fmtInt(p.pdpCallsPerDay)}/day`,
+        note: "one-shot calls from product pages — outside the conversation",
+        tok: `~${k(Ck.EXTRA_PDP_INPUT_TOKENS)} in / ~${k(Ck.EXTRA_PDP_OUTPUT_TOKENS)} out each` });
     }
     el.replaceChildren(
       ...rows.map((row) => {
@@ -195,43 +225,34 @@
         div.className = `conv-row conv-${row.cls}`;
         const bar = document.createElement("span");
         bar.className = "conv-bar";
-        if (row.cls === "user") bar.style.setProperty("--w", "0.45");
-        if (row.cls === "answer") bar.style.setProperty("--w", "0.8");
-        if (row.cls === "round") bar.style.setProperty("--w", "1");
+        const widths = { user: 0.45, answer: 0.8, round: 1, guard: 0.2, follow: 0.25, cached: 0.5, pdp: 0.35, subtotal: 0.6 };
+        if (widths[row.cls]) bar.style.setProperty("--w", String(widths[row.cls]));
         const label = document.createElement("span");
         label.className = "conv-label";
         label.textContent = row.label;
+        const tok = document.createElement("span");
+        tok.className = "conv-tok mono";
+        tok.textContent = row.tok;
         const note = document.createElement("span");
         note.className = "conv-note";
         note.textContent = row.note;
-        div.append(bar, label, note);
+        div.append(bar, label, tok, note);
         return div;
       })
     );
-    const callsPerConv = p.turnsPerConversation * p.roundsPerTurn + (p.followups ? p.turnsPerConversation : 0);
     $("conv-total").textContent =
-      `${p.turnsPerConversation} turns × ${p.roundsPerTurn} rounds = ${callsPerConv} LLM call(s)` +
-      (p.followups ? " + follow-up chips" : "");
+      `A conversation of ${p.turnsPerConversation} turns carries ≈${k(interactionIn)} in / ≈${k(interactionOut)} out per interaction` +
+      (p.responseCachePct > 0 ? ` · ${p.responseCachePct}% of interactions are cached` : "");
   }
 
-  /* The managed-LLM callout: our own model, beta terms, the first number
-     a visitor sees — and the honest caveat that GA pricing will differ. */
-  function renderManaged(v) {
-    const model = C.models.find((m) => m.id === "algolia-medium");
-    const cost = cachedCost(v);
+  /* The interactions callout: the layman's unit. One interaction = one
+     turn; the skeleton below shows what it contains. */
+  function renderCallout(v) {
     const fig = $("managed-figure");
-    if (!cost) {
-      fig.textContent = "—";
-    } else if (cost.point === 0) {
-      const pct = Math.min(100, Math.round((v.tokensMonth / model.managedBeta.freeTokensPerMonth) * 100));
-      fig.textContent = `Free at this traffic — ${pct}% of the 500M free tokens/month`;
-    } else {
-      fig.textContent =
-        `from ${Calc.usd(cost.low)} · est ${Calc.usd(cost.point)} · up to ${Calc.usd(cost.high)} / month`;
-    }
+    fig.textContent = `${Calc.fmtInt(v.turnsBilledPerDay * 30)} billed interactions / month at this traffic`;
     $("managed-terms").textContent =
-      "First 500M tokens/month free, then $0.62 per 1M output tokens, invoiced monthly. " +
-      "4-month beta; GA pricing will differ — talk to your AE or CSM to join.";
+      "One interaction is one turn of the conversation. Cache hits, guardrail blocks and bots " +
+      "are excluded. The table below prices the conversation model you bring, per token.";
   }
 
   function renderSummary(v, p) {
@@ -288,21 +309,25 @@
     const rows = visibleModels(v);
     const body = $("cost-body");
 
-    const points = rows
-      .map((m) => Calc.costBand(m, v.tokensInMonth, v.tokensOutMonth, C.constants.BAND_RATIO))
-      .filter(Boolean)
-      .map((b) => b.point);
-    const maxPoint = points.length ? Math.max(...points) : 0;
-    const minPoint = points.length ? Math.min(...points) : 0;
+    // The scale is fixed over EVERY priced model at the current traffic, so
+    // filtering changes which rows show — never where the bars sit. (Bars
+    // that reshuffle on every filter click read as random.)
+    const priced = C.models
+      .map((m) => ({ m, b: Calc.costBandCached(
+        m, v.tokensInMonth, v.tokensOutMonth,
+        v.providerCachePct, C.constants.PROVIDER_CACHE_DISCOUNT, C.constants.BAND_RATIO) }))
+      .filter((x) => x.b && x.b.point > 0);
+    const maxPoint = priced.length ? Math.max(...priced.map((x) => x.b.point)) : 0;
+    const minPoint = priced.length ? Math.min(...priced.map((x) => x.b.point)) : 0;
     // Log scale: o1-pro at $150/$600 per Mtok would otherwise flatten every
-    // realistic row into a hairline. The axis note says so, on the page.
+    // realistic row into a hairline. The header tooltip says so, on the page.
     const width = (x) =>
-      maxPoint <= 0 ? 0
-        : minPoint <= 0 ? 50
+      maxPoint <= 0 ? 50
+        : x <= 0 ? 2
         : 4 + 92 * (Math.log(x / minPoint) / Math.log(maxPoint / minPoint));
 
-    $("bar-note").textContent = points.length > 1 && maxPoint / minPoint > 20
-      ? "· bar on a log scale" : "";
+    $("bar-note").textContent = priced.length > 1 && maxPoint / minPoint > 20
+      ? "· log scale, fixed across all priced models" : "";
 
     body.replaceChildren(
       ...rows.map((m) => {
@@ -338,10 +363,10 @@
         }
 
         const costCell = document.createElement("td");
-        costCell.className = "num grow";
+        costCell.className = "num grow cost-cell";
         const barWrap = document.createElement("div");
         barWrap.className = "cost-bar";
-        if (bandCost) {
+        if (bandCost && bandCost.point > 0) {
           const bandEl = document.createElement("span");
           bandEl.className = "band";
           bandEl.style.left = `${width(bandCost.low)}%`;
@@ -350,12 +375,15 @@
           pointEl.className = "point";
           pointEl.style.left = `${width(bandCost.point)}%`;
           barWrap.append(bandEl, pointEl);
+        } else if (bandCost) {
+          // the managed beta's free tier: the band is $0 – $0, show the fact
+          barWrap.classList.add("is-free");
         }
         const figure = document.createElement("span");
         figure.className = "cost-figure";
         figure.textContent = bandCost
           ? Calc.usdRange(bandCost)
-          : m.inPerMTok != null || m.outPerMTok != null ? "" : "no curated price";
+          : m.included ? "included" : "no curated price";
         costCell.append(barWrap, figure);
 
         tr.append(name, inCell, outCell, ctxCell, costCell);
@@ -398,7 +426,7 @@
       tag.textContent = m.priceScope === "platform" ? "platform table"
         : m.priceScope === "list" ? "list price"
         : m.priceScope === "auto" ? "auto-synced"
-        : m.priceScope === "beta" ? "private beta" : "illustrative";
+        : "illustrative";
       tags.push(tag);
     }
     if (m.state !== "available") {
@@ -436,10 +464,10 @@
     const tiles = $("eval-tiles");
     tiles.replaceChildren(
       tile("Agent cost / run",
-        v.agentCost ? Calc.usd(v.agentCost.point) : "unpriced",
+        v.agentCost ? Calc.usdOrFree(v.agentCost) : "unpriced",
         v.agentCost ? Calc.usdRange(v.agentCost) : "no curated price for this model"),
       tile("Judge cost / run",
-        v.judgeCost ? Calc.usd(v.judgeCost.point) : "unpriced",
+        v.judgeCost ? Calc.usdOrFree(v.judgeCost) : "unpriced",
         v.judgeCost ? Calc.usdRange(v.judgeCost) : `the "${p.judgeModelId}" alias is unpriced by design`),
       tile("Wall time",
         `${Calc.shortTokens(v.wallSeconds.point / 60)} min`,
@@ -467,9 +495,10 @@
     renderConversation(p);
     renderAnatomy(p);
     renderSummary(v, p);
-    renderManaged(v);
+    renderCallout(v);
     renderTable(v);
     renderEval();
+    syncUrl();
   }
 
   for (const id of ["in-sessions", "in-adoption", "in-turns", "in-rounds", "in-tokin", "in-tokout",
@@ -756,6 +785,80 @@
     }
   });
 
+  /* ── Shareable state ────────────────────────────────────────────────
+     Every input travels in the URL (?s=…), so a copied link carries the
+     values, and the copy-summary text carries them in plain words too. */
+
+  const STATE_FIELDS = [
+    ["sessions", "in-sessions"], ["adoption", "in-adoption"], ["turns", "in-turns"],
+    ["rounds", "in-rounds"], ["tokin", "in-tokin"], ["tokout", "in-tokout"],
+    ["guard", "in-guardrails"], ["resp", "in-respcache"], ["prov", "in-provcache"],
+    ["pdp", "in-pdp"], ["pdpcalls", "in-pdpcalls"], ["follow", "in-followups"], ["days", "in-days"],
+  ];
+
+  function currentState() {
+    const s = { model: state.selectedModel };
+    for (const [key, id] of STATE_FIELDS) {
+      const el = $(id);
+      s[key] = el.type === "checkbox" ? el.checked : el.value;
+    }
+    return s;
+  }
+
+  function applyState(s) {
+    if (!s) return;
+    if (s.model && C.models.some((m) => m.id === s.model)) state.selectedModel = s.model;
+    for (const [key, id] of STATE_FIELDS) {
+      const el = $(id);
+      if (s[key] === undefined) continue;
+      if (el.type === "checkbox") el.checked = Boolean(s[key]);
+      else el.value = s[key];
+    }
+    $("out-adoption").value = $("in-adoption").value;
+    $("out-respcache").value = $("in-respcache").value;
+    $("out-provcache").value = $("in-provcache").value;
+  }
+
+  function shareUrl() {
+    return `${location.origin}${location.pathname}?s=${Calc.encodeState(currentState())}${location.hash}`;
+  }
+
+  function syncUrl() {
+    try { history.replaceState(null, "", `?s=${Calc.encodeState(currentState())}${location.hash}`); }
+    catch (e) { /* replaceState can throw on exotic origins; the page keeps working */ }
+  }
+
+  $("copy-summary").addEventListener("click", async () => {
+    const p = trafficParams();
+    const v = Calc.productionView(p, C);
+    const cost = cachedCost(v);
+    const model = C.models.find((m) => m.id === state.selectedModel);
+    const costLine = cost
+      ? `${Calc.usdRange(cost)} / month (±50%, midpoint ${Calc.usd(cost.point)})`
+      : "no curated price for this model";
+    const lines = [
+      `Shopping Assistant cost estimate — ${model ? model.label : "?"}`,
+      `Traffic: ${Calc.fmtInt(p.sessionsPerDay)} sessions/day · ${p.adoptionPct}% adoption · ${p.turnsPerConversation} turns · ${p.roundsPerTurn} rounds`,
+      `Tokens: ${Calc.fmtInt(p.inputTokensPerRound)} in / ${Calc.fmtInt(p.outputTokensPerTurnCall)} out per round · guardrails ${p.guardrails ? "on" : "off"}`,
+      `Caching: ${p.responseCachePct}% response · ${p.providerCachePct}% provider prefix` +
+        (p.pdp ? ` · PDP ${Calc.fmtInt(p.pdpCallsPerDay)}/day` : "") + (p.followups ? " · follow-up chips" : ""),
+      `→ ${costLine} · ≈ ${Calc.usd(cost.point / (v.conversationsPerDay * p.daysPerMonth))} per assisted conversation`,
+      `Monthly tokens: ≈${Calc.shortTokens(v.tokensInMonth)} in / ${Calc.shortTokens(v.tokensOutMonth)} out · ${Calc.fmtInt(v.turnsBilledPerDay * 30)} billed interactions`,
+      `Share (values included): ${shareUrl()}`,
+      "Every figure is a ±50% band, not a quote. Constants and price sources are on the page.",
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      const btn = $("copy-summary");
+      const prev = btn.textContent;
+      btn.textContent = "Copied ✓ — values and link included";
+      setTimeout(() => { btn.textContent = prev; }, 2500);
+    } catch (e) {
+      // clipboard can refuse without user permission; fall back to the URL itself
+      prompt("Copy this share link:", shareUrl());
+    }
+  });
+
   /* ── Boot ─────────────────────────────────────────────────────────── */
 
   (function renderTemplates() {
@@ -783,8 +886,19 @@
     }
   })();
 
+  for (const [chipId, inputId] of [["chip-tokin", "in-tokin"], ["chip-tokout", "in-tokout"]]) {
+    $(chipId).addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-tokin], [data-tokout]");
+      if (!btn) return;
+      $(inputId).value = btn.dataset.tokin || btn.dataset.tokout;
+      renderAll();
+    });
+  }
+
   loadCredentials();
+  applyState(Calc.decodeState(new URLSearchParams(location.search).get("s")));
   const hash = (location.hash || "").replace("#", "");
   if (TABS.includes(hash)) selectTab(hash);
   renderAll();
+  syncUrl();
 })();

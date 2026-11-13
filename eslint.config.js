@@ -54,6 +54,9 @@ const browserGlobals = {
   crypto: "readonly",
   alert: "readonly",
   Intl: "readonly",
+  btoa: "readonly",
+  atob: "readonly",
+  prompt: "readonly",
   Event: "readonly",
   CustomEvent: "readonly",
   // cross-file globals the demos publish to each other
