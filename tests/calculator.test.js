@@ -79,10 +79,35 @@ test("cost band: gpt-4o-mini on the production defaults", () => {
 });
 
 test("an unpriced model yields no cost, and says why in its source", () => {
-  const m = model("grok-4.5");
+  const m = model("algolia-medium");
   assert.equal(m.priceScope, null);
   assert.equal(Calc.costBand(m, 1_000_000, 1_000_000, 0.5), null);
-  assert.match(m.source, /no price curated/);
+  assert.match(m.source, /no (price curated|curated price|public registry)/);
+});
+
+test("auto-synced prices fill gaps and never override curated rows", () => {
+  // prices.auto.js (generated) was loaded by the shared loader when present;
+  // these pins hold against the committed file so a bad sync fails CI.
+  const fable = model("claude-fable-5");
+  if (fable.priceScope === "auto") {
+    assert.ok(fable.inPerMTok > 0 && fable.outPerMTok > 0, "auto price is a real number");
+    assert.match(fable.source, /auto-synced/i);
+    assert.match(fable.source, /fetched \d{4}-\d{2}-\d{2}/);
+  } else {
+    assert.equal(fable.priceScope, null, "unsynced rows stay honestly unpriced");
+  }
+  // curated rows are untouchable: the platform billing table wins even
+  // where a registry disagrees
+  const platform = model("gpt-5.6-sol");
+  assert.equal(platform.priceScope, "platform");
+  assert.equal(platform.inPerMTok, 5);
+  // context windows may be filled by the sync for any row missing one
+  for (const m of C.models) {
+    if (m.priceScope && m.contextWindow == null && globalThis.CALC_AUTO_PRICES) {
+      assert.equal(globalThis.CALC_AUTO_PRICES.prices[m.id]?.contextWindow == null, true,
+        `${m.id}: context left unknown means the registry had none either`);
+    }
+  }
 });
 
 test("eval view mirrors the platform's estimate_eval_run", () => {
@@ -120,7 +145,7 @@ test("eval view: guardrails add one classification per case", () => {
 test("eval view: unpriced agent model yields no agent cost", () => {
   const v = Calc.evalView({
     numCases: 10, iterations: 1, metricCount: 1, roundsMultiplier: 2,
-    modelId: "grok-4.5", judgeModelId: "medium", concurrency: 2, guardrails: false,
+    modelId: "algolia-medium", judgeModelId: "medium", concurrency: 2, guardrails: false,
   }, C);
   assert.equal(v.agentCost, null);
   assert.ok(v.assumptions.some((a) => a.includes("No agent cost")));
@@ -211,10 +236,10 @@ test("every model row is well-formed", () => {
       true, `${m.id}: both prices or neither`
     );
     if (m.priceScope != null) {
-      assert.ok(["platform", "list", "placeholder"].includes(m.priceScope), `${m.id}: scope`);
+      assert.ok(["platform", "list", "placeholder", "auto"].includes(m.priceScope), `${m.id}: scope`);
       assert.ok(m.source && m.source.length > 20, `${m.id}: priced rows name their source`);
     } else {
-      assert.match(m.source, /no price curated/, `${m.id}: unpriced rows say why`);
+      assert.match(m.source, /no (price curated|curated price|public registry)/, `${m.id}: unpriced rows say why`);
     }
   }
 });
