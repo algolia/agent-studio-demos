@@ -125,21 +125,54 @@ test("redact is right-to-left safe and segments cover the text exactly", async (
   assert.deepEqual(d.detect(null), []);
 });
 
-test("the mock agent echoes what it received: raw values on the left, masks on the right", async () => {
+const MOCK_CASES = [
+  { text: "Can you show me my account balance? My account number is 4521-8830-1127 and my social is 123-45-6789",
+    intent: "balance", echo: ["4521-8830-1127", "123-45-6789"], missing: "an account number or a social security number", step: "sign in to the mobile app" },
+  { text: "My card 4111 1111 1111 1111 was charged twice yesterday. Can you refund it?",
+    intent: "card", echo: ["4111 1111 1111 1111"], missing: "a card number", step: "call the number on the back of your card" },
+  { text: "Please send 250 EUR to DE89370400440532013000 for the rent.",
+    intent: "transfer", echo: ["DE89370400440532013000"], missing: "the payee's IBAN", step: "add the payee in the mobile app" },
+  { text: "Update my contact details: my.mail@example.com and +1 415-555-0132.",
+    intent: "contact", echo: ["my.mail@example.com", "+1 415-555-0132"], missing: "an email address or a phone number", step: "open Profile" },
+  { text: "My account number is 00123456, please check my balance",
+    intent: "balance", echo: ["00123456"], missing: "an account number", step: "sign in to the mobile app" },
+  { text: "What is my balance? My social is 123-45-6789",
+    intent: "balance", echo: ["123-45-6789"], missing: "a social security number", step: "sign in to the mobile app" },
+];
+
+test("the mock agent leaks raw identifiers back, and reacts to masks without echoing them", async () => {
+  const d = await load("detect.js");
+  const { mockReply } = await load("mock.js");
+  for (const c of MOCK_CASES) {
+    const raw = mockReply(c.text);
+    assert.equal(raw.intent, c.intent, c.text);
+    for (const v of c.echo) assert.ok(raw.text.includes(v), `raw reply repeats ${v}`);
+    const masked = mockReply(d.filterMessage(c.text, "redact").toModel);
+    assert.equal(masked.intent, c.intent);
+    assert.ok(!/\[[A-Z_]+\]/.test(masked.text), `no mask echoed: ${masked.text}`);
+    assert.deepEqual(d.detect(masked.text), [], "nothing raw comes back from the filtered side");
+    assert.ok(masked.text.includes(`I can't see ${c.missing} in your message`), masked.text);
+    assert.ok(masked.text.includes(c.step), masked.text);
+    assert.notEqual(masked.text, raw.text);
+    assert.deepEqual(mockReply(c.text), raw, "deterministic");
+  }
+});
+
+test("mock reminders: secret numbers get one wording, contact details another", async () => {
   const d = await load("detect.js");
   const { mockReply, BLOCK_REPLY } = await load("mock.js");
-  const text = "Can you show me my account balance? My account number is 4521-8830-1127 and my social is 123-45-6789";
-  const raw = mockReply(text);
-  assert.equal(raw.intent, "balance");
-  assert.ok(raw.text.includes("4521-8830-1127") && raw.text.includes("123-45-6789"));
-  const masked = mockReply(d.filterMessage(text, "redact").toModel);
-  assert.ok(masked.text.includes("[ACCOUNT_NUMBER]") && masked.text.includes("[US_SSN]"));
-  assert.deepEqual(d.detect(masked.text), [], "nothing raw comes back from the filtered side");
-  assert.equal(mockReply("What time do your branches open on Saturday?").intent, "hours");
-  assert.equal(mockReply("Please send 250 EUR to DE89370400440532013000").intent, "transfer");
+  const m = (t) => mockReply(d.filterMessage(t, "redact").toModel).text;
+  assert.match(m(MOCK_CASES[1].text), /never type account, card or social security numbers/);
+  assert.match(m(MOCK_CASES[3].text), /no need to share contact details/);
+  assert.doesNotMatch(m(MOCK_CASES[3].text), /social security/);
+  // mixed: a raw value the filter missed is still echoed, the masked one is not
+  const mixed = mockReply("Update my contact details: [EMAIL] and +1 415-555-0132.");
+  assert.ok(mixed.text.includes("+1 415-555-0132") && mixed.text.includes("I can't see an email address"));
+  const clean = mockReply("What time do your branches open on Saturday?");
+  assert.equal(clean.intent, "hours");
+  assert.ok(!clean.text.includes("I can't see"));
   assert.equal(mockReply("hello").intent, "fallback");
   assert.deepEqual(d.detect(BLOCK_REPLY), []);
-  assert.deepEqual(mockReply(text), raw, "deterministic");
 });
 
 test("live mode: one completions call with the given text, key only in headers, stream read", async () => {
