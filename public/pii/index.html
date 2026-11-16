@@ -110,7 +110,10 @@
     <h2 id="h-in-pr">Also in the pull request <span class="panel-tag">experimental · not deployed yet</span></h2>
     <ul class="in-pr-list">
       <li><strong>Tasks.</strong> Agent tasks take JSON input. In redact mode, the string values in that input
-      are redacted and the task runs. Block mode refuses the task.</li>
+      are redacted and the task runs. Block mode refuses it with a 422 that names the types.
+      Schema errors never quote a value.
+<pre class="wire">{"name": "ClientError", "message": "Input blocked by guardrails",
+ "details": {"category": "pii", "entities": ["PHONE"]}}</pre></li>
       <li><strong>Block names the type.</strong> The refusal is a stream event with category <code>pii</code>.
       Its message names the type in words, and <code>entities</code> lists the type names. Values never appear.
 <pre class="wire">{"type": "data-guardrail-violation",
