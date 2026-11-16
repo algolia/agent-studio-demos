@@ -14,6 +14,12 @@
               Neither has a checksum, so they are lower-precision heuristics:
               the SSN rule only knows which numbers were never issued, and the
               account rule needs a nearby keyword.
+   PORT       FR_NIR, FR_TAX_ID, FR_SIREN, FR_SIRET, ES_DNI, ES_NIE. A demo port
+              of identifiers the toolkit is gaining, written from the public
+              rules (INSEE structure, mod 97 key, mod 511, Luhn, the DNI letter
+              table), not from any library's code or test numbers. SIREN and
+              SIRET pass Luhn one time in ten, so they need a keyword before
+              them. Other countries' national ids are not covered yet.
 
    Names and postal addresses are not detected at all (the toolkit's Tier-2 is
    a no-op today). This reduces exposure; it is not a compliance guarantee.
@@ -22,7 +28,11 @@
 export const TOOLKIT_ENTITIES = ["EMAIL", "PHONE", "CREDIT_CARD", "IBAN", "IP"];
 /** demo extras, not part of the toolkit */
 export const EXTRA_ENTITIES = ["US_SSN", "ACCOUNT_NUMBER"];
-export const ENTITIES = [...TOOLKIT_ENTITIES, ...EXTRA_ENTITIES];
+/** demo port of identifiers the toolkit is gaining; also switched by `extras` */
+export const PORT_ENTITIES = ["FR_NIR", "FR_TAX_ID", "FR_SIREN", "FR_SIRET", "ES_DNI", "ES_NIE"];
+/** the port entities that fire only after a keyword */
+export const GATED_ENTITIES = ["FR_SIREN", "FR_SIRET"];
+export const ENTITIES = [...TOOLKIT_ENTITIES, ...EXTRA_ENTITIES, ...PORT_ENTITIES];
 
 const digitsOf = (s) => String(s).replace(/\D/g, "");
 const allDigits = (s) => s !== "" && /^\d+$/.test(s);
@@ -141,6 +151,60 @@ function accountKeywordBefore(text, start) {
   return words.length <= ACCOUNT_GAP;
 }
 
+/* ── Demo port: French and Spanish identifiers ─────────────────── */
+
+/**
+ * NIR (French social security number): sex, year, month, department (2A and
+ * 2B for Corsica), commune, order, then a 2-digit key = 97 - (first 13 mod 97),
+ * where 2A counts as 19 and 2B as 18. Spaces between the groups are allowed.
+ */
+export function validNir(match) {
+  const c = String(match).replace(/\s/g, "").toUpperCase();
+  if (!/^[1-478]\d{4}(?:\d{2}|2[AB])\d{8}$/.test(c)) return false;
+  const body = c.slice(0, 5) + c.slice(5, 7).replace("2A", "19").replace("2B", "18") + c.slice(7, 13);
+  return 97 - (Number(body) % 97) === Number(c.slice(13));
+}
+
+/** French tax number (numéro fiscal): 13 digits, first 0 to 3, first 10 mod 511 = last 3 */
+export function validFrTaxId(match) {
+  const c = digitsOf(match);
+  return /^[0-3]\d{12}$/.test(c) && Number(c.slice(0, 10)) % 511 === Number(c.slice(10));
+}
+
+/** SIREN: 9 digits, Luhn */
+export const validSiren = (match) => { const c = digitsOf(match); return c.length === 9 && luhn(c); };
+
+/** SIRET: SIREN + 5-digit NIC, Luhn on all 14; La Poste's (SIREN 356000000) use a digit sum divisible by 5 */
+export function validSiret(match) {
+  const c = digitsOf(match);
+  if (c.length !== 14) return false;
+  if (c.startsWith("356000000")) return [...c].reduce((t, d) => t + Number(d), 0) % 5 === 0;
+  return luhn(c);
+}
+
+const DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
+/** DNI: 8 digits and the letter of their value mod 23; NIE: X, Y or Z (as 0, 1, 2), 7 digits, the same letter */
+export function validDni(match) {
+  const m = /^(\d{8})[- ]?([A-Z])$/.exec(String(match).toUpperCase());
+  return Boolean(m) && DNI_LETTERS[Number(m[1]) % 23] === m[2];
+}
+export function validNie(match) {
+  const m = /^([XYZ])-?(\d{7})[- ]?([A-Z])$/.exec(String(match).toUpperCase());
+  return Boolean(m) && DNI_LETTERS[Number("XYZ".indexOf(m[1]) + m[2]) % 23] === m[3];
+}
+
+/** a keyword ending at most `gap` words (none holding a digit) before `start` */
+function keywordBefore(text, start, re, gap = 3) {
+  const before = text.slice(Math.max(0, start - 60), start);
+  let last = null;
+  for (const m of before.matchAll(re)) last = m;
+  if (!last) return false;
+  const rest = before.slice(last.index + last[0].length);
+  return !/\d/.test(rest) && rest.split(/[\s:#=°.]+/).filter(Boolean).length <= gap;
+}
+const SIREN_KEYWORD = /\bsiren\b/gi;
+const SIRET_KEYWORD = /\bsiret\b/gi;
+
 /* ── Detectors ────────────────────────────────────────────────── */
 
 /** score orders overlaps at equal span: checksum 1.0 > demo extras 0.9 > phone 0.85 */
@@ -167,6 +231,19 @@ const DETECTORS = [
     score: 0.9,
     extra: true,
   },
+  // demo port of identifiers the toolkit is gaining
+  { entity: "FR_NIR", re: /(?<![\w])[1-478] ?\d{2} ?\d{2} ?(?:\d{2}|2[ABab]) ?\d{3} ?\d{3} ?\d{2}(?![\w])/g, check: validNir, score: 0.95, extra: true },
+  { entity: "FR_TAX_ID", re: /(?<![\w])[0-3]\d(?: ?\d{2} ?\d{3} ?\d{3} ?\d{3})(?![\w])/g, check: validFrTaxId, score: 0.9, extra: true },
+  {
+    entity: "FR_SIRET", re: /(?<![\w])\d{3} ?\d{3} ?\d{3} ?\d{5}(?![\w])/g,
+    check: (v, text, start) => validSiret(v) && keywordBefore(text, start, SIRET_KEYWORD), score: 0.9, extra: true,
+  },
+  {
+    entity: "FR_SIREN", re: /(?<![\w])\d{3} ?\d{3} ?\d{3}(?![\w])/g,
+    check: (v, text, start) => validSiren(v) && keywordBefore(text, start, SIREN_KEYWORD), score: 0.9, extra: true,
+  },
+  { entity: "ES_DNI", re: /(?<![\w])\d{8}[- ]?[A-Za-z](?![\w])/g, check: validDni, score: 0.95, extra: true },
+  { entity: "ES_NIE", re: /(?<![\w])[XYZxyz]-?\d{7}[- ]?[A-Za-z](?![\w])/g, check: validNie, score: 0.95, extra: true },
 ];
 
 /** earliest start wins; then the longer span; then the higher score; overlaps dropped */
@@ -246,6 +323,6 @@ export function segments(text, findings) {
 export function maskFindings(text) {
   const re = new RegExp(`\\[(${ENTITIES.join("|")})\\]`, "g");
   return [...text.matchAll(re)].map((m) => ({
-    entity: m[1], start: m.index, end: m.index + m[0].length, value: m[0], score: 1, extra: EXTRA_ENTITIES.includes(m[1]),
+    entity: m[1], start: m.index, end: m.index + m[0].length, value: m[0], score: 1, extra: EXTRA_ENTITIES.includes(m[1]) || PORT_ENTITIES.includes(m[1]),
   }));
 }

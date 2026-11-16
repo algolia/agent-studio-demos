@@ -222,11 +222,12 @@ test("every 'try it' sample is flagged with its own type and masks whole", async
       n++;
       const r = d.filterMessage(v, "redact");
       assert.deepEqual(r.findings.map((f) => f.entity), [entity], v);
-      const expected = entity === "ACCOUNT_NUMBER" ? v.replace(/[\d][\d-]*\d$/, "[ACCOUNT_NUMBER]") : `[${entity}]`;
+      const keyed = ["ACCOUNT_NUMBER", ...d.GATED_ENTITIES].includes(entity);
+      const expected = keyed ? v.replace(/\d[\d -]*\d$/, `[${entity}]`) : `[${entity}]`;
       assert.equal(r.toModel, expected, v);
     }
   }
-  assert.equal(n, 22);
+  assert.equal(n, 40);
 });
 
 test("the config's pii block becomes the live agent; anything incomplete keeps the mock", async () => {
@@ -249,4 +250,75 @@ test("the page loads config.js optionally and says where the live agent's filter
   assert.match(html, /Algolia's managed LLM/);
   assert.match(html, /filter on the right still runs in this tab/);
   assert.match(html, /never an admin key/);
+});
+
+/* A clean-room generator: our own inputs, each check computed from the public
+   rule. The port's samples must be exactly what it makes. */
+const DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
+const gen = {
+  nir: (sex, yy, mm, dept, commune, order) => {
+    const body = `${sex}${yy}${mm}${dept}${commune}${order}`;
+    const n = Number(body.slice(0, 5) + body.slice(5, 7).replace("2A", "19").replace("2B", "18") + body.slice(7));
+    return body + String(97 - (n % 97)).padStart(2, "0");
+  },
+  tax: (ten) => ten + String(Number(ten) % 511).padStart(3, "0"),
+  luhn: (prefix) => {
+    for (let c = 0; c < 10; c++) {
+      const s = prefix + c;
+      let t = 0;
+      for (let i = 0; i < s.length; i++) {
+        let x = Number(s[s.length - 1 - i]);
+        if (i % 2) { x *= 2; if (x > 9) x -= 9; }
+        t += x;
+      }
+      if (t % 10 === 0) return s;
+    }
+    return null;
+  },
+  dni: (n) => n + DNI_LETTERS[Number(n) % 23],
+  nie: (l, n) => l + n + DNI_LETTERS[Number("XYZ".indexOf(l) + n) % 23],
+};
+
+test("French and Spanish samples are the generator's, and each validator holds the rule", async () => {
+  const d = await load("detect.js");
+  const { SAMPLES } = await load("samples.js");
+  const siren = ["50832517", "40123456", "81234567"].map(gen.luhn);
+  const made = {
+    FR_NIR: [gen.nir(2, "91", "03", "2A", "004", "123"), gen.nir(1, "78", "11", "69", "123", "045"), gen.nir(2, "02", "06", "13", "055", "310")],
+    FR_TAX_ID: ["1456789012", "0234567891", "2987654321"].map(gen.tax),
+    FR_SIREN: siren,
+    FR_SIRET: [gen.luhn(`${siren[0]}0001`), gen.luhn(`${siren[1]}0002`), gen.luhn(`${siren[2]}0013`)],
+    ES_DNI: ["39740125", "87654321", "00451230"].map(gen.dni),
+    ES_NIE: [gen.nie("X", "1234567"), gen.nie("Y", "7654321"), gen.nie("Z", "0451230")],
+  };
+  const compact = (v) => v.replace(/^(?:n° )?(?:siren|siret)(?: n°)?:? /i, "").replace(/[\s-]/g, "").toUpperCase();
+  for (const e of d.PORT_ENTITIES) assert.deepEqual(SAMPLES[e].map(compact), made[e], e);
+
+  // one digit off breaks every checksum
+  const bump = (s, i) => s.slice(0, i) + ((Number(s[i]) + 1) % 10) + s.slice(i + 1);
+  assert.equal(d.validNir(bump(made.FR_NIR[1], 14)), false);
+  assert.equal(d.validNir("291032B00412368"), false, "2B counts as 18, so 2A's key fails");
+  assert.equal(d.validNir(gen.nir(2, "91", "03", "2B", "004", "123")), true);
+  assert.equal(d.validNir(gen.nir(5, "91", "03", "75", "004", "123")), false, "sex digit 5 is not issued");
+  assert.equal(d.validFrTaxId(bump(made.FR_TAX_ID[0], 12)), false);
+  assert.equal(d.validFrTaxId(gen.tax("5456789012")), false, "first digit 0 to 3");
+  assert.equal(d.validSiren(bump(made.FR_SIREN[0], 3)), false);
+  assert.equal(d.validSiret(bump(made.FR_SIRET[0], 13)), false);
+  assert.equal(d.validSiret("35600000000047"), true, "La Poste: digit sum 25, divisible by 5, Luhn or not");
+  assert.equal(d.validSiret("35600000000048"), false);
+  assert.equal(d.validDni("39740125A"), false);
+  assert.equal(d.validNie("W1234567L"), false);
+});
+
+test("SIREN and SIRET need their keyword; the ungated port fires bare, and extras off silences all", async () => {
+  const d = await load("detect.js");
+  const ents = (t, o) => d.detect(t, o).map((f) => f.entity);
+  assert.deepEqual(ents("ref 508 325 172 please"), ["PHONE"], "a bare Luhn 9-digit number is not a SIREN");
+  assert.deepEqual(ents("notre SIREN est le 508 325 172"), ["FR_SIREN"], "le, est: three words, no digit");
+  assert.deepEqual(ents("SIREN de la société mère du groupe 508325172"), [], "too far from the keyword");
+  assert.deepEqual(ents("siret 50832517200015"), ["FR_SIRET"]);
+  assert.deepEqual(ents("siren 50832517200015"), [], "a SIRET after the SIREN keyword is neither");
+  assert.deepEqual(ents("mon numéro de sécu est 2 91 03 2A 004 123 68"), ["FR_NIR"]);
+  assert.deepEqual(ents("mi DNI es 39740125N y mi NIE X1234567L"), ["ES_DNI", "ES_NIE"]);
+  assert.deepEqual(ents("2 91 03 2A 004 123 68 and 39740125N", { extras: false }), [], "the port rides on the extras switch");
 });

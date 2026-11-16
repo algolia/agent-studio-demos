@@ -12,7 +12,9 @@
    starts on when that block exists); else the mock.
    ─────────────────────────────────────────────────────────────── */
 
-import { detect, filterMessage, maskFindings, segments, resolveOverlaps, ENTITIES, EXTRA_ENTITIES } from "./detect.js";
+import {
+  detect, filterMessage, maskFindings, segments, resolveOverlaps, ENTITIES, EXTRA_ENTITIES, PORT_ENTITIES, GATED_ENTITIES,
+} from "./detect.js";
 import { mockReply, BLOCK_REPLY } from "./mock.js";
 import { complete, configAgent, isUuid } from "./live.js";
 import { SAMPLES } from "./samples.js";
@@ -38,6 +40,12 @@ const COVER = {
   IP: "IPv4, each part 0 to 255",
   US_SSN: "US only: ddd-dd-dddd, never-issued ranges dropped",
   ACCOUNT_NUMBER: "6 to 20 digits after a word like “account number”",
+  FR_NIR: "French social security number: 15\u00a0characters, mod 97 key, 2A and 2B",
+  FR_TAX_ID: "French tax number: 13 digits, mod 511 check",
+  FR_SIREN: "9 digits after “SIREN”, Luhn check",
+  FR_SIRET: "14 digits after “SIRET”, Luhn check",
+  ES_DNI: "Spanish DNI: 8 digits and a check letter",
+  ES_NIE: "Spanish NIE: X, Y or Z, 7 digits and a check letter",
 };
 
 const state = {
@@ -189,7 +197,8 @@ function renderLegend(findings) {
   const list = document.createElement("ul");
   for (const e of ENTITIES) {
     const li = document.createElement("li");
-    const extra = EXTRA_ENTITIES.includes(e);
+    const port = PORT_ENTITIES.includes(e);
+    const extra = port || EXTRA_ENTITIES.includes(e);
     li.className = `${extra ? "extra" : "toolkit"}${counts[e] ? " hit" : ""}${extra && !state.extras ? " off" : ""}`;
     li.append(mark(e, e, false));
     const what = document.createElement("span");
@@ -199,6 +208,10 @@ function renderLegend(findings) {
     const kind = document.createElement("span");
     kind.className = "kind";
     kind.textContent = extra ? "demo extra · lower precision" : "toolkit · checksum";
+    if (port) {
+      kind.textContent = GATED_ENTITIES.includes(e) ? "demo port · keyword · lower precision" : "demo port · checksum";
+      kind.title = "A demo port of identifiers the toolkit is gaining.";
+    }
     if (e === "PHONE") kind.textContent = "toolkit · digit count";
     if (e === "EMAIL") kind.textContent = "toolkit · pattern";
     li.append(kind);
@@ -211,7 +224,7 @@ function renderLegend(findings) {
   }
   const none = document.createElement("li");
   none.className = "none";
-  none.textContent = "Not found: names, postal addresses, dates of birth, free text.";
+  none.textContent = "Not found: names, postal addresses, dates of birth, free text, and national ids of other countries.";
   list.append(none);
   $("legend").replaceChildren(list);
 }

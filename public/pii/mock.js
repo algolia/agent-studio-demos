@@ -30,8 +30,14 @@ const MISSING = {
   EMAIL: "an email address",
   PHONE: "a phone number",
   IP: "an IP address",
+  FR_NIR: "a social security number",
+  FR_TAX_ID: "a tax number",
+  FR_SIREN: "a company number",
+  FR_SIRET: "a company number",
+  ES_DNI: "an ID number",
+  ES_NIE: "an ID number",
 };
-const SECRET = new Set(["ACCOUNT_NUMBER", "US_SSN", "CREDIT_CARD", "IBAN"]);
+const SECRET = new Set(["ACCOUNT_NUMBER", "US_SSN", "CREDIT_CARD", "IBAN", "FR_NIR", "FR_TAX_ID", "ES_DNI", "ES_NIE"]);
 
 const list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} or ${xs[xs.length - 1]}`);
 
