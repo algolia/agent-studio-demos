@@ -120,8 +120,13 @@
  "data": {"category": "pii", "guardrailType": "input",
   "fallbackResponse": "Your message seems to contain sensitive personal data (payment card number), so it was not processed. Remove it and try again.",
   "entities": ["CREDIT_CARD"]}}</pre></li>
+      <li><strong>Detection.</strong> It also catches IBANs in groups of four and a card followed by its
+      expiry. The next kit release adds unspaced + phones. Unspaced phones that start with 0, and some
+      spaced-out IDs, are still missed.</li>
+      <li><strong>Limits.</strong> Only user input is checked, up to 32,000&nbsp;characters a request;
+      longer is refused. An identifier split across two JSON values of a task input is missed.</li>
     </ul>
-    <p class="meta">This page does not run either one. It runs the filter in this tab only.</p>
+    <p class="meta">This page runs none of this. It runs its own filter in this tab only.</p>
   </section>
 
   <section class="panel" aria-labelledby="h-cover">

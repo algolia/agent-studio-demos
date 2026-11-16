@@ -300,6 +300,12 @@ test("the header links to the pull request safely and the pull-request-only feat
   assert.match(inPr[0], /string values in that input\s+are redacted and the task runs/);
   assert.match(inPr[0], /"message": "Input blocked by guardrails"/);
   assert.match(inPr[0], /Schema errors never quote a value/);
+  // the pull request's own known limits, stated rather than contradicted
+  assert.match(inPr[0], /Only user input is checked/);
+  assert.match(inPr[0], /32,000(&nbsp;| )characters/);
+  assert.match(inPr[0], /split across two JSON values of a task input is missed/);
+  assert.match(inPr[0], /still missed/);
+  assert.doesNotMatch(inPr[0], /v0\.2\.1|released/, "the kit release is not claimed before its tag exists");
 });
 
 /* A clean-room generator: our own inputs, each check computed from the public
