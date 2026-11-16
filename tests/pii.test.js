@@ -124,3 +124,56 @@ test("redact is right-to-left safe and segments cover the text exactly", async (
   assert.deepEqual(d.detect(masked), [], "masks are not re-detected");
   assert.deepEqual(d.detect(null), []);
 });
+
+test("the mock agent echoes what it received: raw values on the left, masks on the right", async () => {
+  const d = await load("detect.js");
+  const { mockReply, BLOCK_REPLY } = await load("mock.js");
+  const text = "Can you show me my account balance? My account number is 4521-8830-1127 and my social is 123-45-6789";
+  const raw = mockReply(text);
+  assert.equal(raw.intent, "balance");
+  assert.ok(raw.text.includes("4521-8830-1127") && raw.text.includes("123-45-6789"));
+  const masked = mockReply(d.filterMessage(text, "redact").toModel);
+  assert.ok(masked.text.includes("[ACCOUNT_NUMBER]") && masked.text.includes("[US_SSN]"));
+  assert.deepEqual(d.detect(masked.text), [], "nothing raw comes back from the filtered side");
+  assert.equal(mockReply("What time do your branches open on Saturday?").intent, "hours");
+  assert.equal(mockReply("Please send 250 EUR to DE89370400440532013000").intent, "transfer");
+  assert.equal(mockReply("hello").intent, "fallback");
+  assert.deepEqual(d.detect(BLOCK_REPLY), []);
+  assert.deepEqual(mockReply(text), raw, "deterministic");
+});
+
+test("live mode: one completions call with the given text, key only in headers, stream read", async () => {
+  const live = await load("live.js");
+  const calls = [];
+  const sse = [
+    'data: {"type":"start"}',
+    'data: {"type":"text-delta","id":"t","delta":"Hello "}',
+    'data: {"type":"text-delta","id":"t","delta":"there."}',
+    "data: [DONE]",
+    "",
+  ].join("\n");
+  const fakeFetch = async (url, init) => {
+    calls.push({ url, init });
+    return { ok: true, status: 200, text: async () => sse };
+  };
+  const creds = { region: "eu", appId: "APPID", apiKey: "k-test", agentId: "123e4567-e89b-42d3-a456-426614174000" };
+  const r = await live.complete(fakeFetch, creds, "my account number is [ACCOUNT_NUMBER]");
+  assert.deepEqual(r, { text: "Hello there.", error: null });
+  assert.equal(calls.length, 1);
+  const { url, init } = calls[0];
+  assert.equal(url, `https://agent-studio.eu.algolia.com/1/agents/${creds.agentId}/completions?${live.COMPLETION_QUERY}`);
+  assert.ok(!url.includes("k-test"), "the key never goes in the URL");
+  assert.equal(init.method, "POST");
+  assert.equal(init.headers["X-Algolia-API-Key"], "k-test");
+  assert.equal(init.credentials, "omit");
+  assert.deepEqual(JSON.parse(init.body), { messages: [{ role: "user", parts: [{ type: "text", text: "my account number is [ACCOUNT_NUMBER]" }] }] });
+
+  const denied = await live.complete(async () => ({ ok: false, status: 403, text: async () => "echo of the message" }), creds, "x");
+  assert.deepEqual(denied, { text: "", error: "403: this key cannot do that" }, "a status sentence, never the body");
+  const down = await live.complete(async () => { throw new TypeError("Failed to fetch"); }, creds, "x");
+  assert.equal(down.error, "network or CORS");
+  await assert.rejects(live.complete(fakeFetch, { ...creds, agentId: "../agents" }, "x"), /UUID/);
+  await assert.rejects(live.complete(fakeFetch, { ...creds, region: "mars" }, "x"), /region/);
+  assert.equal(calls.length, 1, "refused before fetch");
+  assert.equal(live.readStream('data: {"type":"data-guardrail-violation","data":{}}\n').error, "blocked by the agent's guardrail");
+});
