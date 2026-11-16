@@ -309,7 +309,8 @@ test("the header links to the pull request safely and the pull-request-only feat
   assert.match(inPr[0], /32,000(&nbsp;| )characters/);
   assert.match(inPr[0], /split across two JSON values of a task input is missed/);
   assert.match(inPr[0], /still missed/);
-  assert.doesNotMatch(inPr[0], /v0\.2\.1|released/, "the kit release is not claimed before its tag exists");
+  assert.match(inPr[0], /Kit v0\.2\.1 adds unspaced \+ phones; the pull request still pins v0\.2\.0/,
+    "a kit-only gain is not credited to the server");
 });
 
 /* A clean-room generator: our own inputs, each check computed from the public
