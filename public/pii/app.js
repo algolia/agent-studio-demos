@@ -56,7 +56,7 @@ const state = {
   own: null, // { region, appId, apiKey, agentId } from the form, in memory only
   demo: configAgent(window.DEMO_CONFIG), // the same shape, from config.js, or null
   useDemo: true,
-  live: { text: null, raw: null, filtered: null, pending: false },
+  live: { text: null, raw: null, filtered: null, pending: false, shown: Infinity },
 };
 
 /** the agent Send asks, or null for the mock */
@@ -143,7 +143,7 @@ function replyFor(side, sent) {
   const r = l[side];
   if (!r) return { text: null, empty: "Press Send to ask the agent." };
   if (r.error) return { text: null, empty: r.error };
-  return { text: r.text };
+  return { text: l.shown >= r.text.length ? r.text : r.text.slice(0, l.shown) };
 }
 
 function render() {
@@ -279,20 +279,51 @@ function setAgentLabel() {
   $("live-note").hidden = !(state.demo && state.useDemo && !state.own);
 }
 
+const FAST_MS = 3000; // a reply this quick came from the cache: type it out
+const COOLDOWN_MS = 1500;
+let cooldownUntil = 0;
+let typer = null;
+
+function setBusy(busy) {
+  const b = $("send");
+  b.disabled = busy;
+  b.textContent = busy ? "Asking…" : "Send";
+}
+
+function typeOut(text) {
+  clearInterval(typer);
+  const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const total = Math.max(state.live.raw?.text.length || 0, state.live.filtered?.text.length || 0);
+  if (reduced) { state.live.shown = Infinity; return; }
+  state.live.shown = 0;
+  typer = setInterval(() => {
+    if (state.live.text !== text || state.live.shown >= total) { clearInterval(typer); return; }
+    state.live.shown += 3;
+    render();
+  }, 20);
+}
+
 async function send() {
   const who = creds();
   if (!who) { render(); return; }
   const text = $("msg").value;
+  if (!text.trim() || state.live.pending || Date.now() < cooldownUntil) return;
   const raw = filterMessage(text, "off", { extras: state.extras });
   const f = filterMessage(text, state.mode, { extras: state.extras });
-  state.live = { text, raw: null, filtered: null, pending: true };
+  clearInterval(typer);
+  state.live = { text, raw: null, filtered: null, pending: true, shown: Infinity };
+  setBusy(true);
   render();
+  const t0 = Date.now();
   const [r, fl] = await Promise.all([
     complete(fetch, who, raw.toModel),
     f.toModel == null ? Promise.resolve(null) : complete(fetch, who, f.toModel),
   ]);
+  cooldownUntil = Date.now() + COOLDOWN_MS;
+  setTimeout(() => setBusy(false), COOLDOWN_MS);
   if (state.live.text !== text) return;
-  state.live = { text, raw: r, filtered: fl, pending: false };
+  state.live = { text, raw: r, filtered: fl, pending: false, shown: Infinity };
+  if (Date.now() - t0 < FAST_MS) typeOut(text);
   render();
 }
 
@@ -309,7 +340,7 @@ function useAgent() {
   }
   state.own = own;
   $("lv-key").value = "";
-  state.live = { text: null, raw: null, filtered: null, pending: false };
+  state.live = { text: null, raw: null, filtered: null, pending: false, shown: Infinity };
   $("lv-status").textContent = "Live: Send asks your agent, both sides.";
   setAgentLabel();
   render();
@@ -318,7 +349,7 @@ function useAgent() {
 function forget() {
   state.own = null;
   $("lv-key").value = "";
-  state.live = { text: null, raw: null, filtered: null, pending: false };
+  state.live = { text: null, raw: null, filtered: null, pending: false, shown: Infinity };
   $("lv-status").textContent = `Back to the ${creds() ? "live" : "mock"} agent. Your key is gone.`;
   setAgentLabel();
   render();
@@ -354,7 +385,7 @@ function init() {
     $("live").checked = state.useDemo;
     $("live").addEventListener("change", (e) => {
       state.useDemo = e.target.checked;
-      state.live = { text: null, raw: null, filtered: null, pending: false };
+      state.live = { text: null, raw: null, filtered: null, pending: false, shown: Infinity };
       setAgentLabel();
       render();
     });

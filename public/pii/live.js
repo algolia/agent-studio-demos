@@ -1,8 +1,8 @@
 /* ───────────────────────────────────────────────────────────────
    live.js — the optional live mode: one message to your own agent.
 
-   POST /1/agents/{id}/completions, the same call and query as the
-   Guardrails Arena (cache, memory and analytics off). The conversation is
+   POST /1/agents/{id}/completions (cache on, so a repeated message is
+   answered from the agent's cache; memory and analytics off). The conversation is
    still kept under the agent's own retention setting, like any completion.
 
    What this file will and will not do:
@@ -20,7 +20,7 @@ export const HOSTS = {
   eu: "https://agent-studio.eu.algolia.com",
   us: "https://agent-studio.us.algolia.com",
 };
-export const COMPLETION_QUERY = "compatibilityMode=ai-sdk-5&stream=true&cache=false&memory=false&analytics=false";
+export const COMPLETION_QUERY = "compatibilityMode=ai-sdk-5&stream=true&cache=true&memory=false&analytics=false";
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 export const isUuid = (s) => UUID.test(String(s || "").trim());
 
