@@ -296,11 +296,12 @@ window.DEMO_CONFIG = {
   // },
 
   // Optional: /pii/, identifier filtering. With this block the page's "Live
-  // agent" switch starts on and both sides ask this agent, a tool-less banking
-  // assistant on Algolia's managed LLM; without it the page runs its mock.
+  // agent" switch starts on and both sides ask this agent, a banking assistant
+  // on Algolia's managed LLM that searches bank_faq; without it, the mock.
   // tools/pii-provision.mjs --write-config writes this block. The key is sent
   // from every visitor's browser: a browser key with completions on this
-  // agent only. NEVER an admin key: the page cannot tell them apart.
+  // agent and search on bank_faq (its tool searches with it), nothing more.
+  // NEVER an admin key: the page cannot tell them apart.
   // pii: {
   //   region: "eu",
   //   host: "https://agent-studio.eu.algolia.com",

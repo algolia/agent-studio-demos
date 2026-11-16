@@ -295,12 +295,23 @@ feature it simulates is still being built. It reduces exposure; it is not a
 compliance guarantee.
 
 Without a `pii` block in `config.js` the agent is a local mock. With one, the
-**Live agent** switch starts on, and Send asks `DEMO_pii-banking`, a tool-less
-banking help assistant on the Algolia-managed LLM: the raw message on the left,
-the filtered one on the right. The filter still runs in the tab either way. A
+**Live agent** switch starts on, and Send asks `DEMO_pii-banking`, a
+financial-advisor assistant on the Algolia-managed LLM that answers from the
+`bank_faq` index: the raw message on the left, the filtered one on the right. The filter still runs in the tab either way. A
 visitor's own agent, entered under "Use your own agent", wins over both.
 
 ### Provision the pii agent
+
+Seed the FAQ first (`public/pii/data/bank_faq.json`, 32 records, EN and FR).
+It takes an indexing key, never the admin key, and writes `bank_faq` only; it
+refuses a `bank_faq` it did not create (no `_demo-marker` record):
+
+```sh
+APP_ID=… INDEX_KEY=… node tools/pii-faq-seed.mjs --dry-run
+APP_ID=… INDEX_KEY=… node tools/pii-faq-seed.mjs
+```
+
+Then the agent:
 
 ```sh
 # list the providers the fence allows, and the candidate models each serves
@@ -319,6 +330,8 @@ one, and on the first model of its candidate list that provider serves unless
 environment. **The block gets a browser key only**, copied from a block of
 `--keys-from` for the same app: the page sends it from every visitor's browser,
 so it must never be an admin key, and nothing in the page can check that.
+The agent's search tool searches with the same key, so it needs `search` on
+`bank_faq` too.
 For production, refresh `DEMO_CONFIG_JS` from the file that now holds the block
 (see [Deploy](#deploy)).
 
