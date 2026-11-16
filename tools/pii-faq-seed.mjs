@@ -30,7 +30,7 @@ export const FAQ_FILE = path.join(HERE, "..", "public", "pii", "data", "bank_faq
 export const INDEX = "bank_faq";
 export const MARKER_ID = "_demo-marker";
 
-/** the marker: no searchable text, a category the agent's tool filters out */
+/** the marker: no searchable text, so only an empty query can return it */
 export const MARKER = Object.freeze({
   objectID: MARKER_ID, question: "", answer: "", category: "_marker", lang: "", tags: [],
   seededBy: "agent-studio-demos tools/pii-faq-seed.mjs",
