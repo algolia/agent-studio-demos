@@ -15,7 +15,7 @@
 import {
   detect, filterMessage, maskFindings, segments, resolveOverlaps, ENTITIES, EXTRA_ENTITIES, PORT_ENTITIES, GATED_ENTITIES,
 } from "./detect.js";
-import { mockReply, BLOCK_REPLY } from "./mock.js";
+import { mockReply, blockReply } from "./mock.js";
 import { complete, configAgent, isUuid } from "./live.js";
 import { SAMPLES } from "./samples.js";
 
@@ -28,6 +28,7 @@ const EXAMPLES = [
   { label: "Card dispute", text: "My card 4111 1111 1111 1111 was charged twice yesterday. Can you refund it?" },
   { label: "IBAN transfer", text: "Please send 250 EUR to DE89370400440532013000 for the rent." },
   { label: "Email + phone", text: "Update my contact details: my.mail@example.com and +1 415-555-0132." },
+  { label: "Solde + NIR", text: "Bonjour, quel est le solde de mon compte ? Mon numéro de sécu est 2 91 03 2A 004 123 68" },
   { label: "Clean question", text: "What time do your branches open on Saturday?" },
 ];
 /* check-copy: on */
@@ -133,7 +134,7 @@ function fillLog(el, rows) {
 /* ── The two sides ────────────────────────────────────────────── */
 
 function replyFor(side, sent) {
-  if (sent == null) return { text: BLOCK_REPLY, note: "local reply" };
+  if (sent == null) return { text: blockReply($("msg").value), note: "local reply" };
   if (!creds()) return { text: mockReply(sent).text };
   const l = state.live;
   if (l.text !== $("msg").value) return { text: null, empty: "Press Send to ask the agent." };

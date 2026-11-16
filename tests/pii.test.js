@@ -127,52 +127,78 @@ test("redact is right-to-left safe and segments cover the text exactly", async (
 
 const MOCK_CASES = [
   { text: "Can you show me my account balance? My account number is 4521-8830-1127 and my social is 123-45-6789",
-    intent: "balance", echo: ["4521-8830-1127", "123-45-6789"], missing: "an account number or a social security number", step: "sign in to the mobile app" },
+    intent: "balance", lang: "en", kinds: "an account number and a social security number", step: "mobile app or online banking" },
   { text: "My card 4111 1111 1111 1111 was charged twice yesterday. Can you refund it?",
-    intent: "card", echo: ["4111 1111 1111 1111"], missing: "a card number", step: "call the number on the back of your card" },
+    intent: "dispute", lang: "en", kinds: "a card number", step: "Report a problem" },
   { text: "Please send 250 EUR to DE89370400440532013000 for the rent.",
-    intent: "transfer", echo: ["DE89370400440532013000"], missing: "the payee's IBAN", step: "add the payee in the mobile app" },
+    intent: "transfer", lang: "en", kinds: "an IBAN", step: "SEPA transfer" },
   { text: "Update my contact details: my.mail@example.com and +1 415-555-0132.",
-    intent: "contact", echo: ["my.mail@example.com", "+1 415-555-0132"], missing: "an email address or a phone number", step: "open Profile" },
-  { text: "My account number is 00123456, please check my balance",
-    intent: "balance", echo: ["00123456"], missing: "an account number", step: "sign in to the mobile app" },
-  { text: "What is my balance? My social is 123-45-6789",
-    intent: "balance", echo: ["123-45-6789"], missing: "a social security number", step: "sign in to the mobile app" },
+    intent: "contact", lang: "en", kinds: "an email address and a phone number", step: "Open Profile" },
+  { text: "Bonjour, quel est le solde de mon compte ? Mon numéro de sécu est 2 91 03 2A 004 123 68",
+    intent: "balance", lang: "fr", kinds: "un numéro de sécurité sociale", step: "application mobile" },
+  { text: "Ma carte 4111 1111 1111 1111 a été débitée deux fois hier, pouvez-vous me rembourser ?",
+    intent: "dispute", lang: "fr", kinds: "un numéro de carte", step: "Signaler un problème" },
+  { text: "Mi DNI es 39740125N, can you tell me how to transfer money?",
+    intent: "transfer", lang: "en", kinds: "an ID number", step: "SEPA transfer" },
 ];
 
-test("the mock agent leaks raw identifiers back, and reacts to masks without echoing them", async () => {
+test("mock flows: raw is warned about and never repeated, masks are named in words, both answer the question", async () => {
   const d = await load("detect.js");
   const { mockReply } = await load("mock.js");
   for (const c of MOCK_CASES) {
     const raw = mockReply(c.text);
+    assert.equal(raw.flow, "raw", c.text);
     assert.equal(raw.intent, c.intent, c.text);
-    for (const v of c.echo) assert.ok(raw.text.includes(v), `raw reply repeats ${v}`);
+    assert.equal(raw.lang, c.lang, c.text);
+    for (const f of d.detect(c.text)) {
+      for (const run of f.value.match(/\d{3,}/g) || []) assert.ok(!raw.text.includes(run), `raw reply never repeats ${run}`);
+    }
+    assert.match(raw.text, c.lang === "fr" ? /ne devrais jamais recevoir/ : /should never receive/);
+    assert.ok(raw.text.includes(`(${c.kinds})`), raw.text);
+    assert.ok(raw.text.includes(c.step), raw.text);
+
     const masked = mockReply(d.filterMessage(c.text, "redact").toModel);
+    assert.equal(masked.flow, "masked");
     assert.equal(masked.intent, c.intent);
+    assert.equal(masked.lang, c.lang);
     assert.ok(!/\[[A-Z_]+\]/.test(masked.text), `no mask echoed: ${masked.text}`);
     assert.deepEqual(d.detect(masked.text), [], "nothing raw comes back from the filtered side");
-    assert.ok(masked.text.includes(`I can't see ${c.missing} in your message`), masked.text);
+    assert.match(masked.text, c.lang === "fr" ? /ont été filtrées/ : /were filtered out/);
+    assert.ok(masked.text.includes(`(${c.kinds})`), masked.text);
     assert.ok(masked.text.includes(c.step), masked.text);
     assert.notEqual(masked.text, raw.text);
     assert.deepEqual(mockReply(c.text), raw, "deterministic");
   }
 });
 
-test("mock reminders: secret numbers get one wording, contact details another", async () => {
+test("mock: clean questions get the FAQ answer alone, in their language; block replies in kind", async () => {
   const d = await load("detect.js");
-  const { mockReply, BLOCK_REPLY } = await load("mock.js");
-  const m = (t) => mockReply(d.filterMessage(t, "redact").toModel).text;
-  assert.match(m(MOCK_CASES[1].text), /never type account, card or social security numbers/);
-  assert.match(m(MOCK_CASES[3].text), /no need to share contact details/);
-  assert.doesNotMatch(m(MOCK_CASES[3].text), /social security/);
-  // mixed: a raw value the filter missed is still echoed, the masked one is not
-  const mixed = mockReply("Update my contact details: [EMAIL] and +1 415-555-0132.");
-  assert.ok(mixed.text.includes("+1 415-555-0132") && mixed.text.includes("I can't see an email address"));
+  const { mockReply, blockReply, langOf } = await load("mock.js");
   const clean = mockReply("What time do your branches open on Saturday?");
-  assert.equal(clean.intent, "hours");
-  assert.ok(!clean.text.includes("I can't see"));
+  assert.deepEqual([clean.intent, clean.flow, clean.lang], ["hours", "clean", "en"]);
+  assert.ok(!/filtered|never receive/.test(clean.text));
+  assert.equal(mockReply("Quels sont les horaires de votre agence le samedi ?").lang, "fr");
   assert.equal(mockReply("hello").intent, "fallback");
-  assert.deepEqual(d.detect(BLOCK_REPLY), []);
+  assert.equal(langOf("[CREDIT_CARD] [IBAN] merci pour le virement"), "fr");
+  const mixed = mockReply("Update my contact details: [EMAIL] and +1 415-555-0132.");
+  assert.equal(mixed.flow, "raw", "a raw value the filter missed wins");
+  assert.ok(mixed.text.includes("(an email address)") && mixed.text.includes("(a phone number)"));
+  assert.match(blockReply("Ma carte est bloquée"), /Pour votre sécurité/);
+  assert.match(blockReply("My card is blocked"), /For your security/);
+  for (const t of [blockReply("x"), blockReply("ma carte")]) assert.deepEqual(d.detect(t), []);
+});
+
+test("mock FAQ answers are the opening of their bank_faq record, so mock and live read alike", async () => {
+  const { INTENTS } = await load("mock.js");
+  const faq = JSON.parse(require("node:fs").readFileSync(path.join(dir, "data", "bank_faq.json"), "utf8"));
+  for (const i of INTENTS.filter((x) => x.faq)) {
+    for (const lang of ["en", "fr"]) {
+      const rec = faq.find((r) => r.objectID === `${i.faq}-${lang}`);
+      assert.ok(rec, `${i.faq}-${lang}`);
+      assert.ok(rec.answer.startsWith(i[lang]), `${i.id}/${lang} opens ${rec.objectID}`);
+    }
+  }
+  assert.ok(!faq.some((r) => /balance|solde/i.test(r.objectID)), "balance has no FAQ entry, so its mock line has none");
 });
 
 test("live mode: one completions call with the given text, key only in headers, stream read", async () => {
