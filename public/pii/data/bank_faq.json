@@ -1,0 +1,453 @@
+[
+  {
+    "objectID": "card-lost-en",
+    "question": "I lost my card or it was stolen. What should I do?",
+    "answer": "Block the card at once in the mobile app, under Cards, or call the bank's 24/7 card line. Blocking is free and immediate. You can then order a replacement card from the same screen.",
+    "category": "cards",
+    "lang": "en",
+    "tags": [
+      "lost card",
+      "stolen card",
+      "block card",
+      "freeze",
+      "replacement"
+    ]
+  },
+  {
+    "objectID": "card-lost-fr",
+    "question": "J'ai perdu ma carte ou on me l'a volée. Que faire ?",
+    "answer": "Faites opposition tout de suite dans l'application mobile, rubrique Cartes, ou appelez la ligne cartes de la banque, ouverte 24h/24. L'opposition est gratuite et immédiate. Vous pouvez ensuite commander une nouvelle carte depuis le même écran.",
+    "category": "cards",
+    "lang": "fr",
+    "tags": [
+      "carte perdue",
+      "carte volée",
+      "opposition",
+      "bloquer",
+      "remplacement"
+    ]
+  },
+  {
+    "objectID": "fraud-en",
+    "question": "How do I report fraud or a suspicious transaction?",
+    "answer": "Block your card in the app first, then report the transaction from its detail screen with Report a problem. If someone contacted you pretending to be the bank, do not reply and call the bank on the number printed on your card. The bank never asks for your codes.",
+    "category": "security",
+    "lang": "en",
+    "tags": [
+      "fraud",
+      "scam",
+      "phishing",
+      "suspicious payment",
+      "unauthorised"
+    ]
+  },
+  {
+    "objectID": "fraud-fr",
+    "question": "Comment signaler une fraude ou une opération suspecte ?",
+    "answer": "Bloquez d'abord votre carte dans l'application, puis signalez l'opération depuis son détail avec Signaler un problème. Si quelqu'un vous a contacté en se faisant passer pour la banque, ne répondez pas et appelez la banque au numéro inscrit sur votre carte. La banque ne demande jamais vos codes.",
+    "category": "security",
+    "lang": "fr",
+    "tags": [
+      "fraude",
+      "arnaque",
+      "hameçonnage",
+      "paiement suspect",
+      "non autorisé"
+    ]
+  },
+  {
+    "objectID": "transfer-en",
+    "question": "What are my transfer limits, and how long does a SEPA transfer take?",
+    "answer": "Your limits are shown in the app under Payments, and you can ask for a temporary raise there. A standard SEPA transfer usually arrives on the next business day; an instant SEPA transfer arrives within seconds when the receiving bank supports it. Transfers to a new payee may need a confirmation in the app.",
+    "category": "transfers",
+    "lang": "en",
+    "tags": [
+      "transfer limit",
+      "SEPA",
+      "instant transfer",
+      "wire",
+      "payee",
+      "delay"
+    ]
+  },
+  {
+    "objectID": "transfer-fr",
+    "question": "Quels sont mes plafonds de virement, et combien de temps prend un virement SEPA ?",
+    "answer": "Vos plafonds sont affichés dans l'application, rubrique Paiements, et vous pouvez y demander une hausse temporaire. Un virement SEPA classique arrive en général le jour ouvré suivant ; un virement instantané arrive en quelques secondes si la banque du bénéficiaire le permet. Un virement vers un nouveau bénéficiaire peut demander une validation dans l'application.",
+    "category": "transfers",
+    "lang": "fr",
+    "tags": [
+      "plafond",
+      "virement SEPA",
+      "virement instantané",
+      "bénéficiaire",
+      "délai"
+    ]
+  },
+  {
+    "objectID": "iban-en",
+    "question": "Where can I find my IBAN and BIC?",
+    "answer": "Open the account in the app and tap Account details: the IBAN and BIC are shown there, and you can download a bank details document to share. Share it only with people who need to pay you, never in a chat.",
+    "category": "accounts",
+    "lang": "en",
+    "tags": [
+      "IBAN",
+      "BIC",
+      "SWIFT",
+      "bank details",
+      "account details"
+    ]
+  },
+  {
+    "objectID": "iban-fr",
+    "question": "Où trouver mon IBAN, mon BIC ou mon RIB ?",
+    "answer": "Ouvrez le compte dans l'application et touchez Détails du compte : l'IBAN et le BIC y sont affichés, et vous pouvez télécharger votre RIB. Ne le transmettez qu'aux personnes qui doivent vous payer, jamais dans un chat.",
+    "category": "accounts",
+    "lang": "fr",
+    "tags": [
+      "IBAN",
+      "BIC",
+      "RIB",
+      "relevé d'identité bancaire",
+      "coordonnées bancaires"
+    ]
+  },
+  {
+    "objectID": "fees-en",
+    "question": "What fees will I pay?",
+    "answer": "Fees depend on your account plan. The full price list is in the app under Help, and every fee charged appears on your statement. Ask an adviser if you want to compare plans.",
+    "category": "fees",
+    "lang": "en",
+    "tags": [
+      "fees",
+      "charges",
+      "price list",
+      "account plan",
+      "commission"
+    ]
+  },
+  {
+    "objectID": "fees-fr",
+    "question": "Quels frais vais-je payer ?",
+    "answer": "Les frais dépendent de votre offre. La brochure tarifaire complète est dans l'application, rubrique Aide, et chaque frais prélevé apparaît sur votre relevé. Demandez à un conseiller si vous voulez comparer les offres.",
+    "category": "fees",
+    "lang": "fr",
+    "tags": [
+      "frais",
+      "tarifs",
+      "brochure tarifaire",
+      "offre",
+      "commission"
+    ]
+  },
+  {
+    "objectID": "overdraft-en",
+    "question": "How does an overdraft work?",
+    "answer": "An arranged overdraft lets your balance go below zero up to an agreed limit, and interest is charged on the amount used. You can see or request an overdraft in the app. Using more than the agreed limit can cost more, so talk to an adviser early if money is tight.",
+    "category": "accounts",
+    "lang": "en",
+    "tags": [
+      "overdraft",
+      "negative balance",
+      "arranged overdraft",
+      "interest",
+      "limit"
+    ]
+  },
+  {
+    "objectID": "overdraft-fr",
+    "question": "Comment fonctionne un découvert ?",
+    "answer": "Un découvert autorisé permet à votre solde de passer sous zéro jusqu'à un montant convenu, et des intérêts s'appliquent sur la somme utilisée. Vous pouvez consulter ou demander un découvert dans l'application. Dépasser le montant convenu peut coûter plus cher : parlez-en tôt à un conseiller si vous êtes juste.",
+    "category": "accounts",
+    "lang": "fr",
+    "tags": [
+      "découvert",
+      "solde négatif",
+      "découvert autorisé",
+      "agios",
+      "plafond"
+    ]
+  },
+  {
+    "objectID": "savings-en",
+    "question": "What savings accounts can I open?",
+    "answer": "The bank offers easy-access savings and fixed-term savings. Current rates and conditions are listed in the app under Savings, and you can open an account there in a few minutes. An adviser can help you choose; this assistant does not give personal advice.",
+    "category": "savings",
+    "lang": "en",
+    "tags": [
+      "savings",
+      "savings account",
+      "interest rate",
+      "fixed term",
+      "deposit"
+    ]
+  },
+  {
+    "objectID": "savings-fr",
+    "question": "Quels comptes d'épargne puis-je ouvrir ?",
+    "answer": "La banque propose une épargne disponible et une épargne à terme. Les taux et conditions en vigueur sont dans l'application, rubrique Épargne, et vous pouvez y ouvrir un compte en quelques minutes. Un conseiller peut vous aider à choisir ; cet assistant ne donne pas de conseil personnalisé.",
+    "category": "savings",
+    "lang": "fr",
+    "tags": [
+      "épargne",
+      "livret",
+      "compte épargne",
+      "taux",
+      "compte à terme"
+    ]
+  },
+  {
+    "objectID": "loan-en",
+    "question": "How do mortgages and personal loans work?",
+    "answer": "A loan is repaid in monthly instalments that include interest; the total cost is shown as an annual percentage rate before you sign. You can run a simulation in the app, then an adviser reviews your situation. Borrowing commits you: check you can repay before you sign.",
+    "category": "loans",
+    "lang": "en",
+    "tags": [
+      "mortgage",
+      "home loan",
+      "personal loan",
+      "credit",
+      "APR",
+      "simulation"
+    ]
+  },
+  {
+    "objectID": "loan-fr",
+    "question": "Comment fonctionnent un prêt immobilier et un crédit à la consommation ?",
+    "answer": "Un prêt se rembourse par mensualités qui incluent des intérêts ; son coût total est indiqué sous forme de TAEG avant la signature. Vous pouvez faire une simulation dans l'application, puis un conseiller étudie votre situation. Un crédit vous engage et doit être remboursé : vérifiez vos capacités de remboursement avant de vous engager.",
+    "category": "loans",
+    "lang": "fr",
+    "tags": [
+      "prêt immobilier",
+      "crédit",
+      "crédit à la consommation",
+      "TAEG",
+      "simulation"
+    ]
+  },
+  {
+    "objectID": "address-en",
+    "question": "How do I change my address or contact details?",
+    "answer": "Open Profile in the app and edit your address, email or phone number. You confirm the change with a code sent to you. Some changes may ask for a recent proof of address.",
+    "category": "profile",
+    "lang": "en",
+    "tags": [
+      "change address",
+      "move",
+      "contact details",
+      "email",
+      "phone number"
+    ]
+  },
+  {
+    "objectID": "address-fr",
+    "question": "Comment changer mon adresse ou mes coordonnées ?",
+    "answer": "Ouvrez Profil dans l'application et modifiez votre adresse, votre e-mail ou votre téléphone. Vous confirmez avec un code qui vous est envoyé. Certains changements demandent un justificatif de domicile récent.",
+    "category": "profile",
+    "lang": "fr",
+    "tags": [
+      "changement d'adresse",
+      "déménagement",
+      "coordonnées",
+      "e-mail",
+      "téléphone"
+    ]
+  },
+  {
+    "objectID": "login-en",
+    "question": "I can't log in to online banking. How does two-factor authentication work?",
+    "answer": "Tap Forgot password on the login screen to reset it. Each login and sensitive operation is confirmed a second time in the app, with your fingerprint, face or app code. If you changed phone, activate the new one from the login screen. The bank will never ask for these codes by phone, email or chat.",
+    "category": "online-banking",
+    "lang": "en",
+    "tags": [
+      "login",
+      "password",
+      "2FA",
+      "two-factor",
+      "strong authentication",
+      "new phone"
+    ]
+  },
+  {
+    "objectID": "login-fr",
+    "question": "Je n'arrive pas à me connecter. Comment marche la double authentification ?",
+    "answer": "Touchez Mot de passe oublié sur l'écran de connexion pour le réinitialiser. Chaque connexion et chaque opération sensible est validée une seconde fois dans l'application, avec votre empreinte, votre visage ou votre code. Si vous avez changé de téléphone, activez le nouveau depuis l'écran de connexion. La banque ne vous demandera jamais ces codes par téléphone, e-mail ou chat.",
+    "category": "online-banking",
+    "lang": "fr",
+    "tags": [
+      "connexion",
+      "mot de passe",
+      "double authentification",
+      "authentification forte",
+      "nouveau téléphone"
+    ]
+  },
+  {
+    "objectID": "dispute-en",
+    "question": "How do I dispute a card payment?",
+    "answer": "Open the payment in the app and tap Report a problem, then pick the reason: not received, charged twice, or not made by you. Contact the merchant first when you can. The bank tells you the outcome in the app.",
+    "category": "cards",
+    "lang": "en",
+    "tags": [
+      "dispute",
+      "chargeback",
+      "refund",
+      "charged twice",
+      "card payment"
+    ]
+  },
+  {
+    "objectID": "dispute-fr",
+    "question": "Comment contester un paiement par carte ?",
+    "answer": "Ouvrez le paiement dans l'application et touchez Signaler un problème, puis choisissez le motif : non reçu, débité deux fois, ou non effectué par vous. Contactez d'abord le commerçant quand c'est possible. La banque vous informe de la suite dans l'application.",
+    "category": "cards",
+    "lang": "fr",
+    "tags": [
+      "contestation",
+      "remboursement",
+      "débité deux fois",
+      "paiement carte",
+      "litige"
+    ]
+  },
+  {
+    "objectID": "close-en",
+    "question": "How do I close my account?",
+    "answer": "Ask for the closure in the app under Help or from an adviser. Move your regular payments first and make sure the balance is not negative. Any remaining money is sent to the account you choose.",
+    "category": "accounts",
+    "lang": "en",
+    "tags": [
+      "close account",
+      "closure",
+      "switch bank",
+      "cancel"
+    ]
+  },
+  {
+    "objectID": "close-fr",
+    "question": "Comment clôturer mon compte ?",
+    "answer": "Demandez la clôture dans l'application, rubrique Aide, ou auprès d'un conseiller. Transférez d'abord vos prélèvements et vérifiez que le solde n'est pas négatif. Le solde restant est versé sur le compte de votre choix.",
+    "category": "accounts",
+    "lang": "fr",
+    "tags": [
+      "clôture",
+      "fermer le compte",
+      "changer de banque",
+      "résiliation"
+    ]
+  },
+  {
+    "objectID": "hours-en",
+    "question": "When are branches open?",
+    "answer": "Opening hours differ by branch and are listed on the branch finder in the app, with Saturday and holiday hours. Many services, such as blocking a card, are available in the app at any time.",
+    "category": "branches",
+    "lang": "en",
+    "tags": [
+      "opening hours",
+      "branch",
+      "Saturday",
+      "Sunday",
+      "agency"
+    ]
+  },
+  {
+    "objectID": "hours-fr",
+    "question": "Quels sont les horaires des agences ?",
+    "answer": "Les horaires varient selon l'agence et figurent dans l'outil Trouver une agence de l'application, y compris le samedi et les jours fériés. De nombreux services, comme faire opposition sur une carte, sont disponibles à tout moment dans l'application.",
+    "category": "branches",
+    "lang": "fr",
+    "tags": [
+      "horaires",
+      "agence",
+      "samedi",
+      "dimanche",
+      "ouverture"
+    ]
+  },
+  {
+    "objectID": "security-chat-en",
+    "question": "Why should I never type my card number, PIN or social security number in chat?",
+    "answer": "A chat is not a secure channel: messages can be stored and read later. No adviser or assistant ever needs your PIN, full card number, social security number or passwords. For anything about your own account, use the app or call the bank.",
+    "category": "security",
+    "lang": "en",
+    "tags": [
+      "PIN",
+      "card number",
+      "social security number",
+      "SSN",
+      "chat",
+      "privacy"
+    ]
+  },
+  {
+    "objectID": "security-chat-fr",
+    "question": "Pourquoi ne jamais écrire mon numéro de carte, mon code ou mon numéro de sécurité sociale dans un chat ?",
+    "answer": "Un chat n'est pas un canal sécurisé : les messages peuvent être conservés et relus. Aucun conseiller ni assistant n'a besoin de votre code, de votre numéro de carte complet, de votre numéro de sécurité sociale (NIR) ou de vos mots de passe. Pour tout ce qui concerne votre compte, utilisez l'application ou appelez la banque.",
+    "category": "security",
+    "lang": "fr",
+    "tags": [
+      "code",
+      "numéro de carte",
+      "numéro de sécurité sociale",
+      "NIR",
+      "chat",
+      "confidentialité"
+    ]
+  },
+  {
+    "objectID": "security-posted-en",
+    "question": "I typed my card number or another identifier in a chat. What now?",
+    "answer": "Don't panic. If it was a card number, block the card in the app and order a new one. If it was a code or password, change it now in the app. Watch your statement for payments you don't recognise and report them. Call the bank if you are unsure.",
+    "category": "security",
+    "lang": "en",
+    "tags": [
+      "leaked",
+      "shared by mistake",
+      "card number",
+      "password",
+      "what to do"
+    ]
+  },
+  {
+    "objectID": "security-posted-fr",
+    "question": "J'ai écrit mon numéro de carte ou un autre identifiant dans un chat. Que faire ?",
+    "answer": "Pas de panique. Si c'était un numéro de carte, faites opposition dans l'application et commandez une nouvelle carte. Si c'était un code ou un mot de passe, changez-le maintenant dans l'application. Surveillez votre relevé et signalez toute opération inconnue. Appelez la banque en cas de doute.",
+    "category": "security",
+    "lang": "fr",
+    "tags": [
+      "fuite",
+      "partagé par erreur",
+      "numéro de carte",
+      "mot de passe",
+      "que faire"
+    ]
+  },
+  {
+    "objectID": "security-bank-asks-en",
+    "question": "Will the bank ever ask me for my codes or identifiers?",
+    "answer": "No. The bank never asks for your PIN, passwords, confirmation codes or full card number, by phone, email, text or chat. If someone does, it is a scam: hang up or don't reply, and call the bank on the number printed on your card.",
+    "category": "security",
+    "lang": "en",
+    "tags": [
+      "scam",
+      "phishing",
+      "codes",
+      "fake adviser",
+      "impersonation"
+    ]
+  },
+  {
+    "objectID": "security-bank-asks-fr",
+    "question": "La banque peut-elle me demander mes codes ou mes identifiants ?",
+    "answer": "Non. La banque ne demande jamais votre code de carte, vos mots de passe, vos codes de validation ni votre numéro de carte complet, ni par téléphone, ni par e-mail, SMS ou chat. Si quelqu'un le fait, c'est une arnaque : raccrochez ou ne répondez pas, et appelez la banque au numéro inscrit sur votre carte.",
+    "category": "security",
+    "lang": "fr",
+    "tags": [
+      "arnaque",
+      "hameçonnage",
+      "codes",
+      "faux conseiller",
+      "usurpation"
+    ]
+  }
+]
