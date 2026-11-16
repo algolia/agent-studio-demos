@@ -86,14 +86,16 @@ test("model: the first candidate served, or --model when served", async () => {
   assert.throws(() => p.pickModel(["other"]), /none of the candidate models/);
 });
 
-test("create: one tool-less agent, memory and guardrails off, published", async () => {
+test("create: one agent searching bank_faq, memory and guardrails off, published", async () => {
   const p = await load();
   const { agent, backend } = await runWith(p);
   const w = backend.writes();
   assert.deepEqual(w.map((c) => `${c.method} ${c.p.replace(agent.agentId, "ID")}`), ["POST /1/agents", "POST /1/agents/ID/publish"]);
   const body = w[0].body;
   assert.equal(body.name, "DEMO_pii-banking");
-  assert.deepEqual(body.tools, []);
+  assert.equal(body.tools.length, 1);
+  assert.equal(body.tools[0].type, "algolia_search_index");
+  assert.deepEqual(body.tools[0].indices.map((i) => i.index), ["bank_faq"], "the tool block names the index");
   assert.equal(body.config.memory.enabled, false);
   assert.equal(body.config.guardrail.enabled, false);
   assert.equal(body.config.suggestions.enabled, false);
@@ -101,6 +103,10 @@ test("create: one tool-less agent, memory and guardrails off, published", async 
   assert.ok(!("enableAlgoliaMcp" in body.config), "create refuses an MCP flag");
   assert.match(body.instructions, /no access to any account/);
   assert.match(body.instructions, /secure channel/);
+  assert.match(body.instructions, /English or French/);
+  assert.match(body.instructions, /\[FR_NIR\]/, "the masked flow names the masks");
+  assert.match(body.instructions, /Never repeat, confirm or reformat any of its digits/, "the raw flow");
+  assert.match(body.instructions, /never personal financial advice/);
 });
 
 test("adopt: an agent with the name is reused untouched; a second run creates nothing", async () => {
@@ -114,11 +120,11 @@ test("adopt: an agent with the name is reused untouched; a second run creates no
 
 test("converge: drift is reported, rewritten only with --converge, never on a dry run", async () => {
   const p = await load();
-  const drifted = { id: "00000000-0000-4000-8000-0000000000aa", name: "DEMO_pii-banking", providerId: MANAGED.id, model: "gpt-4.1",
-    instructions: "old", tools: [{ type: "algolia_search_index" }], config: { memory: { enabled: true }, sendUsage: true } };
+  const drifted = { id: "00000000-0000-4000-8000-0000000000aa", name: "DEMO_pii-banking", providerId: MANAGED.id, model: "gpt-3",
+    instructions: "old", tools: [{ type: "algolia_search_index", indices: [{ index: "products" }] }], config: { memory: { enabled: true }, sendUsage: true } };
   const plain = await runWith(p, { backend: fakeBackend({ agents: [drifted] }) });
   assert.equal(plain.backend.writes().length, 0);
-  assert.ok(plain.lines.some((l) => /differs: model gpt-4.1; other instructions; 1 tools; memory on/.test(l)), plain.lines.join("\n"));
+  assert.ok(plain.lines.some((l) => /differs: model gpt-3; other instructions; tools \[\["algolia_search_index",\["products"\]\]\]; memory on/.test(l)), plain.lines.join("\n"));
 
   const dry = await runWith(p, { args: ["--converge", "--dry-run"], backend: fakeBackend({ agents: [drifted] }) });
   assert.equal(dry.backend.writes().length, 0);
@@ -128,11 +134,27 @@ test("converge: drift is reported, rewritten only with --converge, never on a dr
   const [patch, pub] = fixed.backend.writes();
   assert.equal(patch.method, "PATCH");
   assert.equal(pub.p, `/1/agents/${drifted.id}/publish`);
-  assert.deepEqual(patch.body.tools, []);
+  assert.deepEqual(patch.body.tools, p.piiTools());
   assert.equal(patch.body.model, "gpt-6-sol");
   assert.equal(patch.body.config.memory.enabled, false);
   assert.equal(patch.body.config.sendUsage, true, "fields this demo does not own are kept");
   assert.deepEqual(p.piiDrift(fixed.backend.store.get(drifted.id), p.piiBody({ providerId: MANAGED.id, model: "gpt-6-sol" })), []);
+});
+
+test("converge on the tool-less agent already live: the tools drift is fixed, its model kept", async () => {
+  const p = await load();
+  const live = { id: "00000000-0000-4000-8000-0000000000bb", name: "DEMO_pii-banking", providerId: MANAGED.id, model: "medium",
+    instructions: "tool-less banking assistant", tools: [], config: p.piiConfig() };
+  const backend = fakeBackend({ agents: [live], models: ["medium", "gpt-4.1"] });
+  const plain = await runWith(p, { backend });
+  assert.ok(plain.lines.some((l) => /differs: other instructions; no search tool on bank_faq/.test(l)), plain.lines.join("\n"));
+  assert.ok(!plain.lines.some((l) => /model medium;/.test(l)), "the served model is not drift");
+  const fixed = await runWith(p, { args: ["--converge"], backend });
+  const patch = backend.writes().find((c) => c.method === "PATCH");
+  assert.equal(patch.body.model, "medium");
+  assert.equal(patch.body.tools[0].indices[0].index, "bank_faq");
+  assert.ok(fixed.lines.some((l) => /^fix/.test(l)));
+  assert.deepEqual(p.piiDrift(backend.store.get(live.id), p.piiBody({ providerId: MANAGED.id, model: "medium" })), []);
 });
 
 test("dry run: no agent and no file written", async () => {
