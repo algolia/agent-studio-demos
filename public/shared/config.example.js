@@ -294,4 +294,20 @@ window.DEMO_CONFIG = {
   //     "w3-h10": { agentId: "YOUR_AGENT_ID", name: "DEMO_albums-prefetch-w3-h10" },
   //   },
   // },
+
+  // Optional: /pii/, identifier filtering. With this block the page's "Live
+  // agent" switch starts on and both sides ask this agent, a tool-less banking
+  // assistant on Algolia's managed LLM; without it the page runs its mock.
+  // tools/pii-provision.mjs --write-config writes this block. The key is sent
+  // from every visitor's browser: a browser key with completions on this
+  // agent only. NEVER an admin key: the page cannot tell them apart.
+  // pii: {
+  //   region: "eu",
+  //   host: "https://agent-studio.eu.algolia.com",
+  //   appId: "YOUR_APP_ID",
+  //   agentStudioApiKey: "YOUR_BROWSER_API_KEY",
+  //   agentId: "YOUR_PII_AGENT_ID",
+  //   name: "DEMO_pii-banking",
+  //   model: "YOUR_MODEL_ID",
+  // },
 };
