@@ -11,9 +11,6 @@
 <meta property="og:url" content="https://agent-studio-demos.pages.dev/pii/">
 <meta name="twitter:card" content="summary">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../shared/tokens.css">
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:,">
@@ -24,19 +21,21 @@
 <body>
 <a class="skip" href="#compose">Skip to the demo</a>
 
+<div class="topbar">
+  <div class="wrap topbar-in">
+    <span class="wordmark">Example Bank</span>
+    <span class="topbar-label">Secure messaging · simulation</span>
+    <button class="theme-toggle" type="button" data-theme-toggle>
+      <span data-theme-glyph>◐</span><span data-theme-label>Auto</span>
+    </button>
+  </div>
+</div>
+
 <header class="hero wrap">
-  <button class="theme-toggle" type="button" data-theme-toggle>
-    <span data-theme-glyph>◐</span><span data-theme-label>Auto</span>
-  </button>
   <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
   <h1>Identifier filtering, before and after</h1>
   <p class="lede">A bank customer types an account number into chat.
   Without a filter, it reaches the model and the chat log. With one, a mask takes its place.</p>
-  <ul class="honesty">
-    <li>A <strong>simulation in your browser</strong> of a server-side feature that is still being built.</li>
-    <li>It finds structural identifiers only. <strong>Names and addresses are not detected.</strong></li>
-    <li>It reduces exposure. It is not a compliance guarantee.</li>
-  </ul>
 </header>
 
 <main class="wrap">
@@ -67,26 +66,30 @@
   <div class="sides">
     <section class="panel side" aria-labelledby="h-raw">
       <h2 id="h-raw">Without filter <span class="panel-tag">mode off</span></h2>
-      <h3>Sent to the model</h3>
-      <div class="box" id="raw-model"></div>
-      <h3>Agent reply <span class="badge" data-agent-badge>mock agent</span></h3>
-      <div class="box reply" id="raw-reply"></div>
-      <h3>Stored in the chat log</h3>
-      <div class="box log" id="raw-log"></div>
+      <div class="ledger">
+      <div class="row"><h3>Sent to the model</h3>
+      <div class="box" id="raw-model"></div></div>
+      <div class="row"><h3>Agent reply <span class="badge" data-agent-badge>mock agent</span></h3>
+      <div class="box reply" id="raw-reply"></div></div>
+      <div class="row"><h3>Stored in the chat log</h3>
+      <div class="box log" id="raw-log"></div></div>
+      </div>
     </section>
     <section class="panel side filtered" aria-labelledby="h-filtered">
       <h2 id="h-filtered">With filter <span class="panel-tag" id="mode-tag">mode redact</span></h2>
-      <h3>Sent to the model</h3>
-      <div class="box" id="f-model"></div>
-      <h3>Agent reply <span class="badge" id="f-badge" data-agent-badge>mock agent</span></h3>
-      <div class="box reply" id="f-reply"></div>
-      <h3>Stored in the chat log</h3>
-      <div class="box log" id="f-log"></div>
+      <div class="ledger">
+      <div class="row"><h3>Sent to the model</h3>
+      <div class="box" id="f-model"></div></div>
+      <div class="row"><h3>Agent reply <span class="badge" id="f-badge" data-agent-badge>mock agent</span></h3>
+      <div class="box reply" id="f-reply"></div></div>
+      <div class="row"><h3>Stored in the chat log</h3>
+      <div class="box log" id="f-log"></div></div>
+      </div>
     </section>
   </div>
 
   <section class="panel compare" aria-labelledby="h-compare">
-    <h2 id="h-compare" class="sr-only">Side by side</h2>
+    <h2 id="h-compare">Summary of exposure</h2>
     <table>
       <thead><tr><td></td><th scope="col">Without filter</th><th scope="col">With filter</th></tr></thead>
       <tbody id="compare"></tbody>
@@ -120,9 +123,17 @@
     </div>
   </details>
 
+</main>
+
+<footer class="wrap disclosure">
+  <ul class="honesty">
+    <li>A <strong>simulation in your browser</strong> of a server-side feature that is still being built.</li>
+    <li>It finds structural identifiers only. <strong>Names and addresses are not detected.</strong></li>
+    <li>It reduces exposure. It is not a compliance guarantee.</li>
+  </ul>
   <p class="footnote">Detection runs in this tab: regex candidates, then checksums. Nothing leaves the page in mock mode.
   Live, each Send goes to the agent: the raw message on the left, the filtered one on the right.</p>
-</main>
+</footer>
 
 <script type="module" src="app.js"></script>
 </body>
