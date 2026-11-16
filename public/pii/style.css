@@ -82,7 +82,7 @@ button, .chip, .sample, .seg button, a { transition: color 120ms, background-col
 .ba .ba-before dt { color: var(--over); }
 .ba dd { margin: 2px 0 0; font-size: 14px; color: var(--ink-2); }
 @media (max-width: 720px) { .ba { grid-template-columns: 1fr; } }
-.pr-cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 14px 0 0; }
+.pr-cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 14px 0 8px; }
 .pr-cta {
   display: inline-flex; align-items: center; height: 36px; padding: 0 16px;
   font-size: 14px; font-weight: 600; text-decoration: none;
