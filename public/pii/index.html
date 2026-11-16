@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Identifier filtering, before and after</title>
+<meta name="description" content="A bank customer types an account number into chat. See what reaches the model and the chat log, with and without an identifier filter.">
+<meta property="og:title" content="Identifier filtering, before and after">
+<meta property="og:description" content="What reaches the model and the chat log when a customer types an account number, with and without a filter.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://agent-studio-demos.pages.dev/pii/">
+<meta name="twitter:card" content="summary">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/tokens.css">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:,">
+<script src="../shared/theme.js"></script>
+</head>
+<body>
+<a class="skip" href="#compose">Skip to the demo</a>
+
+<header class="hero wrap">
+  <button class="theme-toggle" type="button" data-theme-toggle>
+    <span data-theme-glyph>◐</span><span data-theme-label>Auto</span>
+  </button>
+  <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
+  <h1>Identifier filtering, before and after</h1>
+  <p class="lede">A bank customer types an account number into chat.
+  Without a filter, it reaches the model and the chat log. With one, a mask takes its place.</p>
+  <ul class="honesty">
+    <li>A <strong>simulation in your browser</strong> of a server-side feature that is still being built.</li>
+    <li>It finds structural identifiers only. <strong>Names and addresses are not detected.</strong></li>
+    <li>It reduces exposure. It is not a compliance guarantee.</li>
+  </ul>
+</header>
+
+<main class="wrap">
+  <section class="panel compose" id="compose" aria-label="Message">
+    <div class="chips" id="examples" role="group" aria-label="Example messages"></div>
+    <label class="field">
+      <span class="field-name">Customer message</span>
+      <textarea id="msg" rows="3" spellcheck="false"></textarea>
+    </label>
+    <div class="controls">
+      <div class="seg" role="radiogroup" aria-label="Filter mode">
+        <button type="button" role="radio" data-mode="redact" aria-checked="true"
+          data-tip="Masks replace each identifier, then the cleaned message goes on.">Redact</button>
+        <button type="button" role="radio" data-mode="block" aria-checked="false"
+          data-tip="Any identifier refuses the message. Nothing goes to the model.">Block</button>
+      </div>
+      <label class="check"><input type="checkbox" id="extras" checked> Demo extras: SSN, account number</label>
+      <button type="button" class="primary" id="send">Send</button>
+      <span class="meta" id="agent-tag" role="status">mock agent</span>
+    </div>
+  </section>
+
+  <div class="sides">
+    <section class="panel side" aria-labelledby="h-raw">
+      <h2 id="h-raw">Without filter <span class="panel-tag">mode off</span></h2>
+      <h3>Sent to the model</h3>
+      <div class="box" id="raw-model"></div>
+      <h3>Agent reply <span class="badge" data-agent-badge>mock agent</span></h3>
+      <div class="box reply" id="raw-reply"></div>
+      <h3>Stored in the chat log</h3>
+      <div class="box log" id="raw-log"></div>
+    </section>
+    <section class="panel side filtered" aria-labelledby="h-filtered">
+      <h2 id="h-filtered">With filter <span class="panel-tag" id="mode-tag">mode redact</span></h2>
+      <h3>Sent to the model</h3>
+      <div class="box" id="f-model"></div>
+      <h3>Agent reply <span class="badge" id="f-badge" data-agent-badge>mock agent</span></h3>
+      <div class="box reply" id="f-reply"></div>
+      <h3>Stored in the chat log</h3>
+      <div class="box log" id="f-log"></div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="h-cover">
+    <h2 id="h-cover">What it finds</h2>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <details class="panel live">
+    <summary>Use your own agent <span class="panel-tag">optional</span></summary>
+    <ul class="honesty safe">
+      <li>The left side sends the raw message. Use made-up numbers only.</li>
+      <li>The key stays in this tab's memory and goes only to your app. Reload to forget it.</li>
+      <li>Your agent keeps each conversation under its own retention setting.</li>
+    </ul>
+    <div class="lv-form">
+      <label>Region
+        <select id="lv-region"><option value="eu">EU</option><option value="us">US</option></select>
+      </label>
+      <label>Application ID <input id="lv-app" type="text" spellcheck="false" autocomplete="off"></label>
+      <label>API key <input id="lv-key" type="password" spellcheck="false" autocomplete="off"></label>
+      <label>Agent ID <input id="lv-agent" type="text" spellcheck="false" autocomplete="off"></label>
+      <div class="lv-row">
+        <button type="button" id="lv-use">Use my agent</button>
+        <button type="button" id="lv-forget">Back to the mock</button>
+        <span class="meta" id="lv-status" role="status"></span>
+      </div>
+    </div>
+  </details>
+
+  <p class="footnote">Detection runs in this tab: regex candidates, then checksums. Nothing leaves the page in mock mode.</p>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

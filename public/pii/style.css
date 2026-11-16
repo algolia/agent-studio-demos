@@ -1,0 +1,149 @@
+/* pii/style.css — linked after tokens.css; declares no token of its own. */
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+
+.hero { padding: 48px 20px 8px; position: relative; }
+.hero .theme-toggle { position: absolute; top: 24px; right: 20px; }
+.hero h1 {
+  font-family: var(--display);
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 6px 0 12px;
+}
+.hero .lede { max-width: 62ch; color: var(--ink-2); font-size: 17px; line-height: 1.55; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.eyebrow a { color: var(--accent); text-decoration: none; }
+.muted { color: var(--ink-3); }
+.meta { font-size: 12.5px; color: var(--ink-3); }
+.skip:focus { left: 8px; top: 8px; position: fixed; z-index: 10; background: var(--surface); padding: 8px 12px; }
+
+.honesty { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 4px; max-width: 72ch; }
+.honesty li { font-size: 14px; color: var(--ink-2); padding-left: 18px; position: relative; }
+.honesty li::before { content: "!"; position: absolute; left: 0; font-weight: 700; color: var(--warn); }
+.honesty.safe li::before { content: "·"; color: var(--accent); }
+
+main { display: grid; gap: 20px; padding-top: 20px; padding-bottom: 48px; }
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 18px 20px;
+}
+.panel h2 {
+  font-family: var(--display); font-size: 17px; font-weight: 600;
+  margin: 0 0 10px; display: flex; align-items: baseline; gap: 10px;
+}
+.panel h3 {
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--ink-3); margin: 14px 0 6px; display: flex; align-items: center; gap: 8px;
+}
+.panel-tag { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--ink-3); }
+
+/* ── Compose ──────────────────────────────────────────────────── */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+.chip {
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  color: var(--ink-2); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
+}
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.chip[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.field { display: block; }
+.field-name { display: block; font-size: 13.5px; font-weight: 600; margin-bottom: 5px; }
+.field textarea {
+  width: 100%; font-family: var(--mono); font-size: 14px; line-height: 1.5;
+  color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; resize: vertical;
+}
+.controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: visible; }
+.seg button {
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  color: var(--ink-2); background: var(--surface); border: 0; padding: 7px 16px;
+}
+.seg button + button { border-left: 1px solid var(--line-strong); }
+.seg button[aria-checked="true"] { color: var(--paper); background: var(--accent); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; }
+button.primary, .lv-row button {
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  border-radius: var(--radius); padding: 7px 16px;
+  color: var(--accent); background: var(--surface); border: 1px solid var(--accent);
+}
+button.primary { color: var(--paper); background: var(--accent); }
+
+/* ── The two sides ────────────────────────────────────────────── */
+.sides { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; align-items: start; }
+@media (max-width: 860px) { .sides { grid-template-columns: 1fr; } }
+.side { border-top: 3px solid var(--over); }
+.side.filtered { border-top-color: var(--ok); }
+.box {
+  font-family: var(--mono); font-size: 13.5px; line-height: 1.9;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 8px 10px; min-height: 2.6em; overflow-wrap: anywhere;
+}
+.box.reply { font-family: var(--body); font-size: 14.5px; line-height: 1.75; }
+.box.refused { border-style: dashed; border-color: var(--ok); }
+.box.refused .muted { color: var(--ok); font-weight: 600; }
+.log-row { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.log-row + .log-row { border-top: 1px dashed var(--line); margin-top: 4px; padding-top: 4px; }
+.who { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); min-width: 6.5em; }
+.note { font-size: 11px; font-weight: 600; color: var(--ok); border: 1px solid var(--ok); border-radius: 999px; padding: 0 6px; }
+.badge {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: none;
+  color: var(--ink-2); background: var(--surface-2); border: 1px dashed var(--line-strong);
+  border-radius: 999px; padding: 1px 8px;
+}
+.badge.live { border-style: solid; border-color: var(--accent); color: var(--accent); }
+
+/* ── Highlights: colour plus a type label, never colour alone ─── */
+.hl {
+  --hue: var(--accent);
+  color: var(--ink); background: color-mix(in srgb, var(--hue) 16%, transparent);
+  border-bottom: 2px solid var(--hue); border-radius: 2px; padding: 1px 2px;
+}
+.hl .t {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: 0.03em;
+  color: var(--hue); vertical-align: super; margin-left: 3px;
+}
+/* a raw value is exposed, a mask is not; the label names the type */
+.hl.raw { --hue: var(--over); }
+.hl.mask { --hue: var(--ok); }
+.hl[data-entity="US_SSN"], .hl[data-entity="ACCOUNT_NUMBER"] { border-bottom-style: dashed; }
+
+/* ── Legend ───────────────────────────────────────────────────── */
+.legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.legend li {
+  display: grid; grid-template-columns: 11em 1fr 13em 2.5em; gap: 10px; align-items: baseline;
+  font-size: 13.5px; color: var(--ink-3);
+}
+.legend li.hit { color: var(--ink); }
+.legend li.off { opacity: 0.45; }
+.legend li .hl { font-family: var(--mono); font-size: 12px; justify-self: start; }
+.legend .kind { font-size: 12px; }
+.legend li.extra .kind { color: var(--warn); }
+.legend .count { font-family: var(--mono); font-weight: 600; color: var(--ink); }
+.legend li.none { display: block; margin-top: 6px; font-weight: 600; color: var(--ink-2); }
+@media (max-width: 700px) { .legend li { grid-template-columns: 1fr; gap: 2px; } }
+
+/* ── Live mode ────────────────────────────────────────────────── */
+.live summary { font-family: var(--display); font-size: 17px; font-weight: 600; cursor: pointer; }
+.lv-form { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: 14px; }
+.lv-form label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+.lv-form input, .lv-form select {
+  font: inherit; font-size: 14px; font-weight: 400; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 7px 10px;
+}
+.lv-row { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.footnote { font-size: 12.5px; color: var(--ink-3); margin: 0; }
+
+/* Tooltips: opt-in depth on hover or keyboard focus. */
+[data-tip] { position: relative; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 6;
+  width: min(280px, 72vw);
+  background: var(--ink); color: var(--paper);
+  font-size: 12px; font-weight: 400; line-height: 1.45; text-align: left;
+  padding: 8px 10px; border-radius: var(--radius); white-space: normal;
+}
