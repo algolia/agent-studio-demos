@@ -75,6 +75,14 @@ button, .chip, .sample, .seg button, a { transition: color 120ms, background-col
 .eyebrow a:hover { text-decoration: underline; }
 .hero h1 { font-family: var(--serif); font-size: clamp(26px, 3.4vw, 34px); font-weight: 500; letter-spacing: 0; margin: 6px 0 10px; color: var(--ink); }
 .hero .lede { max-width: 66ch; color: var(--ink-2); font-size: 16px; margin: 0; }
+.pr-cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 14px 0 0; }
+.pr-cta {
+  display: inline-flex; align-items: center; height: 36px; padding: 0 16px;
+  font-size: 14px; font-weight: 600; text-decoration: none;
+  color: var(--accent); background: var(--surface); border: 1px solid var(--accent); border-radius: var(--radius);
+}
+.pr-cta::after { content: "\2197"; margin-left: 6px; }
+.pr-cta:hover { color: var(--navy-ink); background: var(--action); border-color: var(--action); }
 .muted { color: var(--ink-3); }
 .meta { font-size: 12.5px; color: var(--ink-3); }
 
