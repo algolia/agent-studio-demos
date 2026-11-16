@@ -96,16 +96,23 @@ const FALLBACK = {
   fr: "Je peux vous aider pour les cartes, les virements, l'épargne, les crédits et votre profil. De quoi avez-vous besoin ?",
 };
 
-/** the canned refusal block mode answers with, locally */
-const BLOCK = {
-  en: "For your security, I cannot accept account numbers, card numbers or other identifiers in chat. Please remove them and ask again.",
-  fr: "Pour votre sécurité, je ne peux pas accepter de numéros de compte, de carte ou d'autres identifiants dans le chat. Retirez-les et reposez votre question.",
+/* the server's fallback in pull request 2059, English only like the server; the last two are demo extras */
+const BLOCK_LABEL = {
+  CREDIT_CARD: "payment card number", EMAIL: "email address", ES_DNI: "Spanish DNI", ES_NIE: "Spanish NIE",
+  FR_NIR: "French social security number", FR_SIREN: "SIREN number", FR_SIRET: "SIRET number",
+  FR_TAX_ID: "French tax number", IBAN: "IBAN", IP: "IP address", PHONE: "phone number",
+  US_SSN: "US social security number", ACCOUNT_NUMBER: "account number",
 };
-/* check-copy: on */
+const BLOCK_GENERIC = "Your message seems to contain sensitive personal data, so it was not processed. Remove it and try again.";
 
-export const BLOCK_REPLY = BLOCK.en;
-/** the block reply in the language of the message that was refused */
-export const blockReply = (original) => BLOCK[langOf(original)];
+/** the refusal block mode answers with: entity names sorted, each named in words */
+export function blockReply(entities = []) {
+  const names = [...new Set(entities)].sort();
+  if (!names.length) return BLOCK_GENERIC;
+  const labels = names.map((e) => BLOCK_LABEL[e] || e).join(", ");
+  return `Your message seems to contain sensitive personal data (${labels}), so it was not processed. Remove it and try again.`;
+}
+/* check-copy: on */
 
 /** received text → { intent, flow: "raw" | "masked" | "clean", lang, text } */
 export function mockReply(received) {

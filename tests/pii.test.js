@@ -183,9 +183,13 @@ test("mock: clean questions get the FAQ answer alone, in their language; block r
   const mixed = mockReply("Update my contact details: [EMAIL] and +1 415-555-0132.");
   assert.equal(mixed.flow, "raw", "a raw value the filter missed wins");
   assert.ok(mixed.text.includes("(an email address)") && mixed.text.includes("(a phone number)"));
-  assert.match(blockReply("Ma carte est bloquée"), /Pour votre sécurité/);
-  assert.match(blockReply("My card is blocked"), /For your security/);
-  for (const t of [blockReply("x"), blockReply("ma carte")]) assert.deepEqual(d.detect(t), []);
+  // the pull request's fallback: entity names sorted, each in words, never the value
+  assert.equal(blockReply(["CREDIT_CARD"]), "Your message seems to contain sensitive personal data "
+    + "(payment card number), so it was not processed. Remove it and try again.");
+  assert.match(blockReply(["IBAN", "CREDIT_CARD", "IBAN"]), /\(payment card number, IBAN\)/);
+  assert.equal(blockReply([]), "Your message seems to contain sensitive personal data, so it was not processed. "
+    + "Remove it and try again.");
+  for (const t of [blockReply([]), blockReply(["IBAN", "PHONE"])]) assert.deepEqual(d.detect(t), []);
 });
 
 test("mock FAQ answers are the opening of their bank_faq record, so mock and live read alike", async () => {
