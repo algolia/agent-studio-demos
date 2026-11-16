@@ -278,6 +278,23 @@ test("the page loads config.js optionally and says where the live agent's filter
   assert.match(html, /never an admin key/);
 });
 
+test("the header links to the pull request safely and the pull-request-only features say they are not live", () => {
+  const fs = require("node:fs");
+  const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+  const cta = html.match(/<a class="pr-cta"[^>]*>([\s\S]*?)<\/a>/);
+  assert.ok(cta, "a pr-cta link exists");
+  assert.match(cta[0], /href="https:\/\/github\.com\/algolia\/conversational-ai\/pull\/2059"/);
+  assert.match(cta[0], /target="_blank"/);
+  assert.match(cta[0], /rel="noopener noreferrer"/);
+  assert.match(cta[1], /Comment on the PR/);
+  assert.ok(html.indexOf('class="pr-cta"') < html.indexOf('id="compose"'), "the link sits above the demo");
+  assert.match(html, /<dl class="ba"/);
+  const inPr = html.match(/<section class="panel in-pr"[\s\S]*?<\/section>/);
+  assert.ok(inPr, "the pull-request-only panel exists");
+  assert.match(inPr[0], /not deployed yet/);
+  assert.match(inPr[0], /blocked: IBAN/);
+});
+
 /* A clean-room generator: our own inputs, each check computed from the public
    rule. The port's samples must be exactly what it makes. */
 const DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
