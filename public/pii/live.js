@@ -41,6 +41,21 @@ export function readStream(streamText) {
   return { text, error: text ? null : error };
 }
 
+/**
+ * The demo's own agent, from the `pii` block of window.DEMO_CONFIG, as creds;
+ * null when the block is absent or incomplete (the page stays on its mock).
+ * Its key ships to every visitor, so it must be a browser key, never an
+ * admin key: nothing here can tell, see tools/pii-provision.mjs.
+ */
+export function configAgent(config) {
+  const b = config && typeof config === "object" ? config.pii : null;
+  if (!b || typeof b !== "object") return null;
+  const byHost = Object.keys(HOSTS).find((r) => HOSTS[r] === String(b.host || "").replace(/\/+$/, ""));
+  const region = HOSTS[b.region] ? b.region : byHost;
+  if (!region || !b.appId || !b.agentStudioApiKey || !isUuid(b.agentId)) return null;
+  return { region, appId: String(b.appId), apiKey: String(b.agentStudioApiKey), agentId: String(b.agentId).trim() };
+}
+
 export function statusText(status) {
   if (status === 401 || status === 403) return `${status}: this key cannot do that`;
   if (status === 404) return "404: no such agent in this app and region";
