@@ -228,3 +228,25 @@ test("every 'try it' sample is flagged with its own type and masks whole", async
   }
   assert.equal(n, 22);
 });
+
+test("the config's pii block becomes the live agent; anything incomplete keeps the mock", async () => {
+  const live = await load("live.js");
+  const id = "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b";
+  const block = { region: "eu", host: live.HOSTS.eu, appId: "FAKEAPP01", agentStudioApiKey: "browser-key-not-real", agentId: id };
+  assert.deepEqual(live.configAgent({ pii: block }), { region: "eu", appId: "FAKEAPP01", apiKey: "browser-key-not-real", agentId: id });
+  assert.equal(live.configAgent({ pii: { ...block, region: undefined, host: `${live.HOSTS.us}/` } }).region, "us", "the host names the region");
+  for (const cfg of [null, undefined, {}, { pii: null }, { pii: { ...block, agentId: "nope" } }, { pii: { ...block, agentStudioApiKey: "" } },
+    { pii: { ...block, region: "ap", host: "https://example.com" } }]) {
+    assert.equal(live.configAgent(cfg), null, JSON.stringify(cfg));
+  }
+});
+
+test("the page loads config.js optionally and says where the live agent's filter runs", () => {
+  const fs = require("node:fs");
+  const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+  assert.match(html, /<script src="\.\.\/shared\/config\.js" onerror="window\.DEMO_CONFIG = window\.DEMO_CONFIG \|\| null"><\/script>/);
+  assert.ok(html.indexOf("shared/config.js") < html.indexOf('src="app.js"'), "config before the page module");
+  assert.match(html, /Algolia's managed LLM/);
+  assert.match(html, /filter on the right still runs in this tab/);
+  assert.match(html, /never an admin key/);
+});

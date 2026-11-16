@@ -18,6 +18,8 @@
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:,">
 <script src="../shared/theme.js"></script>
+<!-- optional: a `pii` block turns on the live agent; it holds a browser key, never an admin key -->
+<script src="../shared/config.js" onerror="window.DEMO_CONFIG = window.DEMO_CONFIG || null"></script>
 </head>
 <body>
 <a class="skip" href="#compose">Skip to the demo</a>
@@ -52,9 +54,12 @@
           data-tip="Any identifier refuses the message. Nothing goes to the model.">Block</button>
       </div>
       <label class="check"><input type="checkbox" id="extras" checked> Demo extras: SSN, account number</label>
+      <label class="check" id="live-wrap" hidden><input type="checkbox" id="live"> Live agent</label>
       <button type="button" class="primary" id="send">Send</button>
       <span class="meta" id="agent-tag" role="status">mock agent</span>
     </div>
+    <p class="meta live-note" id="live-note" hidden>The live agent is a demo bank assistant on Algolia's managed LLM.
+    The filter on the right still runs in this tab, not on the server. Use made-up numbers only.</p>
   </section>
 
   <div class="sides">
@@ -99,13 +104,14 @@
       <label>Agent ID <input id="lv-agent" type="text" spellcheck="false" autocomplete="off"></label>
       <div class="lv-row">
         <button type="button" id="lv-use">Use my agent</button>
-        <button type="button" id="lv-forget">Back to the mock</button>
+        <button type="button" id="lv-forget">Forget my agent</button>
         <span class="meta" id="lv-status" role="status"></span>
       </div>
     </div>
   </details>
 
-  <p class="footnote">Detection runs in this tab: regex candidates, then checksums. Nothing leaves the page in mock mode.</p>
+  <p class="footnote">Detection runs in this tab: regex candidates, then checksums. Nothing leaves the page in mock mode.
+  Live, each Send goes to the agent: the raw message on the left, the filtered one on the right.</p>
 </main>
 
 <script type="module" src="app.js"></script>

@@ -6,11 +6,15 @@
    the chat log keeps. Mock replies redraw as you type; live replies wait for
    Send. Every node is built with textContent: no message ever goes through
    innerHTML.
+
+   Which agent answers: the visitor's own (from the form) wins; else the
+   demo's agent from window.DEMO_CONFIG.pii while "Live agent" is on (it
+   starts on when that block exists); else the mock.
    ─────────────────────────────────────────────────────────────── */
 
 import { detect, filterMessage, maskFindings, segments, resolveOverlaps, ENTITIES, EXTRA_ENTITIES } from "./detect.js";
 import { mockReply, BLOCK_REPLY } from "./mock.js";
-import { complete, isUuid } from "./live.js";
+import { complete, configAgent, isUuid } from "./live.js";
 import { SAMPLES } from "./samples.js";
 
 const $ = (id) => document.getElementById(id);
@@ -39,9 +43,14 @@ const COVER = {
 const state = {
   mode: "redact",
   extras: true,
-  creds: null, // { region, appId, apiKey, agentId } while live, in memory only
+  own: null, // { region, appId, apiKey, agentId } from the form, in memory only
+  demo: configAgent(window.DEMO_CONFIG), // the same shape, from config.js, or null
+  useDemo: true,
   live: { text: null, raw: null, filtered: null, pending: false },
 };
+
+/** the agent Send asks, or null for the mock */
+const creds = () => state.own || (state.useDemo ? state.demo : null);
 
 /* ── Painting ─────────────────────────────────────────────────── */
 
@@ -117,12 +126,12 @@ function fillLog(el, rows) {
 
 function replyFor(side, sent) {
   if (sent == null) return { text: BLOCK_REPLY, note: "local reply" };
-  if (!state.creds) return { text: mockReply(sent).text };
+  if (!creds()) return { text: mockReply(sent).text };
   const l = state.live;
-  if (l.text !== $("msg").value) return { text: null, empty: "Press Send to ask your agent." };
-  if (l.pending) return { text: null, empty: "Waiting for your agent…" };
+  if (l.text !== $("msg").value) return { text: null, empty: "Press Send to ask the agent." };
+  if (l.pending) return { text: null, empty: "Waiting for the agent…" };
   const r = l[side];
-  if (!r) return { text: null, empty: "Press Send to ask your agent." };
+  if (!r) return { text: null, empty: "Press Send to ask the agent." };
   if (r.error) return { text: null, empty: r.error };
   return { text: r.text };
 }
@@ -216,24 +225,26 @@ function setMode(mode) {
 }
 
 function setAgentLabel() {
-  const label = state.creds ? "your agent" : "mock agent";
+  const label = state.own ? "your agent" : creds() ? "live agent" : "mock agent";
   $("agent-tag").textContent = label;
   for (const b of document.querySelectorAll("[data-agent-badge]")) {
     b.textContent = label;
-    b.classList.toggle("live", Boolean(state.creds));
+    b.classList.toggle("live", Boolean(creds()));
   }
+  $("live-note").hidden = !(state.demo && state.useDemo && !state.own);
 }
 
 async function send() {
-  if (!state.creds) { render(); return; }
+  const who = creds();
+  if (!who) { render(); return; }
   const text = $("msg").value;
   const raw = filterMessage(text, "off", { extras: state.extras });
   const f = filterMessage(text, state.mode, { extras: state.extras });
   state.live = { text, raw: null, filtered: null, pending: true };
   render();
   const [r, fl] = await Promise.all([
-    complete(fetch, state.creds, raw.toModel),
-    f.toModel == null ? Promise.resolve(null) : complete(fetch, state.creds, f.toModel),
+    complete(fetch, who, raw.toModel),
+    f.toModel == null ? Promise.resolve(null) : complete(fetch, who, f.toModel),
   ]);
   if (state.live.text !== text) return;
   state.live = { text, raw: r, filtered: fl, pending: false };
@@ -241,17 +252,17 @@ async function send() {
 }
 
 function useAgent() {
-  const creds = {
+  const own = {
     region: $("lv-region").value,
     appId: $("lv-app").value.trim(),
     apiKey: $("lv-key").value,
     agentId: $("lv-agent").value.trim(),
   };
-  if (!creds.appId || !creds.apiKey || !isUuid(creds.agentId)) {
+  if (!own.appId || !own.apiKey || !isUuid(own.agentId)) {
     $("lv-status").textContent = "Fill in all four. The agent ID is a UUID.";
     return;
   }
-  state.creds = creds;
+  state.own = own;
   $("lv-key").value = "";
   state.live = { text: null, raw: null, filtered: null, pending: false };
   $("lv-status").textContent = "Live: Send asks your agent, both sides.";
@@ -260,9 +271,10 @@ function useAgent() {
 }
 
 function forget() {
-  state.creds = null;
+  state.own = null;
   $("lv-key").value = "";
-  $("lv-status").textContent = "Back to the mock agent. The key is gone.";
+  state.live = { text: null, raw: null, filtered: null, pending: false };
+  $("lv-status").textContent = `Back to the ${creds() ? "live" : "mock"} agent. Your key is gone.`;
   setAgentLabel();
   render();
 }
@@ -292,6 +304,16 @@ function init() {
   $("send").addEventListener("click", send);
   $("lv-use").addEventListener("click", useAgent);
   $("lv-forget").addEventListener("click", forget);
+  if (state.demo) {
+    $("live-wrap").hidden = false;
+    $("live").checked = state.useDemo;
+    $("live").addEventListener("change", (e) => {
+      state.useDemo = e.target.checked;
+      state.live = { text: null, raw: null, filtered: null, pending: false };
+      setAgentLabel();
+      render();
+    });
+  }
   setAgentLabel();
   render();
 }
