@@ -269,6 +269,16 @@ module.exports = [
     rules: recommended,
   },
   {
+    // pii/ is ES modules: the page imports detect.js, and so does its test.
+    files: ["public/pii/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: { ...browserGlobals, ReadableStream: "readonly", Response: "readonly", Headers: "readonly" },
+    },
+    rules: recommended,
+  },
+  {
     // The conversation generator: Node, CommonJS, and never loaded by a page.
     files: ["tools/**/*.js"],
     languageOptions: {
