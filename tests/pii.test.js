@@ -292,7 +292,11 @@ test("the header links to the pull request safely and the pull-request-only feat
   const inPr = html.match(/<section class="panel in-pr"[\s\S]*?<\/section>/);
   assert.ok(inPr, "the pull-request-only panel exists");
   assert.match(inPr[0], /not deployed yet/);
-  assert.match(inPr[0], /blocked: IBAN/);
+  assert.doesNotMatch(inPr[0], /blocked: IBAN/, "the old wording is gone");
+  assert.match(inPr[0], /"type": "data-guardrail-violation"/);
+  assert.match(inPr[0], /"category": "pii"/);
+  assert.match(inPr[0], /sensitive personal data \(payment card number\)/);
+  assert.match(inPr[0], /"entities": \["CREDIT_CARD"\]/);
 });
 
 /* A clean-room generator: our own inputs, each check computed from the public

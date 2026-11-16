@@ -99,6 +99,10 @@ button, .chip, .sample, .seg button, a { transition: color 120ms, background-col
 .in-pr-list strong { color: var(--ink); }
 .in-pr code { font-family: var(--mono); font-size: 13px; padding: 0 4px; background: var(--surface-2); border-radius: 2px; }
 .in-pr .meta { margin: 0; }
+.in-pr .wire {
+  margin: 6px 0 2px; padding: 8px 10px; font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+  white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); background: var(--surface-2); border-radius: 2px;
+}
 .meta { font-size: 12.5px; color: var(--ink-3); }
 
 /* ── Panels ───────────────────────────────────────────────────── */
