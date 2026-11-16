@@ -175,7 +175,7 @@ function render() {
   }, { extras: state.extras }));
 }
 
-/** the strip under the sides: label, left, right, from the run above */
+/** the strip under the sides: label, left, right, from the run above; a leading count gets its own span */
 function renderCompare(rows) {
   const trs = [];
   for (const [label, left, right] of rows) {
@@ -187,7 +187,13 @@ function renderCompare(rows) {
     for (const [v, cls] of [[left, "l"], [right, "r"]]) {
       const td = document.createElement("td");
       td.className = cls;
-      td.textContent = v;
+      const m = /^(\d+)(.*)$/s.exec(v);
+      if (m) {
+        const fig = document.createElement("span");
+        fig.className = `fig ${m[1] === "0" ? "safe" : "leak"}`;
+        fig.textContent = m[1];
+        td.append(fig, m[2]);
+      } else td.textContent = v;
       tr.append(td);
     }
     trs.push(tr);
