@@ -18,6 +18,7 @@ import {
 import { mockReply, blockReply } from "./mock.js";
 import { complete, configAgent, isUuid } from "./live.js";
 import { SAMPLES } from "./samples.js";
+import { compareSides } from "./compare.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -168,6 +169,30 @@ function render() {
   if (f.blocked) $("f-badge").textContent = "local reply";
   else setAgentLabel();
   renderLegend(f.findings);
+  renderCompare(compareSides({
+    raw: { sent: raw.toModel, log: [raw.toLog, rr.text] },
+    filtered: { sent: f.toModel, log: [f.toLog, fr.text] },
+  }, { extras: state.extras }));
+}
+
+/** the strip under the sides: label, left, right, from the run above */
+function renderCompare(rows) {
+  const trs = [];
+  for (const [label, left, right] of rows) {
+    const tr = document.createElement("tr");
+    const th = document.createElement("th");
+    th.scope = "row";
+    th.textContent = label;
+    tr.append(th);
+    for (const [v, cls] of [[left, "l"], [right, "r"]]) {
+      const td = document.createElement("td");
+      td.className = cls;
+      td.textContent = v;
+      tr.append(td);
+    }
+    trs.push(tr);
+  }
+  $("compare").replaceChildren(...trs);
 }
 
 /** one "try it" chip per sample: a click puts it in the message box */

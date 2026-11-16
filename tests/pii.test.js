@@ -348,3 +348,30 @@ test("SIREN and SIRET need their keyword; the ungated port fires bare, and extra
   assert.deepEqual(ents("mi DNI es 39740125N y mi NIE X1234567L"), ["ES_DNI", "ES_NIE"]);
   assert.deepEqual(ents("2 91 03 2A 004 123 68 and 39740125N", { extras: false }), [], "the port rides on the extras switch");
 });
+
+test("the comparison strip counts what each side sent and stored, nothing invented", async () => {
+  const d = await load("detect.js");
+  const { compareSides } = await load("compare.js");
+  const { mockReply } = await load("mock.js");
+  const text = MOCK_CASES[0].text;
+  const side = (mode) => {
+    const f = d.filterMessage(text, mode);
+    const reply = f.toModel == null ? "refused" : mockReply(f.toModel).text;
+    return { sent: f.toModel, log: [f.toLog, reply] };
+  };
+  const rows = compareSides({ raw: side("off"), filtered: side("redact") });
+  assert.deepEqual(rows.map((r) => r.slice(1)), [
+    ["2 raw", "0 raw"],
+    ["2 raw", "0 raw"],
+    ["the numbers themselves, so it warns about them", "only that details were filtered"],
+  ]);
+  const blocked = compareSides({ raw: side("off"), filtered: side("block") });
+  assert.equal(blocked[0][2], "0, nothing sent");
+  assert.equal(blocked[2][2], "nothing, refused before the model");
+  const echo = compareSides({ raw: { sent: text, log: [text, "Noted 123-45-6789"] }, filtered: side("redact") });
+  assert.equal(echo[1][1], "3 raw", "an agent that echoes a number adds to the log count");
+  const clean = compareSides({ raw: { sent: "hi", log: ["hi"] }, filtered: { sent: "hi", log: ["hi"] } });
+  assert.deepEqual(clean.map((r) => r.slice(1)), [["0 raw", "0 raw"], ["0 raw", "0 raw"], ["a message with no identifier", "a message with no identifier"]]);
+  const off = compareSides({ raw: side("off"), filtered: side("redact") }, { extras: false });
+  assert.equal(off[0][1], "2 raw", "with extras off the toolkit still sees the two as phone numbers");
+});

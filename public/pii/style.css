@@ -156,3 +156,12 @@ button.primary { color: var(--paper); background: var(--accent); }
 
 .live-note { margin: 10px 0 0; max-width: 70ch; }
 .check[hidden], .live-note[hidden] { display: none; }
+
+.compare table { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: fixed; }
+.compare th, .compare td { text-align: left; padding: 6px 8px; vertical-align: top; overflow-wrap: anywhere; }
+.compare thead th { font-size: 12.5px; color: var(--ink-3); font-weight: 600; }
+.compare tbody th { font-weight: 600; width: 34%; }
+.compare tbody tr + tr > * { border-top: 1px solid var(--line); }
+.compare td.l { border-left: 3px solid var(--over); }
+.compare td.r { border-left: 3px solid var(--ok); }
+@media (max-width: 520px) { .compare table { font-size: 12.5px; } .compare tbody th { width: 30%; } }

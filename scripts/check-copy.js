@@ -78,7 +78,7 @@ const JS_FILES = [
   "main-demo/fixture.mjs", "main-demo/fields.mjs", "main-demo/race.mjs", "main-demo/agents.mjs",
   "prefetch/app.js", "prefetch/compare.mjs", "prefetch/outcome.mjs", "prefetch/demos.mjs",
   "prefetch/intro.js", "prefetch/intro.mjs", "prefetch/tune.js", "prefetch/tune.mjs",
-  "pii/app.js", "pii/detect.js", "pii/mock.js", "pii/live.js", "pii/samples.js",
+  "pii/app.js", "pii/detect.js", "pii/mock.js", "pii/live.js", "pii/samples.js", "pii/compare.js",
 ];
 
 /* ── Text extraction ──────────────────────────────────────────── */
