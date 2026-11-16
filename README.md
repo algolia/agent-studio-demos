@@ -286,6 +286,42 @@ To point the public page at a backend:
 4. Refresh `DEMO_CONFIG_JS` from that file (see [Deploy](#deploy)), and the next
    push to `main` serves it.
 
+## Identifier filtering
+
+`public/pii/` shows one customer message twice: without a filter, and with
+structural identifiers (cards, IBANs, emails, phones, IPs, plus two demo extras)
+masked or blocked. Detection runs in the browser (`detect.js`); the server-side
+feature it simulates is still being built. It reduces exposure; it is not a
+compliance guarantee.
+
+Without a `pii` block in `config.js` the agent is a local mock. With one, the
+**Live agent** switch starts on, and Send asks `DEMO_pii-banking`, a tool-less
+banking help assistant on the Algolia-managed LLM: the raw message on the left,
+the filtered one on the right. The filter still runs in the tab either way. A
+visitor's own agent, entered under "Use your own agent", wins over both.
+
+### Provision the pii agent
+
+```sh
+# list the providers the fence allows, and the candidate models each serves
+APP_ID=… ADMIN_KEY=… node tools/pii-provision.mjs --region eu --providers
+# see what would happen, write nothing
+APP_ID=… ADMIN_KEY=… node tools/pii-provision.mjs --region eu --dry-run
+# adopt or create the agent, and write the pii block into config.js
+APP_ID=… ADMIN_KEY=… node tools/pii-provision.mjs --region eu \
+  --keys-from public/shared/config.js --write-config public/shared/config.js
+```
+
+It runs on the Algolia-managed provider unless `--provider` names a `TEST_…`
+one, and on the first model of its candidate list that provider serves unless
+`--model` says otherwise. Only agents named `DEMO_pii-…` are ever written;
+`--converge` rewrites an adopted agent that drifted. The admin key stays in the
+environment. **The block gets a browser key only**, copied from a block of
+`--keys-from` for the same app: the page sends it from every visitor's browser,
+so it must never be an admin key, and nothing in the page can check that.
+For production, refresh `DEMO_CONFIG_JS` from the file that now holds the block
+(see [Deploy](#deploy)).
+
 ## Jev trims the record
 
 `/jev-attributes/` trims the context an agent would read, twice, on one
