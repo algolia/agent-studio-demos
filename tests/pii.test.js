@@ -210,3 +210,21 @@ test("live mode: one completions call with the given text, key only in headers, 
   assert.equal(calls.length, 1, "refused before fetch");
   assert.equal(live.readStream('data: {"type":"data-guardrail-violation","data":{}}\n').error, "blocked by the agent's guardrail");
 });
+
+test("every 'try it' sample is flagged with its own type and masks whole", async () => {
+  const d = await load("detect.js");
+  const { SAMPLES } = await load("samples.js");
+  assert.deepEqual(Object.keys(SAMPLES), d.ENTITIES, "one sample row per type, in legend order");
+  let n = 0;
+  for (const [entity, values] of Object.entries(SAMPLES)) {
+    assert.ok(values.length >= 3, `${entity} has at least 3 samples`);
+    for (const v of values) {
+      n++;
+      const r = d.filterMessage(v, "redact");
+      assert.deepEqual(r.findings.map((f) => f.entity), [entity], v);
+      const expected = entity === "ACCOUNT_NUMBER" ? v.replace(/[\d][\d-]*\d$/, "[ACCOUNT_NUMBER]") : `[${entity}]`;
+      assert.equal(r.toModel, expected, v);
+    }
+  }
+  assert.equal(n, 22);
+});

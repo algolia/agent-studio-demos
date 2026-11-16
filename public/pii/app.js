@@ -11,6 +11,7 @@
 import { detect, filterMessage, maskFindings, segments, resolveOverlaps, ENTITIES, EXTRA_ENTITIES } from "./detect.js";
 import { mockReply, BLOCK_REPLY } from "./mock.js";
 import { complete, isUuid } from "./live.js";
+import { SAMPLES } from "./samples.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -29,9 +30,9 @@ const COVER = {
   EMAIL: "name@domain.tld",
   PHONE: "9 to 15 digits, with separators",
   CREDIT_CARD: "Luhn check and card network prefix",
-  IBAN: "country length and mod-97 check",
+  IBAN: "country length and mod-97 check; spaced form missed",
   IP: "IPv4, each part 0 to 255",
-  US_SSN: "ddd-dd-dddd, never-issued ranges dropped",
+  US_SSN: "US only: ddd-dd-dddd, never-issued ranges dropped",
   ACCOUNT_NUMBER: "6 to 20 digits after a word like “account number”",
 };
 
@@ -151,6 +152,28 @@ function render() {
   renderLegend(f.findings);
 }
 
+/** one "try it" chip per sample: a click puts it in the message box */
+function sampleChips(entity) {
+  const row = document.createElement("div");
+  row.className = "samples";
+  row.setAttribute("role", "group");
+  row.setAttribute("aria-label", `Try a ${entity} sample`);
+  for (const value of SAMPLES[entity] || []) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "sample";
+    b.textContent = value;
+    b.addEventListener("click", () => {
+      $("msg").value = value;
+      for (const c of $("examples").children) c.setAttribute("aria-pressed", "false");
+      render();
+      $("msg").focus();
+    });
+    row.append(b);
+  }
+  return row;
+}
+
 function renderLegend(findings) {
   const counts = {};
   for (const x of findings) counts[x.entity] = (counts[x.entity] || 0) + 1;
@@ -174,6 +197,7 @@ function renderLegend(findings) {
     n.className = "count";
     n.textContent = counts[e] ? `×${counts[e]}` : "";
     li.append(n);
+    li.append(sampleChips(e));
     list.append(li);
   }
   const none = document.createElement("li");
