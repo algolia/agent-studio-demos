@@ -66,17 +66,17 @@
     models: [
       /* ── OpenAI — priced from the platform's billing table ─────────── */
       {
-        id: "gpt-5.6-sol", label: "gpt-5.6 Sol", provider: "openai", state: "available",
+        id: "gpt-5.6-sol", showcase: true, label: "gpt-5.6 Sol", provider: "openai", state: "available",
         contextWindow: 1000000, inPerMTok: 5, outPerMTok: 30, priceScope: "platform",
         source: PLATFORM_TABLE_SOURCE,
       },
       {
-        id: "gpt-5.6-terra", label: "gpt-5.6 Terra", provider: "openai", state: "available",
+        id: "gpt-5.6-terra", showcase: true, label: "gpt-5.6 Terra", provider: "openai", state: "available",
         contextWindow: 1000000, inPerMTok: 2.5, outPerMTok: 15, priceScope: "platform",
         source: PLATFORM_TABLE_SOURCE,
       },
       {
-        id: "gpt-5.6-luna", label: "gpt-5.6 Luna", provider: "openai", state: "available",
+        id: "gpt-5.6-luna", showcase: true, label: "gpt-5.6 Luna", provider: "openai", state: "available",
         contextWindow: 1000000, inPerMTok: 1, outPerMTok: 6, priceScope: "platform",
         source: PLATFORM_TABLE_SOURCE,
       },
@@ -171,7 +171,7 @@
 
       /* ── Anthropic ─────────────────────────────────────────────────── */
       {
-        id: "claude-haiku-5-5", label: "claude-haiku-5.5", provider: "anthropic", state: "available",
+        id: "claude-haiku-5-5", showcase: true, label: "claude-haiku-5.5", provider: "anthropic", state: "available",
         contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
         source: "In the registry as Anthropic's fast tier; priced by the registry sync when available.",
       },
@@ -187,12 +187,12 @@
         source: "The registry's Anthropic flagship; no price curated yet.",
       },
       {
-        id: "claude-sonnet-5-5", label: "claude-sonnet-5.5", provider: "anthropic", state: "available",
+        id: "claude-sonnet-5-5", showcase: true, label: "claude-sonnet-5.5", provider: "anthropic", state: "available",
         contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
         source: "Registered, not yet the default on any workload; no price curated yet.",
       },
       {
-        id: "claude-opus-5-5", label: "claude-opus-5.5", provider: "anthropic", state: "available",
+        id: "claude-opus-5-5", showcase: true, label: "claude-opus-5.5", provider: "anthropic", state: "available",
         contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
         source: "Anthropic's newest GA Opus; no price curated yet.",
       },
@@ -202,7 +202,7 @@
         source: "In the registry; no price curated yet.",
       },
       {
-        id: "claude-fable-5", label: "claude-fable-5", provider: "anthropic", state: "available",
+        id: "claude-fable-5", showcase: true, label: "claude-fable-5", provider: "anthropic", state: "available",
         contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
         source: "In the registry; no price curated yet.",
       },
@@ -219,7 +219,7 @@
         source: "xAI's top model (GA Sep 2026); no price curated yet.",
       },
       {
-        id: "grok-3-mini", label: "grok-3-mini", provider: "xai", state: "available",
+        id: "grok-3-mini", showcase: true, label: "grok-3-mini", provider: "xai", state: "available",
         contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
         quality: {
           score: 0.869, ciLow: 0.824, ciHigh: 0.910, n: 80,
@@ -233,7 +233,7 @@
       {
         /* The managed beta serves gemma-4-31b-it-nvfp4; bare-metal hosting is
            not live, so today's honest cost is the open-weights list price. */
-        id: "gemma-4-31b-it", label: "gemma-4-31b · private beta", provider: "google",
+        id: "gemma-4-31b-it", showcase: true, label: "gemma-4-31b · private beta", provider: "google",
         state: "available", contextWindow: 262144, inPerMTok: 0.2, outPerMTok: 0.4,
         priceScope: "list",
         source: "OpenRouter's published list price for google/gemma-4-31b-it, fetched " +
@@ -242,7 +242,7 @@
           "shows the open-weights list price, not an Algolia price.",
       },
       {
-        id: "gemini-3.1-pro-preview", label: "gemini-3.1-pro (preview)", provider: "google",
+        id: "gemini-3.1-pro-preview", showcase: true, label: "gemini-3.1-pro (preview)", provider: "google",
         state: "available", contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
         source: "The registry's Google flagship; no price curated yet.",
       },
@@ -257,14 +257,14 @@
         source: "In the registry; no price curated yet.",
       },
       {
-        id: "gemini-2.5-flash-lite", label: "gemini-2.5-flash-lite", provider: "google",
+        id: "gemini-2.5-flash-lite", showcase: true, label: "gemini-2.5-flash-lite", provider: "google",
         state: "available", contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
         source: "In the registry; no price curated yet.",
       },
 
       /* ── DeepSeek ──────────────────────────────────────────────────── */
       {
-        id: "deepseek-v4-flash", label: "deepseek-v4-flash", provider: "deepseek",
+        id: "deepseek-v4-flash", showcase: true, label: "deepseek-v4-flash", provider: "deepseek",
         state: "available", contextWindow: 1000000, inPerMTok: null, outPerMTok: null,
         priceScope: null,
         source: "In the registry as the latency tier (pricing page exists upstream); no price curated yet.",
@@ -282,7 +282,7 @@
         source: "The registry's Mistral flagship; no price curated yet.",
       },
       {
-        id: "mistral-small-2603", label: "mistral-small-2603", provider: "mistral",
+        id: "mistral-small-2603", showcase: true, label: "mistral-small-2603", provider: "mistral",
         state: "available", contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
         source: "In the registry as the fast tier; no price curated yet.",
       },
