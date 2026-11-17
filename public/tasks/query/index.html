@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Query rewrite — RushHour</title>
+  <meta name="description" content="A shopping query rewriting into states: one schema-validated task call." />
+  <link rel="icon" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Inter+Tight:ital,wght@0,300..700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="/shared/tokens.css" />
+  <link rel="stylesheet" href="../style.css" />
+  <script src="/shared/config.js"></script>
+  <script src="/shared/theme.js"></script>
+  <script src="../common.js"></script>
+  <script src="../page.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="kicker">RushHour · <a href="/tasks/">Tasks</a> · <a href="/tasks/rerank/">rerank →</a></p>
+      <h1>Query rewrite</h1>
+      <p class="lede">Raw keyword search on the left, instantly. The rewrite task lands on the right: states you can run.</p>
+    </div>
+    <button type="button" class="theme-toggle" data-theme-toggle>
+      <span data-theme-glyph aria-hidden="true"></span>
+      <span data-theme-label></span>
+    </button>
+  </header>
+
+  <section id="setup" class="setup hidden">
+    <p></p>
+  </section>
+
+  <main id="demo" class="hidden">
+    <form id="form" class="bar">
+      <input id="message" type="text" autocomplete="off" placeholder="glowy serum but not dior" />
+      <button type="submit">Rewrite</button>
+    </form>
+    <div id="chips" class="chips">
+      <button type="button" data-q="glowy serum but not dior">glowy serum but not dior</button>
+      <button type="button" data-q="cheal item for festival makeup">cheal item for festival makeup</button>
+      <button type="button" data-q="conferrable travel kit under $30">conferrable travel kit under $30</button>
+      <button type="button" data-q="refillable shampoo in a tin">refillable shampoo in a tin</button>
+    </div>
+
+    <p id="status" class="status" role="status"></p>
+
+    <div class="board">
+      <section class="panel">
+        <h2>Raw keyword</h2>
+        <p id="raw-meta" class="panel-meta"></p>
+        <ol id="raw" class="hits"></ol>
+      </section>
+      <section class="panel">
+        <h2>After rewrite</h2>
+        <p id="states-meta" class="panel-meta"></p>
+        <section id="states"></section>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <p>RushHour — no time for agents. One task: <code>algolia_query_generation</code>. The message goes in raw; the states come back schema-checked.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
