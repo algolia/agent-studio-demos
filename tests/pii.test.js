@@ -305,12 +305,13 @@ test("the header links to the pull request safely and the pull-request-only feat
   assert.match(inPr[0], /"message": "Input blocked by guardrails"/);
   assert.match(inPr[0], /Schema errors never quote a value/);
   // the pull request's own known limits, stated rather than contradicted
-  assert.match(inPr[0], /Only user input is checked/);
-  assert.match(inPr[0], /32,000(&nbsp;| )characters/);
+  assert.doesNotMatch(inPr[0], /Only user input is checked/, "replies sent back are redacted too");
+  assert.match(inPr[0], /Tool data and\s+the system prompt are not checked/);
+  assert.match(inPr[0], /32,000(&nbsp;| )new characters/);
   assert.match(inPr[0], /split across two JSON values of a task input\s+is missed/);
   assert.match(inPr[0], /kit v0\.2\.1/, "the kit the pull request pins");
   assert.doesNotMatch(inPr[0], /v0\.2\.0/);
-  assert.match(inPr[0], /≈1\.6% of EAN-13 barcodes and ≈2\.6% of 16-digit order numbers read as cards/);
+  assert.match(inPr[0], /≈1\.6% of EAN-13 barcodes and ≈2\.6% of 16-digit order numbers read\s+as cards/);
   assert.match(inPr[0], /needs a word like “call” first/);
   assert.match(inPr[0], /Only new input blocks/);
   assert.match(inPr[0], /misses most of the detection above/, "the port's gap is stated");

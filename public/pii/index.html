@@ -124,10 +124,9 @@
       no + and no spaces needs a word like “call” first.</li>
       <li><strong>Only new input blocks:</strong> user messages after the last agent reply. Earlier turns
       and replies sent back are redacted silently. So is a stored message resent unchanged.</li>
-      <li><strong>Limits.</strong> Only user input is checked, up to 32,000&nbsp;characters a request;
-      longer is refused. ≈1.6% of EAN-13 barcodes and ≈2.6% of 16-digit order numbers read as cards, so
-      block mode refuses some product codes. An identifier split across two JSON values of a task input
-      is missed.</li>
+      <li><strong>Limits.</strong> A request with over 32,000&nbsp;new characters is refused. Tool data and
+      the system prompt are not checked. ≈1.6% of EAN-13 barcodes and ≈2.6% of 16-digit order numbers read
+      as cards. An identifier split across two JSON values of a task input is missed.</li>
     </ul>
     <p class="meta">This page runs none of this; its own filter here misses most of the detection above.</p>
   </section>
