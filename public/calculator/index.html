@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Shopping Assistant cost calculator</title>
-<meta name="description" content="What does running an AI shopping assistant cost per month? Bands, not quotes: arithmetic over the platform's own pricing table, with every assumption on the page.">
+<meta name="description" content="What does running an AI shopping assistant cost per month? Set your traffic, pick a model, read a ±50% band. The typical deployment shape is built in.">
 <meta property="og:title" content="The Shopping Assistant cost calculator">
 <meta property="og:description" content="What does an AI shopping assistant cost per month? Traffic in, ±50% cost bands per model out&nbsp;— every assumption on the page.">
 <meta property="og:type" content="website">
@@ -29,270 +29,57 @@
   <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
   <h1>The Shopping Assistant cost calculator</h1>
   <p class="lede">What does an AI shopping assistant cost per month?
-  Tell us your use-case or pick an industry-standard starting point. Compare the priced models, refine with real prompts.</p>
+  Set your traffic, pick a model, read a ±50% band. The typical deployment
+  shape is built in&nbsp;— no token math required.</p>
 </header>
 
 <main class="wrap">
-  <nav class="tabs" role="tablist" aria-label="Estimate modes">
-    <button class="tab" id="tab-envelope" role="tab" aria-selected="true" aria-controls="pane-envelope">Back of the envelope</button>
-    <button class="tab" id="tab-traffic" role="tab" aria-selected="false" aria-controls="pane-traffic">Refine with real traffic</button>
-    <button class="tab" id="tab-eval" role="tab" aria-selected="false" aria-controls="pane-eval">Before launch · eval run</button>
-  </nav>
+  <div class="grid-2">
+    <form class="panel" id="traffic-form" autocomplete="off">
+      <h2>Your traffic</h2>
+      <p class="small muted">Not sure where to start? Pick a template:</p>
+      <div class="chips" id="templates" role="group" aria-label="Traffic templates"></div>
+      <label class="field">
+        <span class="field-name" data-tip="One visit, whatever the visitor does. Analytics knows this number.">Site sessions per day</span>
+        <input type="number" id="in-sessions" min="1" max="10000000" value="10000" inputmode="numeric">
+        <span class="field-note">all visitors, not only AI ones</span>
+      </label>
+      <label class="field">
+        <span class="field-name">Share who use the assistant <output id="out-adoption">12</output>%</span>
+        <input type="range" id="in-adoption" min="1" max="100" value="12">
+        <span class="field-note">adoption is the biggest lever and the least known&nbsp;— sweep it</span>
+      </label>
+    </form>
 
-  <!-- ── Tab 1 · back of the envelope ─────────────────────────────── -->
-  <section class="pane" id="pane-envelope" role="tabpanel" aria-labelledby="tab-envelope">
-    <div class="grid-2">
-      <form class="panel" id="traffic-form" autocomplete="off">
-        <h2>Your traffic</h2>
-        <p class="small muted">New to this? Start from a template:</p>
-        <div class="chips" id="templates" role="group" aria-label="Traffic templates"></div>
-        <label class="field">
-          <span class="field-name" data-tip="One visit, whatever the visitor does. Analytics knows this number.">Site sessions per day</span>
-          <input type="number" id="in-sessions" min="1" max="10000000" value="10000" inputmode="numeric">
-          <span class="field-note">all visitors, not only AI ones</span>
-        </label>
-        <label class="field">
-          <span class="field-name">Share who use the assistant <output id="out-adoption">12</output>%</span>
-          <input type="range" id="in-adoption" min="1" max="100" value="12">
-          <span class="field-note">adoption is the biggest lever and the least known&nbsp;— sweep it</span>
-        </label>
-        <label class="field">
-          <span class="field-name" data-tip="One user message plus the answer. Shopping chats: 2–4.">Turns per conversation</span>
-          <input type="number" id="in-turns" min="1" max="50" value="3" inputmode="numeric">
-        </label>
-        <label class="field">
-          <span class="field-name" data-tip="The agent may search several times before answering. 2 is typical.">LLM rounds per turn</span>
-          <input type="number" id="in-rounds" min="1" max="10" value="2" inputmode="numeric">
-          <span class="field-note">the tool-call loop: search, refine, answer</span>
-        </label>
-        <label class="field">
-          <span class="field-name" data-tip="3,000&nbsp;tok ≈ 2,300&nbsp;words: instructions, products, history, question.">Input tokens per round</span>
-          <div class="chips mini" id="chip-tokin" role="group" aria-label="Input token examples">
-            <button type="button" data-tokin="1500">Lean · 1.5k</button>
-            <button type="button" data-tokin="3000">Typical · 3k</button>
-            <button type="button" data-tokin="6000">Catalog · 6k</button>
-          </div>
-          <input type="number" id="in-tokin" min="100" max="200000" value="3000" inputmode="numeric">
-          <span class="field-note">live accounts average ≈3k: frame + records + history + user turn; big catalogs push higher</span>
-        </label>
-        <label class="field">
-          <span class="field-name" data-tip="500&nbsp;tok ≈ a solid answer with three product picks.">Output tokens per round</span>
-          <div class="chips mini" id="chip-tokout" role="group" aria-label="Output token examples">
-            <button type="button" data-tokout="200">Terse · 200</button>
-            <button type="button" data-tokout="500">Typical · 500</button>
-            <button type="button" data-tokout="1200">Detailed · 1.2k</button>
-          </div>
-          <input type="number" id="in-tokout" min="20" max="20000" value="500" inputmode="numeric">
-        </label>
-        <label class="check">
-          <input type="checkbox" id="in-guardrails"> Guardrails on (one classification per turn)
-        </label>
-
-        <fieldset class="sub">
-          <legend>Caching&nbsp;— the two discounts everyone forgets</legend>
-          <label class="field">
-            <span class="field-name" data-tip="Repeated questions cost nothing after the first answer.">Answers served from Agent Studio's response cache <output id="out-respcache">50</output>%</span>
-            <span class="range-wrap">
-              <input type="range" id="in-respcache" min="0" max="90" value="50">
-              <i class="lever-band" style="--lo: 77.8%; --hi: 94.4%" aria-hidden="true"></i>
-              <span class="lever-tag">typical for steady traffic</span>
-            </span>
-            <span class="field-note">a cached turn makes no LLM call at all; sweep into the green band for steady traffic</span>
-          </label>
-          <label class="field">
-            <span class="field-name" data-tip="Repeated prompt prefixes bill at about a tenth of the price.">Prompt prefix served from the provider's cache <output id="out-provcache">40</output>%</span>
-            <input type="range" id="in-provcache" min="0" max="90" value="40">
-            <span class="field-note">cached input bills at ≈10% of the input price&nbsp;—
-            <a href="https://platform.openai.com/docs/guides/prompt-caching" target="_blank" rel="noopener">OpenAI's docs</a>,
-            <a href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching" target="_blank" rel="noopener">Anthropic's docs</a></span>
-          </label>
-        </fieldset>
-
-        <fieldset class="sub">
-          <legend>Beyond the conversation</legend>
-          <label class="check">
-            <input type="checkbox" id="in-pdp"> PDP suggestions&nbsp;— one-shot calls on product pages
-          </label>
-          <label class="field" id="pdp-count-field">
-            <span class="field-name">Suggestion calls per day</span>
-            <input type="number" id="in-pdpcalls" min="0" max="10000000" value="3000" inputmode="numeric">
-            <span class="field-note">≈600&nbsp;tok in / 150 out each; prefixes cache well, so billed cost sits below this ceiling</span>
-          </label>
-          <label class="check">
-            <input type="checkbox" id="in-followups"> Follow-up suggestion chips after each answer
-          </label>
-          <span class="field-note">≈250&nbsp;tok in / 80 out each, once per billed turn</span>
-        </fieldset>
-
-
-        <p class="small muted">A typical account runs a few thousand completions a
-        day; a median conversation carries ≈15–20k&nbsp;tokens. Far off? Re-sweep adoption.</p>
-      </form>
-
-      <div class="stack">
-        <div class="panel summary" id="summary">
-          <h2>Selected model · <span class="mono" id="sum-model">—</span></h2>
-          <p class="sum-figure">
-            <span class="sum-edge"><span class="sum-word">from</span> <span id="sum-low">—</span></span>
-            <span class="sum-point"><span class="sum-word">est.</span> <span id="sum-point">—</span></span>
-            <span class="sum-edge"><span class="sum-word">up to</span> <span id="sum-high">—</span></span>
-            <span class="sum-unit">/ month ±50%</span>
-          </p>
-          <p class="sum-sub" id="sum-annual">—</p>
-          <p class="sum-sub muted">LLM tokens only; indexing, embeddings, storage, discounts
-          are extra (Methodology below).</p>
-          <p class="sum-sub muted" id="sum-note">±50% band. Click a row to change models.</p>
-          <p class="check-row"><button type="button" class="btn btn-ghost" id="copy-summary">Copy summary + share link</button></p>
-        </div>
-
-        <div class="panel">
-          <h2>Where the tokens come from <span class="panel-tag">one month</span></h2>
-          <div class="funnel" id="funnel" role="img" aria-label="Traffic funnel from sessions to monthly cost"></div>
-        </div>
-
-        <div class="panel">
-          <h2>What a conversation looks like <span class="panel-tag" id="conv-total"></span></h2>
-          <div class="conv" id="conversation" role="img" aria-label="A skeleton conversation: user turns and the LLM calls they trigger"></div>
-        </div>
-
-        <div class="panel">
-          <h2>Anatomy of one agent call <span class="panel-tag" id="anatomy-total">4,000&nbsp;tok in</span></h2>
-          <div class="anatomy" id="anatomy" role="img" aria-label="What one agent call's input tokens are made of"></div>
-          <p class="muted small" id="anatomy-note">The frame/records/history/user split is a fixed assumption, scaled to
-          your input total.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Tab 2 · refine with real traffic ─────────────────────────── -->
-  <section class="pane" id="pane-traffic" role="tabpanel" aria-labelledby="tab-traffic" hidden>
-    <div class="grid-2">
-      <form class="panel" id="measure-form" autocomplete="off">
-        <h2>Measure your real prompts</h2>
-        <p class="small">The platform counts tokens with its own estimator. Paste a system
-        prompt and a turn; the result replaces the defaults. Key stays in
-        <code>sessionStorage</code>&nbsp;— use a throwaway app's key.</p>
-        <label class="field">
-          <span class="field-name">API host</span>
-          <input type="url" id="m-host" value="https://agent-studio.eu.algolia.com" spellcheck="false">
-        </label>
-        <label class="field">
-          <span class="field-name">Application ID</span>
-          <input type="text" id="m-appid" maxlength="16" spellcheck="false" placeholder="XXXXXXXXXX">
-        </label>
-        <label class="field">
-          <span class="field-name">API key</span>
-          <input type="password" id="m-key" maxlength="128" spellcheck="false" autocomplete="off">
-        </label>
-        <label class="field">
-          <span class="field-name">System prompt</span>
-          <textarea id="m-system" rows="5" placeholder="You are the shopping assistant for…"></textarea>
-        </label>
-        <label class="field">
-          <span class="field-name">A sample user turn</span>
-          <textarea id="m-user" rows="3" placeholder="I need a gift for a 10-year-old who…"></textarea>
-        </label>
-        <label class="field">
-          <span class="field-name">A typical answer (counts as output)</span>
-          <textarea id="m-answer" rows="3" placeholder="Great idea&nbsp;— here are three picks…"></textarea>
-        </label>
-        <button type="submit" class="btn">Count with the platform tokenizer</button>
-        <p class="check-row"><button type="button" class="btn btn-ghost" id="m-agents-btn">Start from a real agent on this app</button></p>
-        <label class="field" id="m-agents-field" hidden>
-          <span class="field-name">Pick an agent&nbsp;— its real system prompt fills the field above</span>
-          <select id="m-agents" class="mono"></select>
-        </label>
-        <p class="check-row"><button type="button" class="btn btn-ghost" id="m-conv-btn">Pull real conversations from this app</button></p>
-        <dl class="tiles" id="conv-tiles" hidden>
-          <div class="tile"><dt>Sample</dt><dd class="mono" id="mc-sample">—</dd></div>
-          <div class="tile"><dt>Median turns</dt><dd class="mono" id="mc-turns">—</dd></div>
-          <div class="tile"><dt>Median tokens / conversation</dt><dd class="mono" id="mc-tokens">—</dd></div>
-          <div class="tile"><dt>Conversations / day</dt><dd class="mono" id="mc-cpd">—</dd></div>
-        </dl>
-        <p class="check-row" id="conv-apply-row" hidden>
-          <button type="button" class="btn" id="m-apply-conv">Use these numbers in the envelope</button>
-          <button type="button" class="btn btn-ghost" id="m-clear-conv">Clear measured</button>
+    <div class="stack">
+      <div class="panel summary" id="summary">
+        <h2>Selected model · <span class="mono" id="sum-model">—</span></h2>
+        <p class="sum-figure">
+          <span class="sum-edge"><span class="sum-word">from</span> <span id="sum-low">—</span></span>
+          <span class="sum-point"><span class="sum-word">est.</span> <span id="sum-point">—</span></span>
+          <span class="sum-edge"><span class="sum-word">up to</span> <span id="sum-high">—</span></span>
+          <span class="sum-unit">/ month ±50%</span>
         </p>
-        <p class="check-row"><button type="button" class="btn btn-ghost" id="m-approx">No key? Use the ≈4&nbsp;chars/token approximation</button></p>
-        <p class="notice" id="m-status" role="status"></p>
-      </form>
+        <p class="sum-sub" id="sum-annual">—</p>
+        <p class="sum-sub muted">LLM tokens only; indexing, embeddings, storage, discounts
+        are extra (Methodology below).</p>
+        <p class="check-row"><button type="button" class="btn btn-ghost" id="copy-summary">Copy summary + share link</button></p>
+      </div>
 
-      <div class="panel" id="measure-result">
-        <h2>What came back</h2>
-        <p class="muted" id="measure-empty">Nothing measured yet.</p>
-        <dl class="tiles" id="measure-tiles" hidden>
-          <div class="tile"><dt>Input / turn</dt><dd class="mono" id="mr-in">—</dd></div>
-          <div class="tile"><dt>Output / turn</dt><dd class="mono" id="mr-out">—</dd></div>
-          <div class="tile"><dt>Method</dt><dd class="mono small" id="mr-method">—</dd></div>
-        </dl>
-        <p class="small" id="measure-caveat" hidden></p>
+      <div class="panel">
+        <h2>What the estimate assumes <span class="panel-tag">typical deployment</span></h2>
+        <div class="baseline" id="baseline" role="list" aria-label="Locked typical-deployment assumptions"></div>
+        <p class="small muted">These are averages from live deployments, fixed so the
+        estimate stays honest. Your traffic and adoption are the levers that matter.</p>
       </div>
     </div>
-  </section>
-
-  <!-- ── Tab 3 · eval run ─────────────────────────────────────────── -->
-  <section class="pane" id="pane-eval" role="tabpanel" aria-labelledby="tab-eval" hidden>
-    <div class="grid-2">
-      <form class="panel" id="eval-form" autocomplete="off">
-        <h2>What one External Evaluations run consumes</h2>
-        <p class="small">Measure quality and spend before any customer traffic. Same shape
-        as <code>POST /1/estimate/eval-run</code>.</p>
-        <label class="field">
-          <span class="field-name">Cases in the run</span>
-          <input type="number" id="e-cases" min="1" max="10000" value="500" inputmode="numeric">
-        </label>
-        <label class="field">
-          <span class="field-name">Iterations per case</span>
-          <input type="number" id="e-iterations" min="1" max="100" value="1" inputmode="numeric">
-        </label>
-        <label class="field">
-          <span class="field-name">Metrics selected</span>
-          <input type="number" id="e-metrics" min="1" max="50" value="2" inputmode="numeric">
-        </label>
-        <label class="field">
-          <span class="field-name">Agent LLM rounds per case</span>
-          <input type="number" id="e-rounds" min="1" max="20" value="2" inputmode="numeric">
-        </label>
-        <label class="field">
-          <span class="field-name">Agent model</span>
-          <select id="e-model" class="mono"></select>
-        </label>
-        <label class="field">
-          <span class="field-name">Judge model</span>
-          <input type="text" id="e-judge" value="medium" class="mono" spellcheck="false">
-          <span class="field-note">"medium" is the platform default judge alias&nbsp;— unpriced by design</span>
-        </label>
-        <label class="field">
-          <span class="field-name">Concurrent completions</span>
-          <input type="number" id="e-concurrency" min="1" max="64" value="2" inputmode="numeric">
-        </label>
-        <label class="check">
-          <input type="checkbox" id="e-guardrails"> Guardrails on (one classification per case)
-        </label>
-      </form>
-
-      <div class="stack">
-        <div class="tiles-3" id="eval-tiles"></div>
-        <div class="panel">
-          <h2>Assumptions</h2>
-          <ul class="assumptions" id="eval-assumptions"></ul>
-        </div>
-      </div>
-    </div>
-  </section>
+  </div>
 
   <!-- ── The model table ──────────────────────────────────────────── -->
-  <section class="panel managed" id="managed-callout" aria-labelledby="managed-h">
-    <h2 id="managed-h">Interactions&nbsp;— the unit that gets billed</h2>
-    <p class="managed-figure" id="managed-figure">—</p>
-    <p class="small muted" id="managed-terms"></p>
-    <!-- terms text set by app.js -->
-  </section>
   <section class="panel table-panel" id="models" aria-labelledby="models-h">
     <h2 id="models-h">Monthly cost by model <span class="panel-tag" id="table-tag">at the traffic above</span></h2>
-    <p class="small muted">Platform-table rows are what Agent Studio bills; others are
-    context, priced where a defensible number exists.</p>
+    <p class="small muted">Pick the model your assistant runs on. Platform-table rows
+    are what Agent Studio bills; the rest are published list prices.</p>
     <div class="filters">
       <label>Provider
         <select id="f-provider"><option value="">All</option></select>
@@ -302,14 +89,8 @@
           <option value="cost">Cost, cheapest first</option>
           <option value="in">Input $/Mtok, cheapest first</option>
           <option value="name">Name</option>
-          <option value="context">Context window, largest first</option>
         </select>
       </label>
-      <label>Max input $/Mtok
-        <input type="number" id="f-maxin" min="0" step="0.5" placeholder="any">
-      </label>
-      <label class="check check-inline"><input type="checkbox" id="f-priced" checked> Priced only</label>
-      <label class="check check-inline"><input type="checkbox" id="f-hidelegacy" checked> Hide legacy/deprecated</label>
     </div>
     <div class="table-scroll">
       <table class="cost-table" id="cost-table">
@@ -338,16 +119,12 @@
         <li>Every constant is on this page; readers audit numbers instead of trusting them.</li>
         <li>Every figure is a ±50% band; deployments land inside it when the
         assumptions hold.</li>
-        <li>A model without a defensible price shows no cost. “No curated price” rows
-        count tokens; they refuse to invent dollars.</li>
+        <li>A model without a defensible price shows no cost. Rows without a
+        price count tokens; they refuse to invent dollars.</li>
       </ol>
       <p><strong>Price scopes.</strong> <em>Platform</em> rows use the exact per-1M table
-      your bill comes from&nbsp;— estimate and invoice cannot drift. <em>List</em> rows are published, dated prices.
-      <em>Placeholders</em> say so.</p>
-      <p><strong>How this maps to packaging.</strong> At GA, tokens leave the invoice: plans
-      carry a platform fee plus an interaction envelope&nbsp;— one interaction per turn; cache
-      hits, guardrail blocks and bots excluded; alerts at 80% and 100%. The managed model is included, never priced in tokens&nbsp;— these
-      bands are the BYOK stand-in. Not priced: embeddings, indexing, storage.</p>
+      your bill comes from. <em>List</em> rows are published, dated prices.
+      Auto-synced rows come from public registries.</p>
       <div class="constants" id="constants-list"></div>
     </div>
   </details>
