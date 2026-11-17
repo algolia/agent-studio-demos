@@ -126,7 +126,9 @@
       and replies sent back are redacted silently. So is a stored message resent unchanged, for the model,
       cache and analytics.</li>
       <li><strong>Limits.</strong> Only user input is checked, up to 32,000&nbsp;characters a request;
-      longer is refused. An identifier split across two JSON values of a task input is missed.</li>
+      longer is refused. ≈1.6% of EAN-13 barcodes and ≈2.6% of 16-digit order numbers read as cards, so
+      block mode refuses some product codes. An identifier split across two JSON values of a task input
+      is missed.</li>
     </ul>
     <p class="meta">This page runs none of this; its own filter here misses most of the detection above.</p>
   </section>

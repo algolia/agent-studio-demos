@@ -310,6 +310,7 @@ test("the header links to the pull request safely and the pull-request-only feat
   assert.match(inPr[0], /split across two JSON values of a task input\s+is missed/);
   assert.match(inPr[0], /kit v0\.2\.1/, "the kit the pull request pins");
   assert.doesNotMatch(inPr[0], /v0\.2\.0/);
+  assert.match(inPr[0], /≈1\.6% of EAN-13 barcodes and ≈2\.6% of 16-digit order numbers read as cards/);
   assert.match(inPr[0], /needs a word like “call” first/);
   assert.match(inPr[0], /Only new input blocks/);
   assert.match(inPr[0], /misses most of the detection above/, "the port's gap is stated");
