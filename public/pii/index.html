@@ -34,8 +34,7 @@
 <header class="hero wrap">
   <p class="eyebrow"><a href="../">Agent Studio demos</a></p>
   <h1>Identifier filtering, before and after</h1>
-  <p class="lede">A bank customer types an account number into chat.
-  Without a filter, it reaches the model and the chat log. With one, a mask takes its place.</p>
+  <p class="lede">A bank customer types an account number into chat.</p>
   <dl class="ba" aria-label="Before and after the filter">
     <div class="ba-before"><dt>Before</dt><dd>The raw number reaches the model, the cache and the chat log.</dd></div>
     <div class="ba-after"><dt>After, redact</dt><dd>A placeholder such as [IBAN] goes on in its place.</dd></div>
@@ -110,12 +109,12 @@
     <h2 id="h-in-pr">Also in the pull request <span class="panel-tag">experimental · not deployed yet</span></h2>
     <ul class="in-pr-list">
       <li><strong>Tasks.</strong> Agent tasks take JSON input. In redact mode, the string values in that input
-      are redacted and the task runs. Block mode refuses it with a 422 that names the types.
+      are redacted and the task runs. Block mode answers 422, naming the types.
       Schema errors never quote a value.
 <pre class="wire">{"name": "ClientError", "message": "Input blocked by guardrails",
  "details": {"category": "pii", "entities": ["PHONE"]}}</pre></li>
       <li><strong>Block names the type.</strong> The refusal is a stream event with category <code>pii</code>.
-      Its message names the type in words, and <code>entities</code> lists the type names. Values never appear.
+      Its message and <code>entities</code> name the types, never the values.
 <pre class="wire">{"type": "data-guardrail-violation",
  "data": {"category": "pii", "guardrailType": "input",
   "fallbackResponse": "Your message seems to contain sensitive personal data (payment card number), so it was not processed. Remove it and try again.",
@@ -123,6 +122,9 @@
       <li><strong>Detection.</strong> It uses kit v0.2.1, and also catches grouped or lowercase IBANs, a card
       followed by its expiry, and cards split by dots, tabs, line breaks or spaced hyphens. A phone with
       no + and no spaces needs a word like “call” first.</li>
+      <li><strong>Only new input blocks:</strong> user messages after the last agent reply. Earlier turns
+      and replies sent back are redacted silently. So is a stored message resent unchanged, for the model,
+      cache and analytics.</li>
       <li><strong>Limits.</strong> Only user input is checked, up to 32,000&nbsp;characters a request;
       longer is refused. An identifier split across two JSON values of a task input is missed.</li>
     </ul>
@@ -164,8 +166,8 @@
     <li>It finds structural identifiers only. <strong>Names and addresses are not detected.</strong></li>
     <li>It reduces exposure. It is not a compliance guarantee.</li>
   </ul>
-  <p class="footnote">Detection runs in this tab: regex candidates, then checksums. Nothing leaves the page in mock mode.
-  Live, each Send goes to the agent: the raw message on the left, the filtered one on the right.</p>
+  <p class="footnote">Detection runs in this tab: regex, then checksums. Mock mode sends nothing.
+  Live, Send posts both messages to the agent.</p>
 </footer>
 
 <script type="module" src="app.js"></script>
