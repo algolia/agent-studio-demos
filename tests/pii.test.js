@@ -301,7 +301,7 @@ test("the header links to the pull request safely and the pull-request-only feat
   assert.match(inPr[0], /"category": "pii"/);
   assert.match(inPr[0], /sensitive personal data \(payment card number\)/);
   assert.match(inPr[0], /"entities": \["CREDIT_CARD"\]/);
-  assert.match(inPr[0], /string values in that input\s+are redacted and the task runs/);
+  assert.match(inPr[0], /string values in a task's JSON input\s+are redacted and the task runs/);
   assert.match(inPr[0], /"message": "Input blocked by guardrails"/);
   assert.match(inPr[0], /Schema errors never quote a value/);
   // the pull request's own known limits, stated rather than contradicted
