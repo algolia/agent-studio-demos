@@ -80,9 +80,10 @@
 
     let rows = C.models.filter((m) => {
       if (provider && m.provider !== provider) return false;
-      // showcase view: the curated families a customer would name, plus the
-      // managed "included" rows. The full registry stays in data.js.
-      if (!m.showcase && !m.included) return false;
+      // showcase view: the curated families a customer would name. The
+      // managed rows stay in data.js ("included") until approved pricing
+      // says what to promote — for now they are off the page.
+      if (!m.showcase) return false;
       if (m.state !== "available") return false;
       return true;
     });
@@ -136,8 +137,7 @@
         const tr = document.createElement("tr");
         tr.dataset.id = m.id;
         if (m.id === state.selectedModel) tr.classList.add("selected");
-        tr.title = m.included ? "Included in Agent Studio plans."
-          : m.priceScope === "platform" ? "Priced from Agent Studio's billing table."
+        tr.title = m.priceScope === "platform" ? "Priced from Agent Studio's billing table."
           : m.priceScope === "list" ? "The provider's published list price."
           : "Estimated from public model registries.";
 
@@ -173,9 +173,7 @@
         }
         const figure = document.createElement("span");
         figure.className = "cost-figure";
-        figure.textContent = bandCost
-          ? Calc.usdRange(bandCost)
-          : m.included ? "included" : "no curated price";
+        figure.textContent = bandCost ? Calc.usdRange(bandCost) : "no curated price";
         costCell.append(barWrap, figure);
 
         tr.append(name, inCell, outCell, ctxCell, costCell);
@@ -210,12 +208,7 @@
 
   function modelTags(m) {
     const tags = [];
-    if (m.included) {
-      const tag = document.createElement("span");
-      tag.className = "tag scope-platform";
-      tag.textContent = "included";
-      tags.push(tag);
-    } else if (m.priceScope && m.priceScope !== "auto") {
+    if (m.priceScope && m.priceScope !== "auto") {
       // auto-synced rows carry no badge: the price is the estimate, the
       // exact registry source stays on the row's hover tooltip
       const tag = document.createElement("span");

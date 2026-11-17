@@ -227,21 +227,17 @@ test("every model row is well-formed", () => {
   }
 });
 
-test("the client table shows the showcase families, priced, plus included rows", () => {
+test("the client table shows the showcase families, priced — managed rows wait", () => {
   // The page filter is one predicate; this pins it so an auto-synced row
-  // cannot quietly surface in front of a customer. Showcase rows must be
-  // priced (the sync or a curated scope fills them), one per family tier.
-  const visible = C.models.filter((m) =>
-    (m.showcase || m.included) && m.state === "available");
-  assert.equal(visible.length, 15, "13 model families + the managed pair");
+  // cannot quietly surface in front of a customer. The managed rows stay
+  // off the page until approved pricing says what to promote there.
+  const visible = C.models.filter((m) => m.showcase && m.state === "available");
+  assert.equal(visible.length, 13, "one row per family, fast tier to flagship");
   for (const m of visible) {
-    assert.ok(
-      m.showcase ? m.priceScope != null : m.included,
-      `${m.id}: showcase rows are priced, included rows are the managed pair`
-    );
+    assert.ok(m.priceScope != null, `${m.id}: showcase rows are priced`);
+    assert.ok(!m.included, `${m.id}: managed rows do not surface as showcase`);
   }
   assert.ok(visible.some((m) => m.id === "gemma-4-31b-it"), "the private beta stays visible");
-  assert.equal(visible.filter((m) => m.included).length, 2, "managed pair");
   // every provider a customer names in an RFP finds a row
   for (const p of ["openai", "anthropic", "google", "xai"]) {
     assert.ok(visible.some((m) => m.provider === p), `${p} has a row`);
