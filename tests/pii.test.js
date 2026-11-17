@@ -312,7 +312,9 @@ test("the header links to the pull request safely and the pull-request-only feat
   assert.match(inPr[0], /kit v0\.2\.1/, "the kit the pull request pins");
   assert.doesNotMatch(inPr[0], /v0\.2\.0/);
   assert.match(inPr[0], /≈1\.6% of EAN-13 barcodes and ≈2\.6% of 16-digit order numbers read\s+as cards/);
-  assert.match(inPr[0], /needs a word like “call” first/);
+  assert.doesNotMatch(inPr[0], /“call”/, "call no longer gates a phone");
+  assert.match(inPr[0], /needs a word like “phone” before it and no order word between/);
+  assert.match(inPr[0], /Only some\s+French, UK, German and 00 forms are caught/);
   assert.match(inPr[0], /Only new input blocks/);
   assert.match(inPr[0], /misses most of the detection above/, "the port's gap is stated");
 });
