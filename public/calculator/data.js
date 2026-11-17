@@ -26,25 +26,23 @@
     "computed from), matching OpenAI's published list prices of Jul 2026.";
 
   global.CALC_DATA = {
-    /* Token and timing constants, mirrored from the platform's estimation
-       service. Renamed there → here when they differ from the field labels. */
+    /* Token constants, mirrored from the platform's estimation service.
+       The platform averages below are the page's locked baseline: visitors
+       change traffic, adoption and model — these stay typical-until-measured.
+       Adjust them here as owned numbers replace the defaults. */
     constants: {
-      AGENT_INPUT_TOKENS_PER_CALL: 4000,
-      AGENT_OUTPUT_TOKENS_PER_CALL: 400,
-      JUDGE_INPUT_TOKENS_PER_CALL: 2500,
-      JUDGE_OUTPUT_TOKENS_PER_CALL: 350,
+      AGENT_INPUT_TOKENS_PER_CALL: 3000,
+      AGENT_OUTPUT_TOKENS_PER_CALL: 500,
       GUARDRAIL_INPUT_TOKENS_PER_CALL: 700,
       GUARDRAIL_OUTPUT_TOKENS_PER_CALL: 30,
-      SECONDS_PER_CASE: 12,
-      GUARDRAIL_SECONDS_PER_CASE: 1,
-      BAND_RATIO: 0.5,
-      EVAL_RUN_CONCURRENCY: 2,
-      EVAL_JUDGE_MODEL: "medium",
+      TURNS_PER_CONVERSATION: 1.5,
+      ROUNDS_PER_TURN: 2,
+      RESPONSE_CACHE_PCT: 75,
+      PROVIDER_CACHE_PCT: 40,
       PROVIDER_CACHE_DISCOUNT: 0.1,
-      EXTRA_PDP_INPUT_TOKENS: 600,
-      EXTRA_PDP_OUTPUT_TOKENS: 150,
       EXTRA_FOLLOWUP_INPUT_TOKENS: 250,
       EXTRA_FOLLOWUP_OUTPUT_TOKENS: 80,
+      BAND_RATIO: 0.5,
     },
 
     /* Traffic templates: starting points for someone who cannot answer
@@ -53,32 +51,16 @@
     templates: [
       {
         id: "boutique", label: "Boutique shop",
-        values: { sessionsPerDay: 1500, adoptionPct: 20, turnsPerConversation: 3,
-          roundsPerTurn: 2, inputTokensPerRound: 3000, outputTokensPerTurnCall: 500,
-          pdpCallsPerDay: 400 },
+        values: { sessionsPerDay: 1500, adoptionPct: 20 },
       },
       {
         id: "midsize", label: "Mid-size retailer",
-        values: { sessionsPerDay: 10000, adoptionPct: 12, turnsPerConversation: 3,
-          roundsPerTurn: 2, inputTokensPerRound: 3000, outputTokensPerTurnCall: 500,
-          pdpCallsPerDay: 3000 },
+        values: { sessionsPerDay: 10000, adoptionPct: 12 },
       },
       {
         id: "marketplace", label: "Large marketplace",
-        values: { sessionsPerDay: 60000, adoptionPct: 8, turnsPerConversation: 4,
-          roundsPerTurn: 2, inputTokensPerRound: 3500, outputTokensPerTurnCall: 500,
-          pdpCallsPerDay: 20000 },
+        values: { sessionsPerDay: 60000, adoptionPct: 8 },
       },
-    ],
-
-    /* How one agent round's 4000 input tokens split. Shares are assumptions,
-       not measurements — the assumptions panel says so. Must sum to
-       AGENT_INPUT_TOKENS_PER_CALL. */
-    anatomyShares: [
-      { key: "frame", label: "System frame + tool schemas", tokens: 700 },
-      { key: "records", label: "Retrieved records", tokens: 1900 },
-      { key: "history", label: "Conversation history", tokens: 1100 },
-      { key: "user", label: "User turn", tokens: 300 },
     ],
 
     models: [
@@ -248,6 +230,17 @@
       },
 
       /* ── Google ────────────────────────────────────────────────────── */
+      {
+        /* The managed beta serves gemma-4-31b-it-nvfp4; bare-metal hosting is
+           not live, so today's honest cost is the open-weights list price. */
+        id: "gemma-4-31b-it", label: "gemma-4-31b · private beta", provider: "google",
+        state: "available", contextWindow: 262144, inPerMTok: 0.2, outPerMTok: 0.4,
+        priceScope: "list",
+        source: "OpenRouter's published list price for google/gemma-4-31b-it, fetched " +
+          "Nov 2026 ($0.20 input / $0.40 output per MTok). Private beta: the served " +
+          "model is gemma-4-31b-it-nvfp4; dedicated hosting is not live, so this row " +
+          "shows the open-weights list price, not an Algolia price.",
+      },
       {
         id: "gemini-3.1-pro-preview", label: "gemini-3.1-pro (preview)", provider: "google",
         state: "available", contextWindow: null, inPerMTok: null, outPerMTok: null, priceScope: null,
