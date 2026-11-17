@@ -80,9 +80,9 @@
 
     let rows = C.models.filter((m) => {
       if (provider && m.provider !== provider) return false;
-      // client view: priced rows only, plus the managed "included" rows;
-      // legacy and unpriced rows stay in data.js but off the page
-      if (m.priceScope == null && !m.included) return false;
+      // showcase view: the curated families a customer would name, plus the
+      // managed "included" rows. The full registry stays in data.js.
+      if (!m.showcase && !m.included) return false;
       if (m.state !== "available") return false;
       return true;
     });
