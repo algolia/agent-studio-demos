@@ -311,4 +311,17 @@ window.DEMO_CONFIG = {
   //   name: "DEMO_pii-banking",
   //   model: "YOUR_MODEL_ID",
   // },
+
+  // Optional: /tasks/ demos. One agent owning one or more tasks, called
+  // straight from the browser on POST /1/agents/{id}/tasks. The key must
+  // carry search on the index AND the tasks ACL on the agent; a search-only
+  // key on a demo agent covers both. host is the Agent Studio API of the
+  // agent's region.
+  // tasks: {
+  //   host: "https://agent-studio.eu.algolia.com",
+  //   appId: "YOUR_APP_ID",
+  //   apiKey: "YOUR_SEARCH_ONLY_API_KEY",
+  //   agentId: "YOUR_TASKS_AGENT_ID",
+  //   index: "YOUR_PRODUCTS_INDEX",
+  // },
 };

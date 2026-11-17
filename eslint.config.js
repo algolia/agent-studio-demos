@@ -61,6 +61,8 @@ const browserGlobals = {
   CustomEvent: "readonly",
   // cross-file globals the demos publish to each other
   DEMO_CONFIG: "readonly",
+  TasksCommon: "readonly",
+  Rush: "readonly",
   DEMO_BOOKS: "readonly",
   DemoMeter: "readonly",
   DemoCompactor: "readonly",

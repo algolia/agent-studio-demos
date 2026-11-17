@@ -1,0 +1,368 @@
+/* tasks/ kit stylesheet — structure shared by every task demo page.
+   Palette, fonts and dark mode come from /shared/tokens.css; branding
+   lives in each page, not here. */
+
+body {
+  max-width: 50rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+  font-family: var(--font-body, "Inter Tight", sans-serif);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ── header ─────────────────────────────────────────────────── */
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.kicker {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 0.5rem;
+}
+
+.kicker a {
+  color: inherit;
+  opacity: 0.7;
+}
+
+h1 {
+  font-family: var(--font-display, "Bricolage Grotesque", sans-serif);
+  font-size: 2.1rem;
+  margin: 0 0 0.4rem;
+}
+
+.lede {
+  margin: 0;
+  max-width: 34rem;
+  opacity: 0.8;
+}
+
+/* Theme toggle: theme.js paints the [data-theme-glyph] and
+   [data-theme-label] children; positioning is the page's business. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #ccc);
+  background: var(--surface, transparent);
+  color: inherit;
+  cursor: pointer;
+  flex: none;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent, currentColor);
+}
+
+/* ── setup panel, shown when config is missing ──────────────── */
+.setup {
+  border: 1px dashed var(--border, #ccc);
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.setup code,
+footer code {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.75rem;
+}
+
+/* ── input bar + example chips ──────────────────────────────── */
+.bar {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.75rem 0 0.75rem;
+}
+
+.bar input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 0.5rem;
+  background: var(--surface, transparent);
+  color: inherit;
+}
+
+.bar button,
+.chips button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #ccc);
+  background: var(--surface, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+.bar button {
+  border-radius: 0.5rem;
+}
+
+.bar button:hover,
+.chips button:hover {
+  border-color: var(--accent, currentColor);
+}
+
+.chips button.active {
+  border-color: var(--accent, currentColor);
+  background: color-mix(in oklab, var(--accent, currentColor) 12%, transparent);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.status {
+  min-height: 1.2rem;
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+/* ── two-panel board ────────────────────────────────────────── */
+.board {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+  margin-top: 0.5rem;
+}
+
+.panel {
+  border: 1px solid var(--border, #ccc);
+  border-radius: 0.75rem;
+  padding: 0.9rem 1rem;
+  min-width: 0;
+}
+
+.panel h2 {
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 0.5rem;
+  opacity: 0.7;
+}
+
+.panel-meta {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.75rem;
+  opacity: 0.65;
+  margin: 0 0 0.6rem;
+  min-height: 1rem;
+}
+
+/* ── result rows ────────────────────────────────────────────── */
+.hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.hits li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.4rem;
+  background: color-mix(in oklab, var(--border, #ccc) 18%, transparent);
+  min-width: 0;
+}
+
+.hits li > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hits .hit-meta {
+  opacity: 0.6;
+  font-size: 0.72rem;
+  margin-left: auto;
+  flex: none;
+}
+
+.hits img {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.3rem;
+  object-fit: cover;
+  flex: none;
+}
+
+.hit-none {
+  opacity: 0.7;
+}
+
+.badge {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.68rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border, #ccc);
+  white-space: nowrap;
+  flex: none;
+}
+
+.badge.up {
+  color: var(--ok, #1a7f37);
+  border-color: currentColor;
+}
+
+.badge.down {
+  color: var(--danger, #b42318);
+  border-color: currentColor;
+}
+
+.badge.fallback {
+  opacity: 0.7;
+  border-style: dashed;
+}
+
+/* Below the cut: reranked-out rows fade but stay visible. */
+.below-cut {
+  opacity: 0.45;
+}
+
+/* ── rewrite states (right panel of the query demo) ─────────── */
+.state {
+  border: 1px solid var(--border, #ccc);
+  border-radius: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  margin-bottom: 0.6rem;
+}
+
+.state-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.state-n {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.72rem;
+  opacity: 0.6;
+}
+
+.state-query {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.92rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.state-ms {
+  margin-left: auto;
+  font-size: 0.72rem;
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+.vals {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.val {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.7rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #ccc);
+}
+
+.state-why {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  opacity: 0.75;
+}
+
+.state-actions {
+  margin-top: 0.6rem;
+}
+
+.state-actions button {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #ccc);
+  background: var(--surface, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+.state-actions button:hover {
+  border-color: var(--accent, currentColor);
+}
+
+/* ── reflection strip ───────────────────────────────────────── */
+.reflection {
+  margin-top: 1.25rem;
+  border-left: 3px solid var(--accent, currentColor);
+  padding: 0.25rem 0 0.25rem 1rem;
+  font-size: 0.9rem;
+}
+
+.reflection p {
+  margin: 0.35rem 0;
+}
+
+.reflection .score {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.8rem;
+}
+
+footer {
+  margin-top: 2.5rem;
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+
+/* ── small screens: the board stacks, panels keep their width ─ */
+@media (max-width: 48rem) {
+  body {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+  }
+
+  .bar {
+    flex-wrap: wrap;
+  }
+
+  .bar input {
+    flex-basis: 100%;
+  }
+
+  .board {
+    grid-template-columns: 1fr;
+  }
+}

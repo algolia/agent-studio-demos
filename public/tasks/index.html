@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tasks — Agent Studio demos</title>
+  <meta name="description" content="The shared kit behind the Agent Studio task demos: one helper for task calls and search, one page scaffold." />
+  <link rel="icon" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Inter+Tight:ital,wght@0,300..700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="/shared/tokens.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="/shared/config.js"></script>
+  <script src="/shared/theme.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="kicker"><a href="/#demos">← All demos</a></p>
+      <h1>Tasks</h1>
+      <p class="lede">Agent Studio tasks are stateless structured completions: one call, schema-checked output, honest timing. This kit is what the task demos build on.</p>
+    </div>
+    <button type="button" class="theme-toggle" data-theme-toggle>
+      <span data-theme-glyph aria-hidden="true"></span>
+      <span data-theme-label></span>
+    </button>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>The kit</h2>
+      <ul class="hits">
+        <li><code>common.js</code><span>task calls with cache bypassed, index search with an honest fallback ladder</span></li>
+        <li><code>page.js</code><span>setup guard, example chips, FLIP reorder for lists a task rearranges</span></li>
+        <li><code>style.css</code><span>panels, rows, badges — tokens from the shared kit, branding stays per page</span></li>
+      </ul>
+      <p class="state-why">
+        A demo page brings its own task name, input shape and rendering; the kit brings
+        everything else. Config comes from a <code>tasks</code> block in
+        <code>/shared/config.js</code>: a search-only key on your app, plus the agent id
+        that owns the task.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Timings on every demo are real: calls go out with cache disabled.</p>
+  </footer>
+</body>
+</html>
