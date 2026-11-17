@@ -120,13 +120,13 @@
  "data": {"category": "pii", "guardrailType": "input",
   "fallbackResponse": "Your message seems to contain sensitive personal data (payment card number), so it was not processed. Remove it and try again.",
   "entities": ["CREDIT_CARD"]}}</pre></li>
-      <li><strong>Detection.</strong> It also catches IBANs in groups of four and a card followed by its
-      expiry. Kit v0.2.1 adds unspaced + phones; the pull request still pins v0.2.0. Unspaced phones that start with 0, and some
-      spaced-out IDs, are still missed.</li>
+      <li><strong>Detection.</strong> It uses kit v0.2.1, and also catches grouped or lowercase IBANs, a card
+      followed by its expiry, and cards split by dots, tabs, line breaks or spaced hyphens. A phone with
+      no + and no spaces needs a word like “call” first.</li>
       <li><strong>Limits.</strong> Only user input is checked, up to 32,000&nbsp;characters a request;
       longer is refused. An identifier split across two JSON values of a task input is missed.</li>
     </ul>
-    <p class="meta">This page runs none of this. It runs its own filter in this tab only.</p>
+    <p class="meta">This page runs none of this; its own filter here misses most of the detection above.</p>
   </section>
 
   <section class="panel" aria-labelledby="h-cover">

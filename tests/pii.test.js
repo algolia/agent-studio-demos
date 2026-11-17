@@ -307,10 +307,11 @@ test("the header links to the pull request safely and the pull-request-only feat
   // the pull request's own known limits, stated rather than contradicted
   assert.match(inPr[0], /Only user input is checked/);
   assert.match(inPr[0], /32,000(&nbsp;| )characters/);
-  assert.match(inPr[0], /split across two JSON values of a task input is missed/);
-  assert.match(inPr[0], /still missed/);
-  assert.match(inPr[0], /Kit v0\.2\.1 adds unspaced \+ phones; the pull request still pins v0\.2\.0/,
-    "a kit-only gain is not credited to the server");
+  assert.match(inPr[0], /split across two JSON values of a task input\s+is missed/);
+  assert.match(inPr[0], /kit v0\.2\.1/, "the kit the pull request pins");
+  assert.doesNotMatch(inPr[0], /v0\.2\.0/);
+  assert.match(inPr[0], /needs a word like “call” first/);
+  assert.match(inPr[0], /misses most of the detection above/, "the port's gap is stated");
 });
 
 /* A clean-room generator: our own inputs, each check computed from the public
