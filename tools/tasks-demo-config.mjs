@@ -14,11 +14,15 @@
    SEARCH_KEY=… overrides the Vault read. Either way the key is read into
    this process only: it never reaches stdout, argv, or the log.
 
-   Three checks, in order, all required before a write:
-     1. GET the agent — its config carries the tasks the pages call.
-     2. POST /tasks algolia_query_generation once (?cache=false): the key
-        really carries the ACL, and the agent is published with them.
-     3. Search the index: the pages show the raw lane on the same key.
+   Two required checks and one informational, all before a write:
+     1. POST each page's task once (?cache=false) — the rewrite and a two-hit
+        rerank. This is the call the browser makes, so it proves ACL, publish
+        and schema at once, and it proves the rerank task did not drift into
+        inventing ids.
+     2. Search the index: the raw lane runs on the same key.
+     3. GET the agent, best effort. A search-only key has no settings ACL, so a
+        403 here is the key behaving correctly, not a failure; the task calls
+        are the proof either way.
 
    Then the `tasks` block (host, appId, apiKey, agentId, index) replaces
    the existing one in the config file, or is appended. A --dry-run runs
@@ -139,24 +143,33 @@ async function main() {
   const key = readKey(cfg);
   console.log(`agent ${cfg.agent} on ${cfg.host} (app ${cfg.app}, index ${cfg.index})`);
 
-  // 1. the agent carries the task configs.
-  const agent = await call(cfg, key, "GET", `${cfg.host}/1/agents/${cfg.agent}`);
-  const have = Object.keys((agent.config && agent.config.tasks) || {});
-  const missing = TASKS.filter((t) => !have.includes(t));
-  console.log(`config tasks: ${have.join(", ") || "none"}${missing.length ? ` — missing ${missing.join(", ")}` : ""}`);
-  if (missing.length) throw new Error("apply the task configs first (prototype/agentic-router/apply_tasks.py), then publish");
-
-  // 2. one real task call: the ACL, the publish, and the schema, at once.
+  // 1. both pages' tasks, called for real. One POST proves the ACL, the
+  //    publish and the schema together, and it is the call the browser makes —
+  //    reading the agent's config instead needs editSettings, which a browser
+  //    key rightly lacks. Each page gets its own task proven, not inferred.
+  const tasksUrl = `${cfg.host}/1/agents/${encodeURIComponent(cfg.agent)}/tasks?cache=false`;
   const t0 = Date.now();
-  const run = await call(cfg, key, "POST", `${cfg.host}/1/agents/${cfg.agent}/tasks?cache=false`, {
+  const rewrite = await call(cfg, key, "POST", tasksUrl, {
     task: "algolia_query_generation",
     input: { message: "glowy serum", agentContext: { facets: ["brand", "colors", "price"] } },
   });
-  const states = (run.output && run.output.states) || [];
-  console.log(`query rewrite ok in ${Date.now() - t0} ms — ${states.length} state(s)`);
-  if (!states.length) throw new Error("the task answered with no states");
+  const states = (rewrite.output && rewrite.output.states) || [];
+  console.log(`algolia_query_generation ok in ${Date.now() - t0} ms — ${states.length} state(s)`);
+  if (!states.length) throw new Error("the rewrite task answered with no states");
 
-  // 3. the same key searches the index the raw lane shows.
+  const pool = [
+    { objectID: "check-a", name: "Ultra Glow Serum, vitamin C" },
+    { objectID: "check-b", name: "Matte Velvet Lipstick" },
+  ];
+  const t1 = Date.now();
+  const rerank = await call(cfg, key, "POST", tasksUrl, { task: "algolia_rerank", input: { query: "glow serum", hits: pool, topK: 2 } });
+  const ranked = (rerank.output && rerank.output.rankedIds) || [];
+  console.log(`algolia_rerank ok in ${Date.now() - t1} ms — ${ranked.length} ranked id(s)`);
+  const foreign = ranked.filter((r) => !pool.some((h) => h.objectID === r.objectId));
+  if (!ranked.length) throw new Error("the rerank task answered with no ids");
+  if (foreign.length) throw new Error(`the rerank task invented ids: ${foreign.map((r) => r.objectId).join(", ")}`);
+
+  // 2. the same key searches the index the raw lane shows.
   const found = await call(
     cfg,
     key,
@@ -165,6 +178,18 @@ async function main() {
     { params: "query=serum&hitsPerPage=1" },
   );
   console.log(`search ok: ${found.nbHits} hits for "serum"`);
+
+  // 3. best effort, and only informative: reading the agent's own config needs
+  //    a settings ACL the browser key does not carry, so a 403 here is the key
+  //    behaving correctly. The two task calls above are the proof.
+  try {
+    const agent = await call(cfg, key, "GET", `${cfg.host}/1/agents/${encodeURIComponent(cfg.agent)}`);
+    const have = Object.keys((agent.config && agent.config.tasks) || {});
+    const missing = TASKS.filter((t) => !have.includes(t));
+    console.log(`agent config tasks: ${have.join(", ") || "none"}${missing.length ? ` — missing ${missing.join(", ")}` : ""}`);
+  } catch (e) {
+    console.log(`agent config not readable with this key (${e.message}) — the live task calls stand`);
+  }
 
   const block = [
     "  tasks: {",
