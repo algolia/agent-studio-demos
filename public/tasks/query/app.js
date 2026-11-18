@@ -10,12 +10,6 @@ const RAW_META = document.getElementById("raw-meta");
 const STATES = document.getElementById("states");
 const STATES_META = document.getElementById("states-meta");
 
-const row = (h) => {
-  const name = h.name || h.title || h.objectID;
-  const meta = [h.brand, h.price != null ? `${h.price} ${h.currency || ""}`.trim() : null].filter(Boolean).join(" · ");
-  return `<li><span>${Rush.esc(name)}</span><span class="hit-meta">${Rush.esc(meta)}</span></li>`;
-};
-
 const vals = (list) =>
   Array.isArray(list) && list.length
     ? `<div class="vals">${list.map((v) => `<span class="val">${Rush.esc(v)}</span>`).join("")}</div>`
@@ -27,7 +21,7 @@ async function rawSearch(q) {
     const { hits, nbHits, ms } = await TasksCommon.search(q, { hitsPerPage: 6 });
     RAW_META.textContent = `${ms} ms · ${nbHits} total`;
     RAW.innerHTML = hits.length
-      ? hits.map(row).join("")
+      ? hits.map((h) => Rush.hit(h)).join("")
       : `<li class="hit-none">0 hits as written — every word has to match.</li>`;
   } catch (e) {
     RAW.innerHTML = `<li class="hit-none">${Rush.esc(e.message)}</li>`;
@@ -83,7 +77,7 @@ async function runLive(btn) {
     const { hits, ms } = await TasksCommon.search(state.query || "", { hitsPerPage: 6, filters });
     card.querySelector(".state-ms").textContent = `${ms} ms`;
     out.innerHTML = hits.length
-      ? hits.map(row).join("")
+      ? hits.map((h) => Rush.hit(h)).join("")
       : `<li class="hit-none">0 hits — this state finds nothing as written.</li>`;
   } catch (e) {
     out.innerHTML = `<li class="hit-none">${Rush.esc(e.message)}</li>`;
