@@ -114,28 +114,33 @@ export function blockNames(source) {
   return Object.keys(win.DEMO_CONFIG || {});
 }
 
-/** Replace the tasks block, or append it before the closing `};`. Exported for
- *  tests — the rest of this file reaches the network and Vault. */
-export function withTasksBlock(source, block) {
-  const start = source.search(/^ {2}tasks:\s*\{/m);
-  if (start >= 0) {
-    let depth = 0;
-    let end = -1;
-    for (let i = source.indexOf("{", start); i < source.length; i += 1) {
-      if (source[i] === "{") depth += 1;
-      else if (source[i] === "}" && (depth -= 1) === 0) {
-        end = i + 1;
-        break;
-      }
-    }
-    if (end < 0) throw new Error("found a tasks block but could not find its end");
-    // The old block's trailing comma sits past its brace; the new one carries its own.
-    const tail = source.slice(end).startsWith(",") ? source.slice(end + 1) : source.slice(end);
-    return source.slice(0, start) + block + tail;
-  }
-  const close = source.lastIndexOf("};");
-  if (close < 0) throw new Error("config.js has no closing }; — refusing to guess");
-  return `${source.slice(0, close)}${block}\n${source.slice(close)}`;
+const SECTION_START = /^([ \t]*)\/\/ tasks: begin .*$/m;
+const MARKER = "// tasks: begin (tools/tasks-demo-config.mjs)";
+const MARKER_END = "// tasks: end";
+
+/** The tasks section of a config.js, replaced whole or appended as one.
+ *
+ *  The house convention (pii-provision, prefetch-albums-provision) is a marked
+ *  assignment section after the base object, not an edit inside it: the base
+ *  literal may be shorter than the file, and a hand-written block marked
+ *  "(manual)" is a legal thing to find and upgrade. Exported for tests. */
+export function withTasksBlock(source, fields) {
+  const body = [
+    MARKER,
+    "window.DEMO_CONFIG.tasks = {",
+    ...Object.entries(fields).map(([k, v]) => `  ${k}: ${JSON.stringify(v)},`),
+    "};",
+    MARKER_END,
+  ].join("\n");
+  const start = source.match(SECTION_START);
+  if (!start) return `${source.replace(/\n*$/, "")}\n\n${body}\n`;
+  const from = start.index;
+  const rest = source.slice(from);
+  const endLine = rest.indexOf(MARKER_END);
+  if (endLine < 0) throw new Error("found a tasks section without its end marker — refusing to guess where it stops");
+  const afterEnd = from + endLine + MARKER_END.length;
+  const tail = source.slice(afterEnd).startsWith("\n") ? source.slice(afterEnd + 1) : source.slice(afterEnd);
+  return `${source.slice(0, from)}${body}${tail}`;
 }
 
 async function main() {
@@ -191,14 +196,7 @@ async function main() {
     console.log(`agent config not readable with this key (${e.message}) — the live task calls stand`);
   }
 
-  const block = [
-    "  tasks: {",
-    `    host: ${JSON.stringify(cfg.host)},`,
-    `    appId: ${JSON.stringify(cfg.app)},`,
-    `    apiKey: ${JSON.stringify(key)},`,
-    `    agentId: ${JSON.stringify(cfg.agent)},`,
-    `    index: ${JSON.stringify(cfg.index)},`,
-    "  },"].join("\n");
+  const fields = { host: cfg.host, appId: cfg.app, apiKey: key, agentId: cfg.agent, index: cfg.index };
   if (cfg.dryRun) {
     console.log("--dry-run: checks passed, nothing written");
     return;
@@ -213,7 +211,9 @@ async function main() {
     if (/DEMO_CONFIG\s*=\s*null/.test(source)) throw new Error("the deployed config is the key-less stub — run without --from-deploy");
     const have = blockNames(source);
     if (fs.existsSync(cfg.writeConfig)) {
-      const extra = blockNames(fs.readFileSync(cfg.writeConfig, "utf8")).filter((k) => !have.includes(k));
+      // `tasks` is excluded on purpose: it is the block being added, so the
+      // local file having one the deployed one lacks is the point, not a loss.
+      const extra = blockNames(fs.readFileSync(cfg.writeConfig, "utf8")).filter((k) => k !== "tasks" && !have.includes(k));
       if (extra.length && !cfg.force) {
         throw new Error(`the local file carries ${extra.join(", ")} the deployed one lacks — --force writes from the local file instead`);
       }
@@ -222,10 +222,16 @@ async function main() {
   } else {
     source = fs.readFileSync(cfg.writeConfig, "utf8");
   }
-  const next = withTasksBlock(source, block);
+  const next = withTasksBlock(source, fields);
+  // The deploy's own check first, on the bytes about to be written: the file
+  // must evaluate and hand back a tasks block with all five fields filled.
+  const win = {};
+  new Function("window", next)(win);
+  const written = (win.DEMO_CONFIG || {}).tasks;
+  const blank = Object.entries(written || {}).filter(([, v]) => !v).map(([k]) => k);
+  if (!written || blank.length) throw new Error(`refusing to write: the tasks block would come back ${written ? `with ${blank.join(", ")} empty` : "missing"}`);
   fs.writeFileSync(cfg.writeConfig, next, { mode: 0o600 });
-  blockNames(next); // the deploy's own parse check: it must evaluate and expose DEMO_CONFIG
-  console.log(`tasks block written to ${path.relative(repoRoot, cfg.writeConfig)}`);
+  console.log(`tasks section written to ${path.relative(repoRoot, cfg.writeConfig)}`);
   console.log("production: gh variable set DEMO_CONFIG_JS --repo algolia/agent-studio-demos < public/shared/config.js, then deploy");
 }
 

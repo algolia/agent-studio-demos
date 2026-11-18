@@ -1,7 +1,9 @@
-/* tools/tasks-demo-config.mjs's only risky part: the text surgery on a real
-   config.js. A botched block edit is a blank page for every visitor, so the
-   append, the replace, and the refusal are what is checked here. The three
-   live checks it runs before writing are the operator's smoke test. */
+/* tools/tasks-demo-config.mjs's only risky part: the edit it makes to a real
+   config.js. A botched edit is a blank page for every visitor, and the file has
+   more than one shape in the wild — a plain literal, marked assignment sections
+   appended by the other provisioners, and a hand-written tasks block marked
+   "(manual)". What is checked here is that the tool writes one tasks section and
+   keeps everything else, with its values. */
 
 "use strict";
 
@@ -12,88 +14,92 @@ const { pathToFileURL } = require("node:url");
 
 const load = () => import(pathToFileURL(path.join(__dirname, "..", "tools", "tasks-demo-config.mjs")).href);
 
-const BLOCK = [
-  "  tasks: {",
-  '    host: "h",',
-  '    appId: "a",',
-  '    apiKey: "k",',
-  '    agentId: "g",',
-  '    index: "sephora",',
-  "  },",
-].join("\n");
+const FIELDS = {
+  host: "https://agent-studio.eu.algolia.com",
+  appId: "TDNMRH8LS3",
+  apiKey: "search-key-not-real-0001",
+  agentId: "0a6e05ef-b94e-4ecd-8210-779cbd510005",
+  index: "sephora",
+};
 
-const BASE = [
+/** what the deploy does with the file: run it, read the object back */
+function parse(src) {
+  const win = {};
+  new Function("window", src)(win);
+  return win.DEMO_CONFIG;
+}
+
+const PLAIN = ['window.DEMO_CONFIG = {', '  host: "https://agent-studio.eu.algolia.com",', '  apiKey: "k",', "};", ""].join("\n");
+
+// the shape a provisioner leaves behind: base literal, then marked sections
+const WITH_PII = [
   "window.DEMO_CONFIG = {",
   '  host: "https://agent-studio.eu.algolia.com",',
-  "  models: [",
-  '    { id: "enablers" },',
-  "  ],",
+  '  apiKey: "k",',
   "};",
+  "",
+  "// pii: begin (tools/pii-provision.mjs)",
+  "window.DEMO_CONFIG = window.DEMO_CONFIG || {};",
+  'window.DEMO_CONFIG.pii = {"region":"eu","agentId":"agent-2","model":"medium"};',
+  "// pii: end",
   "",
 ].join("\n");
 
-/** what the deploy does to the file: parse it, read the object back */
-function parse(src) {
-  const fn = new Function(`const window = {}; ${src}; return window.DEMO_CONFIG;`);
-  return fn();
-}
+const MANUAL = [
+  WITH_PII.replace(/\n$/, ""),
+  "",
+  "// tasks: begin (manual)",
+  "window.DEMO_CONFIG.tasks = {",
+  '  host: "http://localhost:8000",',
+  '  apiKey: "a-stale-key",',
+  "};",
+  "// tasks: end",
+  "",
+].join("\n");
 
-test("appends the block before the closing brace, and the file still parses", async () => {
+test("a plain config gains one marked section and still parses", async () => {
   const { withTasksBlock } = await load();
-  const out = withTasksBlock(BASE, BLOCK);
-  assert.deepEqual(parse(out).tasks, { host: "h", appId: "a", apiKey: "k", agentId: "g", index: "sephora" });
-  assert.deepEqual(parse(out).models, [{ id: "enablers" }], "the rest of the config survives");
+  const out = withTasksBlock(PLAIN, FIELDS);
+  assert.deepEqual(parse(out).tasks, FIELDS);
+  assert.equal(parse(out).apiKey, "k", "the rest of the config survives");
+  assert.equal(out.match(/\/\/ tasks: begin/g).length, 1);
 });
 
-test("a commented-out example block is not mistaken for the real one", async () => {
+test("a production-shaped file keeps its pii section, values included", async () => {
   const { withTasksBlock } = await load();
-  const commented = BASE.replace("};", '  // tasks: {\n  //   host: "x",\n  // },\n};');
-  const out = withTasksBlock(commented, BLOCK);
-  assert.equal(out.split("tasks: {").length - 1, 2, "the comment stays, one real block is added");
-  assert.equal(parse(out).tasks.host, "h");
+  const out = withTasksBlock(WITH_PII, FIELDS);
+  assert.deepEqual(parse(out).pii, { region: "eu", agentId: "agent-2", model: "medium" });
+  assert.deepEqual(parse(out).tasks, FIELDS);
+  assert.ok(out.indexOf("pii: begin") < out.indexOf("tasks: begin"), "pii stays where it was");
 });
 
-test("replacing is idempotent: one block, no doubled comma", async () => {
+test("a hand-written (manual) section is replaced whole, not duplicated", async () => {
   const { withTasksBlock } = await load();
-  const once = withTasksBlock(BASE, BLOCK);
-  const twice = withTasksBlock(once, BLOCK.replace('"h"', '"h2"'));
-  assert.equal(twice.split("tasks: {").length - 1, 1);
-  assert.equal(parse(twice).tasks.host, "h2");
-  assert.ok(!/,\s*,/.test(twice), "no comma pile-up");
+  const out = withTasksBlock(MANUAL, FIELDS);
+  assert.equal(out.match(/\/\/ tasks: begin/g).length, 1, "one section");
+  assert.equal(out.match(/\/\/ tasks: end/g).length, 1, "one end marker");
+  assert.deepEqual(parse(out).tasks, FIELDS, "the stale host and key are gone");
+  assert.ok(!out.includes("(manual)"), "the marker now names the tool that owns it");
+  assert.ok(!out.includes("a-stale-key"), "the replaced section leaves nothing behind");
+  assert.deepEqual(parse(out).pii.model, "medium", "the neighbor section is untouched");
 });
 
-test("a file with no closing brace is refused, not guessed at", async () => {
+test("replacing is idempotent", async () => {
   const { withTasksBlock } = await load();
-  assert.throws(() => withTasksBlock("window.DEMO_CONFIG = {", BLOCK), /no closing/);
+  const once = withTasksBlock(PLAIN, FIELDS);
+  const twice = withTasksBlock(once, { ...FIELDS, index: "sephora_v2" });
+  assert.equal(twice.match(/\/\/ tasks: begin/g).length, 1);
+  assert.equal(parse(twice).tasks.index, "sephora_v2");
+  assert.equal(twice.match(/window.DEMO_CONFIG.tasks = \{/g).length, 1);
+});
+
+test("a section with no end marker is refused, not guessed at", async () => {
+  const { withTasksBlock } = await load();
+  const truncated = `${PLAIN.replace(/\n$/, "")}\n\n// tasks: begin (manual)\nwindow.DEMO_CONFIG.tasks = {`;
+  assert.throws(() => withTasksBlock(truncated, FIELDS), /without its end marker/);
 });
 
 test("blockNames reads block names out, never values", async () => {
   const { blockNames } = await load();
-  const deployed = [
-    "window.DEMO_CONFIG = {",
-    '  host: "https://agent-studio.eu.algolia.com",',
-    '  appId: "APP",',
-    '  apiKey: "a-secret-never-printed",',
-    "  pii: {",
-    '    agentId: "agent-2",',
-    "  },",
-    "};",
-  ].join("\n");
-  assert.deepEqual(blockNames(deployed), ["host", "appId", "apiKey", "pii"]);
-});
-
-test("adding the block to a production-shaped file keeps every block", async () => {
-  const { withTasksBlock, blockNames } = await load();
-  const deployed = [
-    "window.DEMO_CONFIG = {",
-    '  host: "https://agent-studio.eu.algolia.com",',
-    '  apiKey: "search-key",',
-    "  pii: {",
-    '    agentId: "agent-2",',
-    "  },",
-    "};",
-  ].join("\n");
-  const out = withTasksBlock(deployed, BLOCK);
-  assert.deepEqual(blockNames(out), ["host", "apiKey", "pii", "tasks"], "nothing dropped, tasks appended");
-  assert.equal(parse(out).pii.agentId, "agent-2", "the other block still parses with its values");
+  assert.deepEqual(blockNames(WITH_PII), ["host", "apiKey", "pii"]);
 });

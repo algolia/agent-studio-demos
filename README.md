@@ -362,8 +362,11 @@ one: `/tasks` asks for `search`, and the raw lane searches with the same key.
 
 `--from-deploy` is the production path. `DEMO_CONFIG_JS` is the *whole* file, so
 writing from a local `config.js` that holds fewer blocks than production would
-delete them there; `--from-deploy` adds the block to what the site serves today
-and refuses if the local file knows a block the deployed one does not. Then:
+delete them there; `--from-deploy` writes onto what the site serves today, and
+refuses if the local file knows a block the deployed one does not — `tasks`
+itself excepted, since that is what the command is there to add. The block goes
+in as a marked section (`// tasks: begin … end`), the way the other provisioners
+write theirs, so a hand-written one is replaced whole rather than left behind. Then:
 
 ```sh
 gh variable set DEMO_CONFIG_JS --repo algolia/agent-studio-demos < public/shared/config.js
