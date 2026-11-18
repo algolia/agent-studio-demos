@@ -14,6 +14,7 @@ Live at **<https://agent-studio-demos.pages.dev/>**, one demo per path. Every pu
 | Jev trims the record | `/jev-attributes/` | Local; public with your own key once this site forwards it |
 | Chat with a book | `/chat-with-book/` | Live |
 | Infinite conversation | `/infinite-conversation/` | Live |
+| RushHour tasks | `/tasks/query/`, `/tasks/rerank/` | Production, once a task-carrying agent is in the config |
 | Guardrails Arena | `/guardrails-arena/` | Live |
 | Guardrails Game | `/guardrails-game/` | Static, no keys |
 | Mémoires | `/memoires/` | Live |
@@ -43,6 +44,8 @@ public/                     the deployable root — this is what Cloudflare Page
                             curated model table, node-tested against the platform's constants
   guardrails-game/          index.html + game-ui.js, on the Arena's csv.js, stats.js and label-game.js
   memoires/                 index.html + shared.js, three memory configurations side by side
+  tasks/                    common.js + page.js + style.css, the kit both task demos share;
+                            query/ and rerank/ are the two pages
 scripts/                    node, zero dependencies — see § The shelf and § The search index
   fetch-books.js            download, strip and count the texts, from either source
   wikisource.js             wikitext → prose, for the one work not on Gutenberg
@@ -52,7 +55,8 @@ scripts/                    node, zero dependencies — see § The shelf and § 
   index-settings-languages.json  the per-language overlay on those settings
   measure-tokens.js         characters per token, per book, via /context/trim
 tools/                      node, zero dependencies — bakes the seeded conversations,
-                            and main-demo-provision.mjs creates the main demo's agents
+                            main-demo-provision.mjs creates the main demo's agents,
+                            tasks-demo-config.mjs points the task demos at their agent
 tests/                      node:test smoke tests — no framework, no install
 functions/relay/            passes a jev-attributes visitor's key on to TypeSafe, a Cloudflare Pages Function (off unless RELAY_ENABLED=1)
 eslint.config.js            flat config, rules written out, zero dependencies
@@ -334,6 +338,36 @@ The agent's search tool searches with the same key, so it needs `search` on
 `bank_faq` too.
 For production, refresh `DEMO_CONFIG_JS` from the file that now holds the block
 (see [Deploy](#deploy)).
+
+## RushHour task demos
+
+`/tasks/query/` and `/tasks/rerank/` show Agent Studio's stateless structured
+completion: one `POST /1/agents/{id}/tasks` call, schema-checked output, honest
+timing (`?cache=false`). The raw keyword search runs on the left, the task's
+states or ranking on the right, so the comparison is the page. Both pages read
+one `tasks` block, and neither can invent it: without one they say what is
+missing rather than pretend.
+
+```sh
+# check the agent carries the tasks and the key carries the ACL, write nothing
+node tools/tasks-demo-config.mjs --dry-run
+# run the same three checks for real, then write the block
+node tools/tasks-demo-config.mjs --from-deploy
+```
+
+The agent is the agentic-router one (its config carries `algolia_query_generation`
+and `algolia_rerank`); `--app`, `--agent`, `--index` and `--host` point it
+elsewhere, and `SEARCH_KEY=…` replaces the Vault read. The key is a search-only
+one: `/tasks` asks for `search`, and the raw lane searches with the same key.
+
+`--from-deploy` is the production path. `DEMO_CONFIG_JS` is the *whole* file, so
+writing from a local `config.js` that holds fewer blocks than production would
+delete them there; `--from-deploy` adds the block to what the site serves today
+and refuses if the local file knows a block the deployed one does not. Then:
+
+```sh
+gh variable set DEMO_CONFIG_JS --repo algolia/agent-studio-demos < public/shared/config.js
+```
 
 ## Jev trims the record
 

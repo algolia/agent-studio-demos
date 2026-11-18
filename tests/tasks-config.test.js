@@ -66,3 +66,34 @@ test("a file with no closing brace is refused, not guessed at", async () => {
   const { withTasksBlock } = await load();
   assert.throws(() => withTasksBlock("window.DEMO_CONFIG = {", BLOCK), /no closing/);
 });
+
+test("blockNames reads block names out, never values", async () => {
+  const { blockNames } = await load();
+  const deployed = [
+    "window.DEMO_CONFIG = {",
+    '  host: "https://agent-studio.eu.algolia.com",',
+    '  appId: "APP",',
+    '  apiKey: "a-secret-never-printed",',
+    "  pii: {",
+    '    agentId: "agent-2",',
+    "  },",
+    "};",
+  ].join("\n");
+  assert.deepEqual(blockNames(deployed), ["host", "appId", "apiKey", "pii"]);
+});
+
+test("adding the block to a production-shaped file keeps every block", async () => {
+  const { withTasksBlock, blockNames } = await load();
+  const deployed = [
+    "window.DEMO_CONFIG = {",
+    '  host: "https://agent-studio.eu.algolia.com",',
+    '  apiKey: "search-key",',
+    "  pii: {",
+    '    agentId: "agent-2",',
+    "  },",
+    "};",
+  ].join("\n");
+  const out = withTasksBlock(deployed, BLOCK);
+  assert.deepEqual(blockNames(out), ["host", "apiKey", "pii", "tasks"], "nothing dropped, tasks appended");
+  assert.equal(parse(out).pii.agentId, "agent-2", "the other block still parses with its values");
+});

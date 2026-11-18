@@ -27,6 +27,13 @@
 
      gh variable set DEMO_CONFIG_JS --repo algolia/agent-studio-demos \
        < public/shared/config.js
+
+   That variable is the WHOLE file, so a local config.js that happens to
+   hold fewer blocks than production would quietly delete them there.
+   --from-deploy writes onto the deployed file instead: it fetches the
+   live config.js, adds the tasks block to that, and refuses if the local
+   file carries a block the deployed one does not (name only — no value
+   is ever printed). Pass --force to write the local file regardless.
    ─────────────────────────────────────────────────────────────── */
 
 import { execFileSync } from "node:child_process";
@@ -45,11 +52,21 @@ const DEFAULTS = {
 const TASKS = ["algolia_query_generation", "algolia_rerank"];
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+const DEPLOYED_URL = "https://agent-studio-demos.pages.dev/shared/config.js";
+
 function parseArgs(argv) {
-  const out = { ...DEFAULTS, writeConfig: path.join(repoRoot, "public/shared/config.js"), dryRun: false };
+  const out = {
+    ...DEFAULTS,
+    writeConfig: path.join(repoRoot, "public/shared/config.js"),
+    dryRun: false,
+    fromDeploy: false,
+    force: false,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--dry-run") out.dryRun = true;
+    else if (a === "--from-deploy") out.fromDeploy = true;
+    else if (a === "--force") out.force = true;
     else if (a === "--write-config") out.writeConfig = path.resolve(argv[++i]);
     else if (a === "--app") out.app = argv[++i];
     else if (a === "--agent") out.agent = argv[++i];
@@ -82,6 +99,15 @@ async function call(cfg, key, method, url, body) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`HTTP ${res.status} ${(data && data.message) || ""}`.trim());
   return data;
+}
+
+/** Top-level block names of a config.js source. The file is a plain
+ *  assignment, so it evaluates; only the key names are ever read out. Exported
+ *  for tests: --from-deploy refuses a write that would drop a block. */
+export function blockNames(source) {
+  const win = {};
+  new Function("window", source)(win);
+  return Object.keys(win.DEMO_CONFIG || {});
 }
 
 /** Replace the tasks block, or append it before the closing `};`. Exported for
@@ -152,10 +178,28 @@ async function main() {
     console.log("--dry-run: checks passed, nothing written");
     return;
   }
-  const source = fs.readFileSync(cfg.writeConfig, "utf8");
+  // The variable replaces the whole file, so the base matters: --from-deploy
+  // adds the block to what production serves today, never to a thinner local file.
+  let source;
+  if (cfg.fromDeploy) {
+    const res = await fetch(DEPLOYED_URL, { headers: { "User-Agent": "Algolia-Agent-Studio/1.0 (tasks demo config)" } });
+    if (!res.ok) throw new Error(`deployed config.js: HTTP ${res.status}`);
+    source = await res.text();
+    if (/DEMO_CONFIG\s*=\s*null/.test(source)) throw new Error("the deployed config is the key-less stub — run without --from-deploy");
+    const have = blockNames(source);
+    if (fs.existsSync(cfg.writeConfig)) {
+      const extra = blockNames(fs.readFileSync(cfg.writeConfig, "utf8")).filter((k) => !have.includes(k));
+      if (extra.length && !cfg.force) {
+        throw new Error(`the local file carries ${extra.join(", ")} the deployed one lacks — --force writes from the local file instead`);
+      }
+    }
+    console.log(`based on the deployed config (${have.join(", ")})`);
+  } else {
+    source = fs.readFileSync(cfg.writeConfig, "utf8");
+  }
   const next = withTasksBlock(source, block);
   fs.writeFileSync(cfg.writeConfig, next, { mode: 0o600 });
-  new Function(next.replace("window.DEMO_CONFIG", "const DEMO_CONFIG")); // the deploy's own parse check
+  blockNames(next); // the deploy's own parse check: it must evaluate and expose DEMO_CONFIG
   console.log(`tasks block written to ${path.relative(repoRoot, cfg.writeConfig)}`);
   console.log("production: gh variable set DEMO_CONFIG_JS --repo algolia/agent-studio-demos < public/shared/config.js, then deploy");
 }
