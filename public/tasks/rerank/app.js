@@ -2,7 +2,7 @@
 "use strict";
 
 const POOL_N = 20;
-const TOP_K = 10;
+const TOP_K = 5;
 const DESCRIPTION_CAP = 240;
 
 const FORM = document.getElementById("form");
