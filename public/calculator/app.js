@@ -70,6 +70,11 @@
     $("sum-annual").textContent = cost
       ? `≈ ${Calc.usd(cost.point / conversationsMonth)} per assisted conversation`
       : "Token counts only — no price available for this model.";
+    const sr = Calc.band(v.searchRequestsMonth, C.constants.BAND_RATIO);
+    $("sum-search").textContent =
+      `Algolia search requests: ≈ ${Calc.shortTokens(sr.point)} / month ` +
+      `(${Calc.shortTokens(sr.low)} – ${Calc.shortTokens(sr.high)}), ` +
+      `≈ ${v.searchRequestsPerConversation.toFixed(1)} per assisted conversation`;
   }
 
   /* ── The model table ──────────────────────────────────────────────── */
@@ -252,6 +257,7 @@
       ["LLM rounds per turn", `${c.ROUNDS_PER_TURN} · the tool-call loop`],
       ["Input tokens per round", `${Calc.fmtInt(c.AGENT_INPUT_TOKENS_PER_CALL)} · live accounts average ≈3k`],
       ["Output tokens per round", `${Calc.fmtInt(c.AGENT_OUTPUT_TOKENS_PER_CALL)} · a solid answer with three picks`],
+      ["Algolia searches per billed turn", `${c.SEARCH_REQUESTS_PER_BILLED_TURN} · round one searches`],
       ["Response cache", `${c.RESPONSE_CACHE_PCT}% of turns · low end of the live 70–85% band`],
       ["Provider prompt cache", `${c.PROVIDER_CACHE_PCT}% of input at ≈10% of the input price`],
       ["Guardrails", "on · one classification per turn"],
@@ -282,6 +288,7 @@
       GUARDRAIL_OUTPUT_TOKENS_PER_CALL: "guardrail classification, output tokens",
       TURNS_PER_CONVERSATION: "turns per conversation (locked typical average)",
       ROUNDS_PER_TURN: "LLM rounds per turn (locked typical average)",
+      SEARCH_REQUESTS_PER_BILLED_TURN: "Algolia search requests per turn that reaches the model",
       RESPONSE_CACHE_PCT: "response cache hit share (locked)",
       PROVIDER_CACHE_PCT: "provider prompt cache share of input (locked)",
       PROVIDER_CACHE_DISCOUNT: "cached input price, as a fraction of input price",
@@ -354,7 +361,8 @@
       `Traffic: ${Calc.fmtInt(p.sessionsPerDay)} sessions/day · ${p.adoptionPct}% adoption · ${p.turnsPerConversation} turns · ${p.roundsPerTurn} rounds`,
       `Tokens: ${Calc.fmtInt(p.inputTokensPerRound)} in / ${Calc.fmtInt(p.outputTokensPerTurnCall)} out per round · guardrails on`,
       `Caching: ${p.responseCachePct}% response cache · ${p.providerCachePct}% provider prefix`,
-      `→ ${costLine} · ≈ ${Calc.usd(cost.point / (v.conversationsPerDay * p.daysPerMonth))} per assisted conversation`,
+      `Algolia search requests: ≈ ${Calc.shortTokens(v.searchRequestsMonth)} / month (±50%)`,
+      `→ ${costLine} · ≈${Calc.usd(cost.point / (v.conversationsPerDay * p.daysPerMonth))} per assisted conversation`,
       `Share (values included): ${shareUrl()}`,
       "Every figure is a ±50% band, not a quote. Constants and price sources are on the page.",
     ];

@@ -128,6 +128,14 @@
     const tokensOutMonth =
       callsBilledPerDay * days * p.outputTokensPerTurnCall + extraOutMonth + guardrailOut;
 
+    /* One search per turn that reaches the model (round one searches, round
+       two answers). Cache hits make no LLM call, so they search nothing. */
+    const searchRequestsPerDay = turnsBilledPerDay * (c.SEARCH_REQUESTS_PER_BILLED_TURN || 0);
+    const searchRequestsMonth = searchRequestsPerDay * days;
+    const conversationsMonth = conversationsPerDay * days;
+    const searchRequestsPerConversation =
+      conversationsMonth > 0 ? searchRequestsMonth / conversationsMonth : 0;
+
     const assumptions = [
       `${fmtInt(conversationsPerDay)} conversations/day = ${fmtInt(p.sessionsPerDay)} site sessions × ${p.adoptionPct}% adoption.`,
       `${fmtInt(turnsPerDay)} turns/day = conversations × ${p.turnsPerConversation} turns (typical).`,
@@ -174,6 +182,9 @@
       tokensInMonth,
       tokensOutMonth,
       tokensMonth: tokensInMonth + tokensOutMonth,
+      searchRequestsPerDay,
+      searchRequestsMonth,
+      searchRequestsPerConversation,
       assumptions,
     };
   }
