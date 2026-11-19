@@ -113,6 +113,8 @@ function run(q, now = true) {
   }
   Rush.activeChip(CHIPS, q);
   STATUS.textContent = "";
+  rewriteSeq++;
+  STATES.innerHTML = `<article class="state"><ul class="hits">${none("rewriting…")}</ul></article>`;
   rawSearch(q);
   if (now) rewrite(q);
   else {
