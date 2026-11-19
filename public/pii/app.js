@@ -134,8 +134,8 @@ function fillLog(el, rows) {
 
 /* ── The two sides ────────────────────────────────────────────── */
 
-function replyFor(side, sent) {
-  if (sent == null) return { text: blockReply($("msg").value), note: "local reply" };
+function replyFor(side, sent, findings = []) {
+  if (sent == null) return { text: blockReply(findings.map((x) => x.entity)), note: "local reply" };
   if (!creds()) return { text: mockReply(sent).text };
   const l = state.live;
   if (l.text !== $("msg").value) return { text: null, empty: "Press Send to ask the agent." };
@@ -161,7 +161,7 @@ function render() {
   } else {
     fill($("f-model"), f.toModel, { empty: "Type a message." });
   }
-  const fr = replyFor("filtered", f.toModel);
+  const fr = replyFor("filtered", f.toModel, f.findings);
   fill($("f-reply"), fr.text, { empty: fr.empty });
   fillLog($("f-log"), [["customer", f.toLog, f.blocked ? "blocked" : ""], ["agent", fr.text, fr.note || ""]]);
 

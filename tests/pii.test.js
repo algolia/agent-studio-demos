@@ -183,9 +183,13 @@ test("mock: clean questions get the FAQ answer alone, in their language; block r
   const mixed = mockReply("Update my contact details: [EMAIL] and +1 415-555-0132.");
   assert.equal(mixed.flow, "raw", "a raw value the filter missed wins");
   assert.ok(mixed.text.includes("(an email address)") && mixed.text.includes("(a phone number)"));
-  assert.match(blockReply("Ma carte est bloquée"), /Pour votre sécurité/);
-  assert.match(blockReply("My card is blocked"), /For your security/);
-  for (const t of [blockReply("x"), blockReply("ma carte")]) assert.deepEqual(d.detect(t), []);
+  // the pull request's fallback: entity names sorted, each in words, never the value
+  assert.equal(blockReply(["CREDIT_CARD"]), "Your message seems to contain sensitive personal data "
+    + "(payment card number), so it was not processed. Remove it and try again.");
+  assert.match(blockReply(["IBAN", "CREDIT_CARD", "IBAN"]), /\(payment card number, IBAN\)/);
+  assert.equal(blockReply([]), "Your message seems to contain sensitive personal data, so it was not processed. "
+    + "Remove it and try again.");
+  for (const t of [blockReply([]), blockReply(["IBAN", "PHONE"])]) assert.deepEqual(d.detect(t), []);
 });
 
 test("mock FAQ answers are the opening of their bank_faq record, so mock and live read alike", async () => {
@@ -276,6 +280,43 @@ test("the page loads config.js optionally and says where the live agent's filter
   assert.match(html, /Algolia's managed LLM/);
   assert.match(html, /filter on the right still runs in this tab/);
   assert.match(html, /never an admin key/);
+});
+
+test("the header links to the pull request safely and the pull-request-only features say they are not live", () => {
+  const fs = require("node:fs");
+  const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+  const cta = html.match(/<a class="pr-cta"[^>]*>([\s\S]*?)<\/a>/);
+  assert.ok(cta, "a pr-cta link exists");
+  assert.match(cta[0], /href="https:\/\/github\.com\/algolia\/conversational-ai\/pull\/2059"/);
+  assert.match(cta[0], /target="_blank"/);
+  assert.match(cta[0], /rel="noopener noreferrer"/);
+  assert.match(cta[1], /Comment on the PR/);
+  assert.ok(html.indexOf('class="pr-cta"') < html.indexOf('id="compose"'), "the link sits above the demo");
+  assert.match(html, /<dl class="ba"/);
+  const inPr = html.match(/<section class="panel in-pr"[\s\S]*?<\/section>/);
+  assert.ok(inPr, "the pull-request-only panel exists");
+  assert.match(inPr[0], /not deployed yet/);
+  assert.doesNotMatch(inPr[0], /blocked: IBAN/, "the old wording is gone");
+  assert.match(inPr[0], /"type": "data-guardrail-violation"/);
+  assert.match(inPr[0], /"category": "pii"/);
+  assert.match(inPr[0], /sensitive personal data \(payment card number\)/);
+  assert.match(inPr[0], /"entities": \["CREDIT_CARD"\]/);
+  assert.match(inPr[0], /string values in a task's JSON input\s+are redacted and the task runs/);
+  assert.match(inPr[0], /"message": "Input blocked by guardrails"/);
+  assert.match(inPr[0], /Schema errors never quote a value/);
+  // the pull request's own known limits, stated rather than contradicted
+  assert.doesNotMatch(inPr[0], /Only user input is checked/, "replies sent back are redacted too");
+  assert.match(inPr[0], /Tool data and\s+the system prompt are not checked/);
+  assert.match(inPr[0], /32,000(&nbsp;| )new characters/);
+  assert.match(inPr[0], /split across two JSON values of a task input\s+is missed/);
+  assert.match(inPr[0], /kit v0\.2\.1/, "the kit the pull request pins");
+  assert.doesNotMatch(inPr[0], /v0\.2\.0/);
+  assert.match(inPr[0], /≈1\.6% of EAN-13 barcodes and ≈2\.6% of 16-digit order numbers read\s+as cards/);
+  assert.doesNotMatch(inPr[0], /“call”/, "call no longer gates a phone");
+  assert.match(inPr[0], /needs a word like “phone” before it and no order word between/);
+  assert.match(inPr[0], /Only some\s+French, UK, German and 00 forms are caught/);
+  assert.match(inPr[0], /Only new input blocks/);
+  assert.match(inPr[0], /misses most of the detection above/, "the port's gap is stated");
 });
 
 /* A clean-room generator: our own inputs, each check computed from the public
