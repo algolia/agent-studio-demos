@@ -58,7 +58,7 @@
   /** One index search. Resolves {hits, nbHits, ms}.
    *  fallback: on 0 hits, retry once with removeWordsIfNoResults=allOptional and
    *  flag it (usedFallback) — the raw miss stays visible, the page keeps a pool. */
-  async function search(query, { hitsPerPage = 20, filters, fallback = false } = {}) {
+  async function search(query, { hitsPerPage = 20, filters, fallback = false, relaxed = false } = {}) {
     const c = cfg();
     const host = `https://${c.appId.toLowerCase()}-dsn.algolia.net`;
     const base = {
@@ -68,6 +68,17 @@
         "objectID", "name", "brand", "price", "currency", "image", "url", "description", "colors", "categories_as_list",
       ],
     };
+    /* Query-time relevance an index with sane settings would already carry:
+       typos, plurals, prefix on the last word, and words dropped rather than
+       a dead end. The raw side of a comparison must not be a strawman. */
+    if (relaxed) {
+      Object.assign(base, {
+        typoTolerance: true,
+        ignorePlurals: true,
+        queryType: "prefixLast",
+        removeWordsIfNoResults: "allOptional",
+      });
+    }
     if (filters) Object.assign(base, filters);
 
     async function once(body) {
