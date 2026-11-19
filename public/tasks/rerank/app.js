@@ -109,8 +109,10 @@ async function rerank(pool) {
   inflight = true;
   const q = current;
   try {
-    const taskPool = pool.hits.map((h) => ({
-      objectID: h.objectID,
+    /* Ids go out as "1".."N": every id the agent writes back costs output
+       tokens, and a 7-digit objectID costs several. Mapped back below. */
+    const taskPool = pool.hits.map((h, i) => ({
+      objectID: String(i + 1),
       name: h.name || "",
       ...(h.description ? { description: String(h.description).slice(0, DESCRIPTION_CAP) } : {}),
     }));
@@ -120,8 +122,11 @@ async function rerank(pool) {
       topK: TOP_K,
     });
     if (q !== current) return;
-    agentIds = new Set(((output && output.rankedIds) || []).map((r) => r.objectId).filter(Boolean));
-    const ids = mergeRanked(pool.hits, (output && output.rankedIds) || []);
+    const ranked = ((output && output.rankedIds) || []).map((r) => ({
+      objectId: pool.hits[Number(r && r.objectId) - 1]?.objectID,
+    }));
+    agentIds = new Set(ranked.map((r) => r.objectId).filter(Boolean));
+    const ids = mergeRanked(pool.hits, ranked);
     renderAgentOrder(pool, ids, ms, usage);
     STATUS.textContent = "";
   } catch (e) {
