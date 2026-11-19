@@ -15,11 +15,79 @@
   const esc = (s) =>
     String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-  /* No usable config: show #setup, hide #demo. Returns false when fine. */
+  /* Catalog text arrives with entities in it (34 of 500 names on this index:
+     Cr&#232;me, &#8482;), and escaping that paints the entity on the card.
+     Decode first through a detached textarea — its content is parsed as text,
+     never as markup, so nothing parses or runs — then escape on the way out.
+     Read the parsed text, not .value: writing .value sets the textarea's dirty
+     flag, and a dirty one stops following later innerHTML writes — which blanks
+     every entity after the first, the shape of bug that hides in a first-card
+     screenshot. */
+  const scratch = document.createElement("textarea");
+  function undent(s) {
+    const raw = String(s ?? "");
+    if (raw.indexOf("&") < 0) return raw;
+    scratch.innerHTML = raw;
+    return scratch.textContent;
+  }
+
+  /* One product card, shared by every task page: image full-height on the
+     left, name, its leaf category, then brand · price. Data-only — a page
+     that wants a badge or a state class passes them in. */
+  function hit(h, opts) {
+    const o = opts || {};
+    const name = undent(h.name || h.title || h.objectID);
+    const cats = Array.isArray(h.categories_as_list) ? h.categories_as_list : [];
+    const leaf = undent(cats.length ? cats[cats.length - 1] : "");
+    const meta = [undent(h.brand || ""), h.price != null ? `${h.price} ${h.currency || ""}`.trim() : null]
+      .filter(Boolean)
+      .join(" · ");
+    const id = h.objectID != null ? ` data-id="${esc(h.objectID)}"` : "";
+    // A catalog's image field is a URL on someone else's CDN, and CDNs refuse
+    // cross-origin <img> (ORB blocks the response, ERR_BLOCKED_BY_ORB). So the
+    // monogram sits behind the image: whichever the CDN allows is what shows,
+    // and a refused image is dropped by watchImages rather than painted grey.
+    const monogram = esc(String(name).trim().charAt(0).toUpperCase());
+    return `<li${id}${o.cls ? ` class="${esc(o.cls)}"` : ""}>
+      <span class="hit-visual">
+        <span class="hit-monogram" aria-hidden="true">${monogram}</span>
+        ${h.image ? `<img src="${esc(h.image)}" alt="" loading="lazy" />` : ""}
+      </span>
+      <span class="hit-body">
+        <h3 class="hit-title">${esc(name)}</h3>
+        ${leaf ? `<p class="hit-cat">${esc(leaf)}</p>` : ""}
+        ${meta ? `<p class="hit-meta">${esc(meta)}</p>` : ""}
+      </span>
+      ${o.badge || ""}
+    </li>`;
+  }
+
+  /* A refused cross-origin image is a grey box by default. Drop it and the
+     monogram behind it stands. error does not bubble, so this listens on the
+     capture phase — one listener for the page, and it survives re-renders. */
+  function watchImages() {
+    document.addEventListener(
+      "error",
+      (e) => {
+        if (e.target && e.target.tagName === "IMG") e.target.remove();
+      },
+      true,
+    );
+  }
+
+  /* Show whichever half applies. Pages ship #demo hidden so a page with no
+     config never flashes an empty board, which means the ready path has to
+     reveal it — hiding alone leaves a configured page with a header, a lede
+     and nothing in between. Returns false when the setup message is showing. */
   function guard() {
-    if (TasksCommon.ready()) return true;
     const el = document.getElementById("setup");
     const demo = document.getElementById("demo");
+    watchImages();
+    if (TasksCommon.ready()) {
+      if (demo) demo.classList.remove("hidden");
+      if (el) el.classList.add("hidden");
+      return true;
+    }
     if (el) {
       el.classList.remove("hidden");
       const p = el.querySelector("p");
@@ -70,5 +138,5 @@
     }
   }
 
-  global.Rush = { esc, guard, chips, activeChip, flip };
+  global.Rush = { esc, hit, guard, chips, activeChip, flip };
 })(window);

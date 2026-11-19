@@ -64,7 +64,9 @@
     const base = {
       query,
       hitsPerPage,
-      attributesToRetrieve: ["objectID", "name", "brand", "price", "currency", "image", "url", "description", "colors"],
+      attributesToRetrieve: [
+        "objectID", "name", "brand", "price", "currency", "image", "url", "description", "colors", "categories_as_list",
+      ],
     };
     if (filters) Object.assign(base, filters);
 

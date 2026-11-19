@@ -55,7 +55,7 @@ h1 {
   font-size: 0.8rem;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
-  border: 1px solid var(--border, #ccc);
+  border: 1px solid var(--line, #ccc);
   background: var(--surface, transparent);
   color: inherit;
   cursor: pointer;
@@ -68,7 +68,7 @@ h1 {
 
 /* ── setup panel, shown when config is missing ──────────────── */
 .setup {
-  border: 1px dashed var(--border, #ccc);
+  border: 1px dashed var(--line, #ccc);
   border-radius: 0.5rem;
   padding: 1rem 1.25rem;
   margin-top: 1.5rem;
@@ -93,7 +93,7 @@ footer code {
   font: inherit;
   font-family: var(--font-mono, "IBM Plex Mono", monospace);
   padding: 0.6rem 0.75rem;
-  border: 1px solid var(--border, #ccc);
+  border: 1px solid var(--line, #ccc);
   border-radius: 0.5rem;
   background: var(--surface, transparent);
   color: inherit;
@@ -105,7 +105,7 @@ footer code {
   font-size: 0.85rem;
   padding: 0.45rem 0.9rem;
   border-radius: 999px;
-  border: 1px solid var(--border, #ccc);
+  border: 1px solid var(--line, #ccc);
   background: var(--surface, transparent);
   color: inherit;
   cursor: pointer;
@@ -149,7 +149,7 @@ footer code {
 }
 
 .panel {
-  border: 1px solid var(--border, #ccc);
+  border: 1px solid var(--line, #ccc);
   border-radius: 0.75rem;
   padding: 0.9rem 1rem;
   min-width: 0;
@@ -171,48 +171,106 @@ footer code {
   min-height: 1rem;
 }
 
-/* ── result rows ────────────────────────────────────────────── */
+/* ── product cards ──────────────────────────────────────────────
+   The image is the point of a shopping result, so it runs the full
+   height of the card and the words sit beside it: name, leaf category,
+   brand · price. One card shape for both pages — it is built in
+   page.js (Rush.hit), so the markup and these rules move together. */
 .hits {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.3rem;
+  gap: 0.5rem;
 }
 
 .hits li {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.82rem;
-  padding: 0.35rem 0.6rem;
-  border-radius: 0.4rem;
-  background: color-mix(in oklab, var(--border, #ccc) 18%, transparent);
+  align-items: stretch;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, var(--line, #ccc) 18%, transparent);
   min-width: 0;
 }
 
-.hits li > span {
+/* The tile carries the product's initial behind its image: whichever the
+   catalog's CDN allows is what shows, and page.js drops a refused image so no
+   grey box is left in front of the letter. */
+.hit-visual {
+  position: relative;
+  display: grid;
+  width: 5.5rem;
+  min-height: 5.5rem;
+  align-self: stretch;
+  border-radius: 0.4rem;
+  overflow: hidden;
+  flex: none;
+}
+
+.hit-visual > * {
+  grid-area: 1 / 1;
+}
+
+.hit-monogram {
+  display: grid;
+  place-items: center;
+  font-family: var(--display, "Bricolage Grotesque", sans-serif);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1;
+  color: color-mix(in oklab, var(--ink, #14162a) 42%, transparent);
+  background: linear-gradient(
+    155deg,
+    color-mix(in oklab, var(--accent, #2c2ae0) 14%, transparent),
+    color-mix(in oklab, var(--line, #ccc) 26%, transparent)
+  );
+}
+
+.hit-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hit-body {
+  display: grid;
+  align-content: center;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.hit-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.hit-cat,
+.hits .hit-meta {
+  margin: 0;
+  font-size: 0.76rem;
+  opacity: 0.65;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.hits .hit-meta {
-  opacity: 0.6;
-  font-size: 0.72rem;
+.hits li > .badge {
+  align-self: flex-start;
   margin-left: auto;
-  flex: none;
 }
 
-.hits img {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.3rem;
-  object-fit: cover;
-  flex: none;
-}
-
-.hit-none {
+/* A card with no product in it is a sentence, not a card. */
+.hits li.hit-none {
+  align-items: center;
+  font-size: 0.82rem;
   opacity: 0.7;
 }
 
@@ -221,7 +279,7 @@ footer code {
   font-size: 0.68rem;
   border-radius: 999px;
   padding: 0.1rem 0.45rem;
-  border: 1px solid var(--border, #ccc);
+  border: 1px solid var(--line, #ccc);
   white-space: nowrap;
   flex: none;
 }
@@ -248,7 +306,7 @@ footer code {
 
 /* ── rewrite states (right panel of the query demo) ─────────── */
 .state {
-  border: 1px solid var(--border, #ccc);
+  border: 1px solid var(--line, #ccc);
   border-radius: 0.6rem;
   padding: 0.7rem 0.8rem;
   margin-bottom: 0.6rem;
@@ -293,7 +351,7 @@ footer code {
   font-size: 0.7rem;
   padding: 0.12rem 0.45rem;
   border-radius: 999px;
-  border: 1px solid var(--border, #ccc);
+  border: 1px solid var(--line, #ccc);
 }
 
 .state-why {
@@ -311,7 +369,7 @@ footer code {
   font-size: 0.8rem;
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
-  border: 1px solid var(--border, #ccc);
+  border: 1px solid var(--line, #ccc);
   background: var(--surface, transparent);
   color: inherit;
   cursor: pointer;

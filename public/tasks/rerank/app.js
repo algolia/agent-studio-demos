@@ -23,23 +23,14 @@ let current = "";
 let inflight = false;
 let agentIds = new Set();
 
-const meta = (h) =>
-  [h.brand, h.price != null ? `${h.price} ${h.currency || ""}`.trim() : null].filter(Boolean).join(" · ");
-
-const row = (h, badge, cls) => `
-  <li data-id="${Rush.esc(h.objectID)}" class="${cls || ""}">
-    ${h.image ? `<img src="${Rush.esc(h.image)}" alt="" loading="lazy" />` : ""}
-    <span>${Rush.esc(h.name || h.objectID)}</span>
-    ${badge || ""}
-    <span class="hit-meta">${Rush.esc(meta(h))}</span>
-  </li>`;
+const row = (h, badge, cls) => Rush.hit(h, { badge, cls });
 
 /* Exactly min(TOP_K, pool) ids: the agent's order, deduped and validated,
    then any missing slots filled in keyword order — marked as fallback.
    The task promises min(topK, N); this keeps the panel honest when a run
    returns 9. */
-function mergeRanked(pool, rankedIds) {
-  const inPool = new Set(pool.map((h) => h.objectID));
+function mergeRanked(hits, rankedIds) {
+  const inPool = new Set(hits.map((h) => h.objectID));
   const seen = new Set();
   const ids = [];
   for (const r of rankedIds || []) {
@@ -48,7 +39,7 @@ function mergeRanked(pool, rankedIds) {
     seen.add(id);
     ids.push(id);
   }
-  for (const h of pool) {
+  for (const h of hits) {
     if (ids.length >= TOP_K) break;
     if (!seen.has(h.objectID)) {
       seen.add(h.objectID);
@@ -130,7 +121,7 @@ async function rerank(pool) {
     });
     if (q !== current) return;
     agentIds = new Set(((output && output.rankedIds) || []).map((r) => r.objectId).filter(Boolean));
-    const ids = mergeRanked(pool, (output && output.rankedIds) || []);
+    const ids = mergeRanked(pool.hits, (output && output.rankedIds) || []);
     renderAgentOrder(pool, ids, ms, usage);
     STATUS.textContent = "";
   } catch (e) {
