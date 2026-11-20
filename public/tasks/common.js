@@ -16,7 +16,8 @@
   "use strict";
 
   function cfg() {
-    return (global.DEMO_CONFIG && global.DEMO_CONFIG.tasks) || null;
+    // shared/demo-config.mjs (a module the page loads first): default + the tasks block
+    return (global.DemoConfig && global.DemoConfig.blockFor(["tasks"]).block) || null;
   }
 
   function ready() {

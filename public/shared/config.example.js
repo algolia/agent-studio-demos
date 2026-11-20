@@ -8,6 +8,20 @@ window.DEMO_CONFIG = {
   appId: "YOUR_APP_ID",
   apiKey: "YOUR_API_KEY",
 
+  // default: what every demo shares, read by shared/demo-config.mjs. The key is
+  // SEARCH-ONLY (public by construction). A demo's own block below overrides
+  // only what differs: another agentId, a prefetch `variants` map. Variants
+  // without an agentId take this one. Order: top-level host/appId/apiKey
+  // (older files) < default < the demo's block. Pages that read it: /tasks/,
+  // /prefetch/. With default alone, /tasks/ works as is.
+  default: {
+    host: "https://agent-studio.eu.algolia.com",
+    appId: "YOUR_APP_ID",
+    apiKey: "YOUR_SEARCH_ONLY_API_KEY",
+    agentId: "YOUR_AGENT_ID",
+    index: "YOUR_INDEX",
+  },
+
   // Mémoires (/memoires/) — its own app, not the one above. The page creates
   // and publishes its three comparison agents on first run, so the first
   // visitor provisions them; the ids are looked up by name after that. host is

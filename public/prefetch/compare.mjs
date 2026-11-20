@@ -9,6 +9,7 @@
 
 import { MANIFEST, configKey, configVariants } from "../main-demo/configs.mjs";
 import { emptyTurn, ms } from "../main-demo/stream.mjs";
+import { blockFor } from "../shared/demo-config.mjs";
 
 /** the two lanes: the base agent, and the same agent with prefetch on */
 export const LANES = [
@@ -117,15 +118,13 @@ export function rows(reports) {
 
 /**
  * The config block this page reads: the first usable one of `names`, a
- * demo's blocks in order. The catalog page tries `prefetchDemo`, its own
- * agent pair, then main-demo's `mainDemo`. Same shape either way.
+ * demo's blocks in order, over DEMO_CONFIG.default (see shared/demo-config.mjs).
+ * The catalog page tries `prefetchDemo`, its own agent pair, then main-demo's
+ * `mainDemo`.
  *   { block, name }: block is null when none is set
  */
 export function pageConfig(root, names = ["prefetchDemo", "mainDemo"]) {
-  const r = root && typeof root === "object" ? root : {};
-  const usable = (b) => Boolean(b) && typeof b === "object" && !Array.isArray(b);
-  const name = names.find((n) => usable(r[n]));
-  return name ? { block: r[name], name } : { block: null, name: null };
+  return blockFor(names, root);
 }
 
 /**
@@ -140,7 +139,14 @@ export function liveReadiness(mainDemo, fallback) {
   if (!mainDemo.agentStudioApiKey || !mainDemo.appId) {
     return { ok: false, why: "Live unavailable: the config has no app id or key." };
   }
-  const variants = configVariants(mainDemo) || fallback || {};
+  const variants = { ...(configVariants(mainDemo) || fallback || {}) };
+  // a lane with no variant of its own runs on the block's (default's) agent
+  if (mainDemo.agentId) {
+    for (const l of LANES) {
+      const k = configKey(l.toggles);
+      if (!(variants[k] && variants[k].agentId)) variants[k] = { ...variants[k], agentId: mainDemo.agentId };
+    }
+  }
   const missing = LANES.filter((l) => !(variants[configKey(l.toggles)] && variants[configKey(l.toggles)].agentId));
   if (missing.length) {
     return { ok: false, why: `Live unavailable: no agent for ${missing.map((l) => l.label.toLowerCase()).join(" or ")}.` };
