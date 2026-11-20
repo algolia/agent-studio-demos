@@ -21,6 +21,7 @@ const REF_NOTE = document.getElementById("reflection-note");
 const warm = new Map();
 let current = "";
 let inflight = false;
+let queued = false;
 let agentIds = new Set();
 
 const row = (h, badge, cls) => Rush.hit(h, { badge, cls });
@@ -49,8 +50,14 @@ function mergeRanked(hits, rankedIds) {
   return ids;
 }
 
+const poolKey = (q) => `${q}\u0000${Rush.facetFilter()}`;
+
 async function fetchPool(q) {
-  const { hits, nbHits, ms, usedFallback } = await TasksCommon.search(q, { hitsPerPage: POOL_N, fallback: true });
+  const { hits, nbHits, ms, usedFallback } = await TasksCommon.search(q, {
+    hitsPerPage: POOL_N,
+    fallback: true,
+    filters: Rush.withFacet(),
+  });
   return { hits, nbHits, ms, usedFallback };
 }
 
@@ -134,6 +141,10 @@ async function rerank(pool) {
     STATUS.textContent = e.message;
   } finally {
     inflight = false;
+    if (queued) {
+      queued = false;
+      run(current);
+    }
   }
 }
 
@@ -148,13 +159,14 @@ async function run(q) {
   RAW.innerHTML = "";
   RANKED.innerHTML = "";
 
-  let pool = warm.get(q);
+  const key = poolKey(q);
+  let pool = warm.get(key);
   if (!pool) {
     RAW_META.textContent = "searching…";
     try {
       pool = await fetchPool(q);
       if (q !== current) return;
-      warm.set(q, pool);
+      warm.set(key, pool);
     } catch (e) {
       RAW_META.textContent = "";
       STATUS.textContent = e.message;
@@ -176,9 +188,9 @@ async function run(q) {
 async function warmup() {
   for (const btn of CHIPS.querySelectorAll("button[data-q]")) {
     const q = btn.dataset.q;
-    if (warm.has(q)) continue;
+    if (warm.has(poolKey(q))) continue;
     try {
-      warm.set(q, await fetchPool(q));
+      warm.set(poolKey(q), await fetchPool(q));
       if (!current) run(q); // first example runs itself, once its pool is warm
     } catch (e) {
       /* a cold example just fetches on click */
@@ -192,4 +204,11 @@ FORM.addEventListener("submit", (e) => {
 });
 Rush.chips(CHIPS, run);
 
-if (Rush.guard()) warmup();
+if (Rush.guard()) {
+  warmup();
+  Rush.facets(document.getElementById("facets"), () => {
+    const q = current || INPUT.value;
+    if (inflight) queued = true;
+    else if (q.trim()) run(q);
+  });
+}

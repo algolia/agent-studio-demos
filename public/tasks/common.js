@@ -55,12 +55,47 @@
     return { output: body.output, usage: body.usage, ms };
   }
 
+  /** One POST to the index's query endpoint. Resolves {data, ms}. */
+  async function post(body) {
+    const c = cfg();
+    const started = performance.now();
+    let res;
+    try {
+      res = await fetch(`https://${c.appId.toLowerCase()}-dsn.algolia.net/1/indexes/${encodeURIComponent(c.index)}/query`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Algolia-Application-Id": c.appId,
+          "X-Algolia-API-Key": c.apiKey,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      throw new Error(`search unreachable: ${e.message}`);
+    }
+    const ms = Math.round(performance.now() - started);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`search: HTTP ${res.status} ${data.message || ""}`.trim());
+    return { data, ms };
+  }
+
+  /** The commonest values of each attribute: {brand: [{value, count}, …]}. No hits fetched. */
+  async function facets(attrs, top = 8) {
+    const { data } = await post({ query: "", hitsPerPage: 0, facets: attrs, maxValuesPerFacet: top });
+    const out = {};
+    for (const a of attrs) {
+      out[a] = Object.entries((data.facets && data.facets[a]) || {})
+        .map(([value, count]) => ({ value, count }))
+        .sort((x, y) => y.count - x.count)
+        .slice(0, top);
+    }
+    return out;
+  }
+
   /** One index search. Resolves {hits, nbHits, ms}.
    *  fallback: on 0 hits, retry once with removeWordsIfNoResults=allOptional and
    *  flag it (usedFallback) — the raw miss stays visible, the page keeps a pool. */
   async function search(query, { hitsPerPage = 20, filters, fallback = false, relaxed = false } = {}) {
-    const c = cfg();
-    const host = `https://${c.appId.toLowerCase()}-dsn.algolia.net`;
     const base = {
       query,
       hitsPerPage,
@@ -82,24 +117,7 @@
     if (filters) Object.assign(base, filters);
 
     async function once(body) {
-      const started = performance.now();
-      let res;
-      try {
-        res = await fetch(`${host}/1/indexes/${encodeURIComponent(c.index)}/query`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Algolia-Application-Id": c.appId,
-            "X-Algolia-API-Key": c.apiKey,
-          },
-          body: JSON.stringify(body),
-        });
-      } catch (e) {
-        throw new Error(`search unreachable: ${e.message}`);
-      }
-      const ms = Math.round(performance.now() - started);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(`search: HTTP ${res.status} ${data.message || ""}`.trim());
+      const { data, ms } = await post(body);
       return { hits: data.hits || [], nbHits: data.nbHits || 0, ms };
     }
 
@@ -109,5 +127,5 @@
     return { ...second, usedFallback: true };
   }
 
-  global.TasksCommon = { cfg, ready, missing, run, search };
+  global.TasksCommon = { cfg, ready, missing, run, search, facets };
 })(window);

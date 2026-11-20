@@ -132,6 +132,32 @@ footer code {
   margin-bottom: 1rem;
 }
 
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.4rem 0.3rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent, currentColor);
+  background: color-mix(in oklab, var(--accent, currentColor) 12%, transparent);
+  font-size: 0.85rem;
+}
+
+.pill-clear {
+  font: inherit;
+  line-height: 1;
+  padding: 0.15rem 0.45rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pill-clear:hover {
+  background: color-mix(in oklab, var(--accent, currentColor) 22%, transparent);
+}
+
 .status {
   min-height: 1.2rem;
   margin: 0.5rem 0;
