@@ -29,30 +29,57 @@
     return ["host", "appId", "apiKey", "agentId", "index"].filter((k) => !c[k]);
   }
 
-  /** One task run. Resolves {output, usage, ms}; rejects with a readable message. */
-  async function run(task, input) {
+  /* Where /tasks and /decisions calls go: the config's host, or ?api=<origin>
+     for a local Agent Studio (recording runs). Loopback names only, so a
+     shared link can never send the demo's key to somebody else's server. */
+  function apiBase() {
+    const c = cfg();
+    try {
+      const u = new URL(new URLSearchParams(global.location.search).get("api") || "");
+      const local = u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname.endsWith(".localhost");
+      if (local && /^https?:$/.test(u.protocol)) return u.origin;
+    } catch (e) {
+      /* no override, or not a URL */
+    }
+    return c.host;
+  }
+
+  const overridden = () => apiBase() !== (cfg() || {}).host;
+
+  /** One POST to an agent endpoint. Resolves {body, ms}; rejects with a readable message. */
+  async function agentPost(path, label, payload) {
     const c = cfg();
     const started = performance.now();
     let res;
     try {
-      res = await fetch(`${c.host}/1/agents/${encodeURIComponent(c.agentId)}/tasks?cache=false`, {
+      res = await fetch(`${apiBase()}/1/agents/${encodeURIComponent(c.agentId)}/${path}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Algolia-Application-Id": c.appId,
           "X-Algolia-API-Key": c.apiKey,
         },
-        body: JSON.stringify({ task, input }),
+        body: JSON.stringify(payload),
       });
     } catch (e) {
-      throw new Error(`task endpoint unreachable: ${e.message}`);
+      throw new Error(`${label} endpoint unreachable: ${e.message}`);
     }
     const ms = Math.round(performance.now() - started);
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(`task ${task}: HTTP ${res.status} ${body.message || ""}`.trim());
-    }
+    if (!res.ok) throw new Error(`${label}: HTTP ${res.status} ${body.message || ""}`.trim());
+    return { body, ms };
+  }
+
+  /** One task run. Resolves {output, usage, ms}; rejects with a readable message. */
+  async function run(task, input) {
+    const { body, ms } = await agentPost("tasks?cache=false", `task ${task}`, { task, input });
     return { output: body.output, usage: body.usage, ms };
+  }
+
+  /** One decisions call: {state, questions} in, {engine, answers, ms} out. */
+  async function decide(state, questions) {
+    const { body, ms } = await agentPost("decisions", "decisions", { state, questions });
+    return { engine: body.engine, answers: body.answers || {}, ms };
   }
 
   /** One POST to the index's query endpoint. Resolves {data, ms}. */
@@ -127,5 +154,5 @@
     return { ...second, usedFallback: true };
   }
 
-  global.TasksCommon = { cfg, ready, missing, run, search, facets };
+  global.TasksCommon = { cfg, ready, missing, run, decide, apiBase, overridden, search, facets };
 })(window);

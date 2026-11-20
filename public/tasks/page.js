@@ -84,6 +84,14 @@
     const demo = document.getElementById("demo");
     watchImages();
     if (TasksCommon.ready()) {
+      const kicker = document.querySelector(".kicker");
+      if (kicker && TasksCommon.overridden()) {
+        const tag = document.createElement("span");
+        tag.className = "badge";
+        tag.textContent = `api ${new URL(TasksCommon.apiBase()).host}`;
+        kicker.append(" ", tag);
+        for (const a of kicker.querySelectorAll("a")) a.search = global.location.search;
+      }
       if (demo) demo.classList.remove("hidden");
       if (el) el.classList.add("hidden");
       return true;
