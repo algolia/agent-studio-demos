@@ -203,6 +203,7 @@ FORM.addEventListener("submit", (e) => {
   run(INPUT.value);
 });
 Rush.chips(CHIPS, run);
+if (window.Mic) window.Mic.attach(INPUT, { onFinal: run });
 
 if (Rush.guard()) {
   warmup();

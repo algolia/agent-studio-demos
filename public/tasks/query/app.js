@@ -128,6 +128,7 @@ FORM.addEventListener("submit", (e) => {
   run(INPUT.value);
 });
 INPUT.addEventListener("input", () => run(INPUT.value, false));
+if (window.Mic) window.Mic.attach(INPUT, { onFinal: (t) => run(t) });
 Rush.chips(CHIPS, (q) => {
   INPUT.value = q;
   run(q);

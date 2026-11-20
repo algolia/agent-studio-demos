@@ -335,6 +335,7 @@ async function main() {
   mountPhone();
   renderChips();
   el.form.addEventListener("submit", (e) => { e.preventDefault(); run(el.ask.value); });
+  if (window.Mic) window.Mic.attach(el.ask, { onFinal: (t) => run(t) });
   renderCheck();
   scheduleScore();
   // variants.json is main-demo's local map: it only stands in for mainDemo
