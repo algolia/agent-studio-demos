@@ -15,6 +15,7 @@
 
 const usable = (b) => Boolean(b) && typeof b === "object" && !Array.isArray(b);
 const LEGACY = ["host", "appId", "apiKey"];
+const legacyOf = (r) => Object.fromEntries(LEGACY.filter((k) => r[k]).map((k) => [k, r[k]]));
 
 /**
  * The block for a demo: `names` are its candidate blocks in order.
@@ -26,8 +27,13 @@ const LEGACY = ["host", "appId", "apiKey"];
 export function blockFor(names, root = globalThis.DEMO_CONFIG) {
   const r = usable(root) ? root : {};
   const name = names.find((n) => usable(r[n])) || null;
-  const legacy = Object.fromEntries(LEGACY.filter((k) => r[k]).map((k) => [k, r[k]]));
-  const merged = { ...legacy, ...(usable(r.default) ? r.default : {}), ...(name ? r[name] : {}) };
+  const shared = { ...legacyOf(r), ...(usable(r.default) ? r.default : {}) };
+  const own = name ? r[name] : {};
+  // default.host points at default's own app; a block naming a region, or an app default is not,
+  // means another backend, and demoHost reads host before region — so inherit no host there.
+  const otherApp = Boolean(own.appId) && own.appId !== shared.appId;
+  if (own.region || otherApp) delete shared.host;
+  const merged = { ...shared, ...own };
   if (!Object.keys(merged).length) return { block: null, name };
   if (!merged.agentStudioApiKey && merged.apiKey) merged.agentStudioApiKey = merged.apiKey;
   if (usable(merged.variants) && merged.agentId) {

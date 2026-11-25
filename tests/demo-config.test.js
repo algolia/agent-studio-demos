@@ -23,6 +23,20 @@ test("a named block overrides only what differs; default fills the rest", async 
   assert.deepEqual({ ...block }, { ...DEFAULT, agentId: "OWN", agentStudioApiKey: "KEY" });
 });
 
+test("a block on another app keeps its region, not default's host", async () => {
+  const { blockFor } = await load("shared/demo-config.mjs");
+  const root = { default: DEFAULT, prefetchAskai: { region: "us", appId: "DOCS", agentId: "A" } };
+  const askai = blockFor(["prefetchAskai"], root).block;
+  assert.equal(askai.host, undefined);
+  assert.equal(askai.region, "us");
+  assert.equal(askai.appId, "DOCS");
+  assert.equal(askai.apiKey, "KEY", "the shared search key still fills in");
+  // its own host still wins, and a block sharing default's app inherits default's host
+  const explicit = blockFor(["x"], { default: DEFAULT, x: { appId: "OWN", host: "https://own" } }).block;
+  assert.equal(explicit.host, "https://own");
+  assert.equal(blockFor(["tasks"], { default: DEFAULT, tasks: { agentId: "OWN" } }).block.host, "https://h");
+});
+
 test("older top-level keys sit below default; default alone answers", async () => {
   const { blockFor } = await load("shared/demo-config.mjs");
   const root = { host: "https://old", appId: "OLD", apiKey: "OLDKEY", default: { appId: "APP" } };
@@ -52,9 +66,11 @@ test("from config.example.js, every demo resolves a usable config", async () => 
   const root = loadExampleConfig();
   for (const names of [["tasks"], ...Object.values(DEMOS).map((d) => d.blocks)]) {
     const { block } = blockFor(names, root);
-    for (const f of ["host", "appId", "apiKey", "agentStudioApiKey", "agentId", "index"]) {
+    for (const f of ["appId", "apiKey", "agentStudioApiKey", "agentId", "index"]) {
       assert.ok(block && block[f], `${names.join("/")} resolves no ${f}`);
     }
+    // demoHost reads host before region, so either one is a backend
+    assert.ok(block && (block.host || block.region), `${names.join("/")} resolves neither host nor region`);
   }
 });
 
