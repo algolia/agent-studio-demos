@@ -84,6 +84,14 @@
     const demo = document.getElementById("demo");
     watchImages();
     if (TasksCommon.ready()) {
+      const kicker = document.querySelector(".kicker");
+      if (kicker && TasksCommon.overridden()) {
+        const tag = document.createElement("span");
+        tag.className = "badge";
+        tag.textContent = `api ${new URL(TasksCommon.apiBase()).host}`;
+        kicker.append(" ", tag);
+        for (const a of kicker.querySelectorAll("a")) a.search = global.location.search;
+      }
       if (demo) demo.classList.remove("hidden");
       if (el) el.classList.add("hidden");
       return true;
@@ -117,6 +125,66 @@
     }
   }
 
+  /* Facet chips: the index's commonest values of one attribute, one filter
+     at a time. Clicking a chip sets the filter and shows a pill with a clear
+     button; the page's onChange re-runs its query. */
+  let facetFilter = "";
+
+  const quote = (v) => `"${String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+
+  /** Search options carrying the active facet filter, AND-joined with a state's own. */
+  function withFacet(extra) {
+    if (!facetFilter) return extra;
+    const own = extra && extra.filters ? `(${extra.filters}) AND ` : "";
+    return { ...(extra || {}), filters: own + facetFilter };
+  }
+
+  async function facets(container, onChange, attr = "brand") {
+    let values;
+    try {
+      values = (await TasksCommon.facets([attr]))[attr];
+    } catch (e) {
+      return;
+    }
+    if (!values.length) return;
+    const pill = document.createElement("span");
+    pill.className = "pill hidden";
+    const label = document.createElement("span");
+    const clear = document.createElement("button");
+    clear.type = "button";
+    clear.className = "pill-clear";
+    clear.setAttribute("aria-label", "Clear filter");
+    clear.textContent = "×";
+    pill.append(label, clear);
+    container.append(pill);
+    for (const { value } of values) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.filters = `${attr}:${quote(value)}`;
+      b.setAttribute("aria-pressed", "false");
+      b.textContent = undent(value);
+      container.append(b);
+    }
+    const set = (filter, text) => {
+      facetFilter = filter;
+      label.textContent = text;
+      pill.classList.toggle("hidden", !filter);
+      for (const b of container.querySelectorAll("button[data-filters]")) {
+        const on = b.dataset.filters === filter;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", String(on));
+      }
+      onChange(filter);
+    };
+    container.addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b === clear || b.dataset.filters === facetFilter) set("", "");
+      else if (b.dataset.filters) set(b.dataset.filters, `${attr}: ${b.textContent}`);
+    });
+    container.classList.remove("hidden");
+  }
+
   /* FLIP reorder: measure, let apply() move the DOM, animate the delta.
      Rows carry data-id; rows appearing or vanishing just fade. */
   function flip(container, apply) {
@@ -138,5 +206,5 @@
     }
   }
 
-  global.Rush = { esc, hit, guard, chips, activeChip, flip };
+  global.Rush = { esc, undent, hit, guard, chips, activeChip, flip, facets, withFacet, facetFilter: () => facetFilter };
 })(window);

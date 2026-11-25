@@ -1,7 +1,10 @@
 /* Rerank demo — pools preloaded, keyword order left, raw-then-rerank FLIP right. */
 "use strict";
 
-const POOL_N = 20;
+/* ?engine=decisions ranks with the /decisions endpoint (one score question per
+   hit) instead of the rerank task. Same page, same panels, same latency line. */
+const ENGINE = new URLSearchParams(window.location.search).get("engine") === "decisions" ? "decisions" : "tasks";
+const POOL_N = ENGINE === "decisions" ? 32 : 20;
 const TOP_K = 10;
 const DESCRIPTION_CAP = 240;
 
@@ -21,6 +24,7 @@ const REF_NOTE = document.getElementById("reflection-note");
 const warm = new Map();
 let current = "";
 let inflight = false;
+let queued = false;
 let agentIds = new Set();
 
 const row = (h, badge, cls) => Rush.hit(h, { badge, cls });
@@ -49,8 +53,14 @@ function mergeRanked(hits, rankedIds) {
   return ids;
 }
 
+const poolKey = (q) => `${q}\u0000${Rush.facetFilter()}`;
+
 async function fetchPool(q) {
-  const { hits, nbHits, ms, usedFallback } = await TasksCommon.search(q, { hitsPerPage: POOL_N, fallback: true });
+  const { hits, nbHits, ms, usedFallback } = await TasksCommon.search(q, {
+    hitsPerPage: POOL_N,
+    fallback: true,
+    filters: Rush.withFacet(),
+  });
   return { hits, nbHits, ms, usedFallback };
 }
 
@@ -67,7 +77,7 @@ function renderRanked(pool) {
   RANK_META.textContent = "raw pool order — task in flight…";
 }
 
-function renderAgentOrder(pool, ids, rerankMs, usage) {
+function renderAgentOrder(pool, ids, rerankMs, usage, label = "rerank") {
   const kwPos = new Map(pool.hits.map((h, i) => [h.objectID, i + 1]));
   const top = new Set(ids);
   const order = [...ids, ...pool.hits.map((h) => h.objectID).filter((id) => !top.has(id))];
@@ -89,7 +99,7 @@ function renderAgentOrder(pool, ids, rerankMs, usage) {
       .join("");
   });
   const tokens = usage ? ` · ${usage.totalTokens ?? "?"} tokens` : "";
-  RANK_META.textContent = `rerank ${rerankMs} ms${tokens} · top ${ids.length} of ${pool.hits.length}`;
+  RANK_META.textContent = `${label} ${rerankMs} ms${tokens} · top ${ids.length} of ${pool.hits.length}`;
 
   let up = 0;
   let down = 0;
@@ -105,38 +115,76 @@ function renderAgentOrder(pool, ids, rerankMs, usage) {
   REFLECTION.classList.remove("hidden");
 }
 
+/* The rerank task. Ids go out as "1".."N": every id the agent writes back costs
+   output tokens, and a 7-digit objectID costs several. Mapped back here. */
+async function rankByTask(pool, q) {
+  const taskPool = pool.hits.map((h, i) => ({
+    objectID: String(i + 1),
+    name: h.name || "",
+    ...(h.brand ? { brand: h.brand } : {}),
+    ...(h.price != null ? { price: `${h.price} ${h.currency || "USD"}` } : {}),
+    ...((h.categories_as_list || []).length ? { category: h.categories_as_list.join(" > ") } : {}),
+    ...(h.description ? { description: String(h.description).slice(0, DESCRIPTION_CAP) } : {}),
+  }));
+  const { output, usage, ms } = await TasksCommon.run("algolia_rerank", {
+    query: q,
+    hits: taskPool,
+    topK: TOP_K,
+  });
+  const ranked = ((output && output.rankedIds) || []).map((r) => ({
+    objectId: pool.hits[Number(r && r.objectId) - 1]?.objectID,
+  }));
+  return { ranked, usage, ms };
+}
+
+const CRITERIA = ["not relevant", "somewhat relevant", "relevant"];
+
+/* One /decisions call, one score question per hit; order is value x confidence.
+   A value may come back as a number or as the criterion's own words. */
+async function rankByDecisions(pool, q) {
+  const questions = {};
+  pool.hits.forEach((h, i) => {
+    const leaf = (h.categories_as_list || []).slice(-1)[0] || "";
+    const product = [h.name, h.brand, leaf].filter(Boolean).map(Rush.undent).join(" / ");
+    /* check-copy: off */
+    questions[`h${i}`] = {
+      type: "score",
+      instructions: `How relevant is this product to the shopper's request? Product: ${product}`,
+      criteria: CRITERIA,
+    };
+    /* check-copy: on */
+  });
+  const { answers, ms } = await TasksCommon.decide(q, questions);
+  const level = (v) => (typeof v === "string" && CRITERIA.indexOf(v) >= 0 ? CRITERIA.indexOf(v) : Number(v));
+  const scored = pool.hits
+    .map((h, i) => {
+      const a = answers[`h${i}`] || {};
+      const s = level(a.value) * (Number(a.confidence) || 0);
+      return { h, i, s: Number.isFinite(s) ? s : -1 };
+    })
+    .sort((x, y) => y.s - x.s || x.i - y.i);
+  return { ranked: scored.slice(0, TOP_K).map((x) => ({ objectId: x.h.objectID })), usage: null, ms };
+}
+
 async function rerank(pool) {
   inflight = true;
   const q = current;
   try {
-    /* Ids go out as "1".."N": every id the agent writes back costs output
-       tokens, and a 7-digit objectID costs several. Mapped back below. */
-    const taskPool = pool.hits.map((h, i) => ({
-      objectID: String(i + 1),
-      name: h.name || "",
-      ...(h.brand ? { brand: h.brand } : {}),
-      ...(h.price != null ? { price: `${h.price} ${h.currency || "USD"}` } : {}),
-      ...((h.categories_as_list || []).length ? { category: h.categories_as_list.join(" > ") } : {}),
-      ...(h.description ? { description: String(h.description).slice(0, DESCRIPTION_CAP) } : {}),
-    }));
-    const { output, usage, ms } = await TasksCommon.run("algolia_rerank", {
-      query: q,
-      hits: taskPool,
-      topK: TOP_K,
-    });
+    const { ranked, usage, ms } = ENGINE === "decisions" ? await rankByDecisions(pool, q) : await rankByTask(pool, q);
     if (q !== current) return;
-    const ranked = ((output && output.rankedIds) || []).map((r) => ({
-      objectId: pool.hits[Number(r && r.objectId) - 1]?.objectID,
-    }));
     agentIds = new Set(ranked.map((r) => r.objectId).filter(Boolean));
     const ids = mergeRanked(pool.hits, ranked);
-    renderAgentOrder(pool, ids, ms, usage);
+    renderAgentOrder(pool, ids, ms, usage, ENGINE === "decisions" ? "decisions" : "rerank");
     STATUS.textContent = "";
   } catch (e) {
     RANK_META.textContent = "";
     STATUS.textContent = e.message;
   } finally {
     inflight = false;
+    if (queued) {
+      queued = false;
+      run(current);
+    }
   }
 }
 
@@ -151,13 +199,14 @@ async function run(q) {
   RAW.innerHTML = "";
   RANKED.innerHTML = "";
 
-  let pool = warm.get(q);
+  const key = poolKey(q);
+  let pool = warm.get(key);
   if (!pool) {
     RAW_META.textContent = "searching…";
     try {
       pool = await fetchPool(q);
       if (q !== current) return;
-      warm.set(q, pool);
+      warm.set(key, pool);
     } catch (e) {
       RAW_META.textContent = "";
       STATUS.textContent = e.message;
@@ -179,9 +228,9 @@ async function run(q) {
 async function warmup() {
   for (const btn of CHIPS.querySelectorAll("button[data-q]")) {
     const q = btn.dataset.q;
-    if (warm.has(q)) continue;
+    if (warm.has(poolKey(q))) continue;
     try {
-      warm.set(q, await fetchPool(q));
+      warm.set(poolKey(q), await fetchPool(q));
       if (!current) run(q); // first example runs itself, once its pool is warm
     } catch (e) {
       /* a cold example just fetches on click */
@@ -194,5 +243,13 @@ FORM.addEventListener("submit", (e) => {
   run(INPUT.value);
 });
 Rush.chips(CHIPS, run);
+if (window.Mic) window.Mic.attach(INPUT, { onFinal: run });
 
-if (Rush.guard()) warmup();
+if (Rush.guard()) {
+  warmup();
+  Rush.facets(document.getElementById("facets"), () => {
+    const q = current || INPUT.value;
+    if (inflight) queued = true;
+    else if (q.trim()) run(q);
+  });
+}

@@ -34,7 +34,7 @@ let rewriteSeq = 0;
 async function rawSearch(q) {
   const seq = ++rawSeq;
   try {
-    const { hits, nbHits, ms } = await TasksCommon.search(q, { hitsPerPage: 6, relaxed: true });
+    const { hits, nbHits, ms } = await TasksCommon.search(q, { hitsPerPage: 6, relaxed: true, filters: Rush.withFacet() });
     if (seq !== rawSeq) return;
     RAW_META.textContent = `${ms} ms · ${nbHits} total`;
     RAW.innerHTML = renderHits(hits, "Nothing close, even with typos, plurals and dropped words.");
@@ -79,7 +79,7 @@ async function rewrite(q) {
         try {
           const { hits, nbHits, ms: sms } = await TasksCommon.search(s.query || "", {
             hitsPerPage: 6,
-            filters: stateFilters(s),
+            filters: Rush.withFacet(stateFilters(s)),
             relaxed: true,
           });
           if (seq !== rewriteSeq) return;
@@ -128,6 +128,7 @@ FORM.addEventListener("submit", (e) => {
   run(INPUT.value);
 });
 INPUT.addEventListener("input", () => run(INPUT.value, false));
+if (window.Mic) window.Mic.attach(INPUT, { onFinal: (t) => run(t) });
 Rush.chips(CHIPS, (q) => {
   INPUT.value = q;
   run(q);
@@ -136,4 +137,5 @@ Rush.chips(CHIPS, (q) => {
 if (Rush.guard()) {
   INPUT.value = "glowy serum but not dior";
   run(INPUT.value);
+  Rush.facets(document.getElementById("facets"), () => run(INPUT.value));
 }
