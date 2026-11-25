@@ -121,6 +121,9 @@ async function rankByTask(pool, q) {
   const taskPool = pool.hits.map((h, i) => ({
     objectID: String(i + 1),
     name: h.name || "",
+    ...(h.brand ? { brand: h.brand } : {}),
+    ...(h.price != null ? { price: `${h.price} ${h.currency || "USD"}` } : {}),
+    ...((h.categories_as_list || []).length ? { category: h.categories_as_list.join(" > ") } : {}),
     ...(h.description ? { description: String(h.description).slice(0, DESCRIPTION_CAP) } : {}),
   }));
   const { output, usage, ms } = await TasksCommon.run("algolia_rerank", {
